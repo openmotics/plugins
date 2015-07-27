@@ -4,7 +4,8 @@
 
 Repository containing the gateway plugins. It currently contains the following plugins:
 
-* flooding - A plugin that measures the current on a power port and switches an output if the current is higher then a threshold for 10 minutes. 
+* flooding - A plugin that measures the current on a power port and switches an output if the current is higher then a threshold for 10 minutes.
+* mqtt-client - An MQTT client to broadcast/send various events/messages to the MQTT broker which can be consumed by other hard- or software.
 
 ## Contribution
 
