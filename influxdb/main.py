@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '0.1.25'
+    version = '0.1.26'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -136,7 +136,7 @@ class InfluxDB(OMPluginBase):
         try:
             if input_id not in self._inputs:
                 self.logger('Loading input {0}'.format(input_id))
-                result = self.webinterface.get_input_configuration(None, input_id)
+                result = json.loads(self.webinterface.get_input_configuration(None, input_id))
                 if result['success'] is False:
                     self.logger('Failed to load input information')
                 self._inputs[input_id] = result['config']
