@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '0.1.26'
+    version = '0.2.0'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -36,6 +36,7 @@ class InfluxDB(OMPluginBase):
         self._config_checker = PluginConfigChecker(InfluxDB.config_description)
         self._outputs = {}
         self._inputs = {}
+        self._sensors = {}
 
         self._read_config()
 
@@ -96,19 +97,21 @@ class InfluxDB(OMPluginBase):
     def run(self):
         while True:
             self.logger('Sending intermediate update')
+            # Outputs
             try:
                 result = json.loads(self.webinterface.get_output_configurations(None, None))
                 if result['success'] is False:
                     self.logger('Failed to get output configuration')
-                for output in result['config']:
-                    output_id = output['id']
-                    if output_id not in self._outputs:
-                        self._outputs[output_id] = {}
-                    self._outputs[output_id]['name'] = InfluxDB._clean_name(output['name'])
-                    self._outputs[output_id]['module_type'] = {'O': 'output',
-                                                               'D': 'dimmer'}[output['module_type']]
-                    self._outputs[output_id]['floor'] = output['floor']
-                    self._outputs[output_id]['type'] = 'relay' if output['type'] == 0 else 'light'
+                else:
+                    for output in result['config']:
+                        output_id = output['id']
+                        if output_id not in self._outputs:
+                            self._outputs[output_id] = {}
+                        self._outputs[output_id]['name'] = InfluxDB._clean_name(output['name'])
+                        self._outputs[output_id]['module_type'] = {'O': 'output',
+                                                                   'D': 'dimmer'}[output['module_type']]
+                        self._outputs[output_id]['floor'] = output['floor']
+                        self._outputs[output_id]['type'] = 'relay' if output['type'] == 0 else 'light'
             except CommunicationTimedOutException:
                 self.logger('Error getting output configuration: CommunicationTimedOutException')
             except Exception as ex:
@@ -117,18 +120,50 @@ class InfluxDB(OMPluginBase):
                 result = json.loads(self.webinterface.get_output_status(None))
                 if result['success'] is False:
                     self.logger('Failed to get output status')
-                for output in result['status']:
-                    output_id = output['id']
-                    if output_id not in self._outputs:
-                        self._outputs[output_id] = {}
-                    self._outputs[output_id]['status'] = output['status']
-                    self._outputs[output_id]['dimmer'] = output['dimmer']
+                else:
+                    for output in result['status']:
+                        output_id = output['id']
+                        if output_id not in self._outputs:
+                            self._outputs[output_id] = {}
+                        self._outputs[output_id]['status'] = output['status']
+                        self._outputs[output_id]['dimmer'] = output['dimmer']
             except CommunicationTimedOutException:
                 self.logger('Error getting output status: CommunicationTimedOutException')
             except Exception as ex:
                 self.logger('Error getting output status: {0}'.format(ex))
             for output_id in self._outputs:
                 self._process_output(output_id, False)
+            # Temperatures
+            try:
+                configs = json.loads(self.webinterface.get_sensor_configurations(None))
+                temperatures = json.loads(self.webinterface.get_sensor_temperature_status(None))
+                humidities = json.loads(self.webinterface.get_sensor_humidity_status(None))
+                brightnesses = json.loads(self.webinterface.get_sensor_brightness_status(None))
+                if configs['success'] is False:
+                    self.logger('Failed to get sensor configurations')
+                else:
+                    for sensor in configs['config']:
+                        sensor_id = sensor['id']
+                        if sensor_id not in self._sensors:
+                            self._sensors[sensor_id] = {'temperature': -1,
+                                                        'humidity': -1,
+                                                        'brightness': -1}
+                        self._sensors[sensor_id]['name'] = InfluxDB._clean_name(sensor['name'])
+                        if temperatures['success'] is True:
+                            temperature = temperatures['status'][sensor_id]
+                            self._sensors[sensor_id]['temperature'] = -1 if temperature == 95.5 else (temperature + sensor['offset'])
+                        if humidities['success'] is True:
+                            humidity = humidities['status'][sensor_id]
+                            self._sensors[sensor_id]['humidity'] = -1 if humidity == 255 else humidity
+                        if brightnesses['success'] is True:
+                            brightness = brightnesses['status'][sensor_id]
+                            self._sensors[sensor_id]['brightness'] = -1 if brightness == 255 else brightness
+            except CommunicationTimedOutException:
+                self.logger('Error getting sensor status: CommunicationTimedOutException')
+            except Exception as ex:
+                self.logger('Error getting sensor status: {0}'.format(ex))
+            for sensor_id in self._sensors:
+                self._process_sensor(sensor_id, False)
             self.logger('Sending intermediate update completed')
             time.sleep(60)
 
@@ -169,12 +204,36 @@ class InfluxDB(OMPluginBase):
         elif log is True:
             self.logger('Not sending output {0}: Name is empty'.format(output_id))
 
+    def _process_sensor(self, sensor_id, log):
+        sensor_name = self._sensors[sensor_id].get('name')
+        if sensor_name != '':
+            temperature = self._sensors[sensor_id]['temperature']
+            humidity = self._sensors[sensor_id]['humidity']
+            brightness = self._sensors[sensor_id]['brightness']
+            data = {'id': sensor_id,
+                    'name': sensor_name}
+            values = {}
+            if temperature != -1:
+                values['temp'] = temperature
+            if humidity != -1:
+                values['hum'] = humidity
+            if brightness != -1:
+                values['bright'] = brightness
+            self._send('sensor', data, values, log)
+        elif log is True:
+            self.logger('Not sending sensor {0}: Name is empty'.format())
+
     def _send(self, key, tags, value, log):
         try:
-            data = '{0},{1} value={2}'.format(key,
-                                              ','.join('{0}={1}'.format(tname, tvalue)
-                                                       for tname, tvalue in tags.iteritems()),
-                                              value)
+            if isinstance(value, dict):
+                values = ','.join('{0}={1}'.format(vname, vvalue)
+                                  for vname, vvalue in value.iteritems())
+            else:
+                values = 'value={0}'.format(value)
+            data = '{0},{1} {2}'.format(key,
+                                        ','.join('{0}={1}'.format(tname, tvalue)
+                                                 for tname, tvalue in tags.iteritems()),
+                                        values)
             if log is True:
                 self.logger('Sending: {0}'.format(data))
             response = requests.post(url=self._endpoint,

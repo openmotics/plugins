@@ -52,9 +52,27 @@ one second a boolean FALSE value. At this moment, the time the input is actually
   * *name*: name of the input - this one is mandatory for an input to be send to InfluxDB
 * *fields*:
   * *value*: boolean TRUE or FALSE
-  
+
 Example:
 
 ```
 input,id=3,name=doorbell value=true
+```
+
+### Sensors
+
+At a one minute interval, all sensor data (where available) is send to InfluxDB.
+
+* *key*: 'sensor', comma separated with following extra tags:
+  * *id*: id of the sensor
+  * *name*: name of the sensor - this one is mandatory for a sensor to be send to InfluxDB
+* *fields*:
+  * *temp*: temperature (float) value of the sensor, omitted if not available for that sensor
+  * *hum*: relative humidity (float) value of the sensor, omitted if not available for that sensor
+  * *bright*: brightness (float) value of the sensor, omitted if not available for that sensor
+
+Example:
+
+```
+sensor,id=5,name=outdoors temp=8.5,hum=83.5
 ```
