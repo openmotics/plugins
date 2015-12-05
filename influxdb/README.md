@@ -4,7 +4,6 @@ An InlfuxDB client plugin, sending various data to an InfluxDB instance.
 
 ## Todo
 
-* Send sensor data (temperature/humidity/brightness)
 * Send power data (from energy modules and/or pulse counters
 
 ## Configuration
