@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '0.2.1'
+    version = '0.2.3'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -37,6 +37,7 @@ class InfluxDB(OMPluginBase):
         self._outputs = {}
         self._inputs = {}
         self._sensors = {}
+        self._errors = {}
 
         self._read_config()
 
@@ -164,6 +165,23 @@ class InfluxDB(OMPluginBase):
                 self.logger('Error getting sensor status: {0}'.format(ex))
             for sensor_id in self._sensors:
                 self._process_sensor(sensor_id, False)
+            # Errors
+            try:
+                errors = json.loads(self.webinterface.get_errors(None))
+                if errors['success'] is False:
+                    self.logger('Failed to get module errors')
+                else:
+                    for error in errors['errors']:
+                        module = error[0]
+                        count = error[1]
+                        if module not in self._errors:
+                            self._errors[module] = count
+            except CommunicationTimedOutException:
+                self.logger('Error getting module errors: CommunicationTimedOutException')
+            except Exception as ex:
+                self.logger('Error getting module errors: {0}'.format(ex))
+            for module in self._errors:
+                self._process_error(module, False)
             self.logger('Sending intermediate update completed')
             time.sleep(60)
 
@@ -222,6 +240,19 @@ class InfluxDB(OMPluginBase):
             self._send('sensor', data, values, log)
         elif log is True:
             self.logger('Not sending sensor {0}: Name is empty'.format())
+
+    def _process_error(self, module, log):
+        count = self._errors[module]
+        types = {'I': 'Input',
+                 'T': 'Temperature',
+                 'O': 'Output',
+                 'D': 'Dimmer',
+                 'R': 'Shutter',
+                 'L': 'OLED'}
+        data = {'type': types[module[0]],
+                'id': module,
+                'name': '{0}\ {1}'.format(types[module[0]], module)}
+        self._send('error', data, '{0}i'.format(count), log)
 
     def _send(self, key, tags, value, log):
         try:
