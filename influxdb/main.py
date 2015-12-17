@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '0.2.3'
+    version = '0.2.4'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -172,10 +172,7 @@ class InfluxDB(OMPluginBase):
                     self.logger('Failed to get module errors')
                 else:
                     for error in errors['errors']:
-                        module = error[0]
-                        count = error[1]
-                        if module not in self._errors:
-                            self._errors[module] = count
+                        self._errors[error[0]] = error[1]
             except CommunicationTimedOutException:
                 self.logger('Error getting module errors: CommunicationTimedOutException')
             except Exception as ex:
