@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '0.2.4'
+    version = '0.2.6'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -133,7 +133,7 @@ class InfluxDB(OMPluginBase):
             except Exception as ex:
                 self.logger('Error getting output status: {0}'.format(ex))
             for output_id in self._outputs:
-                self._process_output(output_id, False)
+                self._process_output(output_id)
             # Temperatures
             try:
                 configs = json.loads(self.webinterface.get_sensor_configurations(None))
@@ -164,7 +164,7 @@ class InfluxDB(OMPluginBase):
             except Exception as ex:
                 self.logger('Error getting sensor status: {0}'.format(ex))
             for sensor_id in self._sensors:
-                self._process_sensor(sensor_id, False)
+                self._process_sensor(sensor_id)
             # Errors
             try:
                 errors = json.loads(self.webinterface.get_errors(None))
@@ -178,7 +178,7 @@ class InfluxDB(OMPluginBase):
             except Exception as ex:
                 self.logger('Error getting module errors: {0}'.format(ex))
             for module in self._errors:
-                self._process_error(module, False)
+                self._process_error(module)
             self.logger('Sending intermediate update completed')
             time.sleep(60)
 
@@ -192,11 +192,10 @@ class InfluxDB(OMPluginBase):
                 self._inputs[input_id] = result['config']
             input_name = InfluxDB._clean_name(self._inputs[input_id]['name'])
             if input_name != '':
-                data = {'id': input_id,
+                data = {'type': 'input',
+                        'id': input_id,
                         'name': input_name}
-                self._send('input', data, 'true', False)
-                time.sleep(1)
-                self._send('input', data, 'false', False)
+                self._send('event', data, 'true')
             else:
                 self.logger('Not sending input {0}: Name is empty'.format(input_id))
         except CommunicationTimedOutException:
@@ -204,7 +203,7 @@ class InfluxDB(OMPluginBase):
         except Exception as ex:
             self.logger('Error processing input: {0}'.format(ex))
 
-    def _process_output(self, output_id, log):
+    def _process_output(self, output_id):
         output_name = self._outputs[output_id].get('name')
         if output_name != '':
             level = self._outputs[output_id].get('dimmer', 0)
@@ -215,11 +214,9 @@ class InfluxDB(OMPluginBase):
             for key in ['module_type', 'type', 'floor']:
                 if key in self._outputs[output_id]:
                     data[key] = self._outputs[output_id][key]
-            self._send('output', data, '{0}i'.format(level), log)
-        elif log is True:
-            self.logger('Not sending output {0}: Name is empty'.format(output_id))
+            self._send('output', data, '{0}i'.format(level))
 
-    def _process_sensor(self, sensor_id, log):
+    def _process_sensor(self, sensor_id):
         sensor_name = self._sensors[sensor_id].get('name')
         if sensor_name != '':
             temperature = self._sensors[sensor_id]['temperature']
@@ -234,11 +231,9 @@ class InfluxDB(OMPluginBase):
                 values['hum'] = humidity
             if brightness != -1:
                 values['bright'] = brightness
-            self._send('sensor', data, values, log)
-        elif log is True:
-            self.logger('Not sending sensor {0}: Name is empty'.format())
+            self._send('sensor', data, values)
 
-    def _process_error(self, module, log):
+    def _process_error(self, module):
         count = self._errors[module]
         types = {'I': 'Input',
                  'T': 'Temperature',
@@ -249,9 +244,9 @@ class InfluxDB(OMPluginBase):
         data = {'type': types[module[0]],
                 'id': module,
                 'name': '{0}\ {1}'.format(types[module[0]], module)}
-        self._send('error', data, '{0}i'.format(count), log)
+        self._send('error', data, '{0}i'.format(count))
 
-    def _send(self, key, tags, value, log):
+    def _send(self, key, tags, value):
         try:
             if isinstance(value, dict):
                 values = ','.join('{0}={1}'.format(vname, vvalue)
@@ -262,8 +257,6 @@ class InfluxDB(OMPluginBase):
                                         ','.join('{0}={1}'.format(tname, tvalue)
                                                  for tname, tvalue in tags.iteritems()),
                                         values)
-            if log is True:
-                self.logger('Sending: {0}'.format(data))
             response = requests.post(url=self._endpoint,
                                      data=data,
                                      headers=self._headers,
