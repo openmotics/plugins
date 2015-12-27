@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '0.2.6'
+    version = '0.2.7'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -89,7 +89,7 @@ class InfluxDB(OMPluginBase):
                         self._outputs[output_id]['status'] = 0
                         self.logger('Output {0} changed to OFF'.format(output_id))
                     if changed is True:
-                        thread = Thread(target=self._process_output, args=(output_id, False))
+                        thread = Thread(target=self._process_output, args=(output_id,))
                         thread.start()
             except Exception as ex:
                 self.logger('Error processing outputs: {0}'.format(ex))
