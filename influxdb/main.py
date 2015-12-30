@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '0.2.7'
+    version = '0.3.3'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -38,6 +38,7 @@ class InfluxDB(OMPluginBase):
         self._inputs = {}
         self._sensors = {}
         self._errors = {}
+        self._counters = {}
 
         self._read_config()
 
@@ -97,6 +98,7 @@ class InfluxDB(OMPluginBase):
     @background_task
     def run(self):
         while True:
+            start = time.time()
             self.logger('Sending intermediate update')
             # Outputs
             try:
@@ -179,8 +181,42 @@ class InfluxDB(OMPluginBase):
                 self.logger('Error getting module errors: {0}'.format(ex))
             for module in self._errors:
                 self._process_error(module)
+            # Pulse counters
+            try:
+                result = json.loads(self.webinterface.get_pulse_counter_configurations(None, None))
+                if result['success'] is False:
+                    self.logger('Failed to get pulse counter configuration')
+                else:
+                    for counter in result['config']:
+                        counter_id = counter['id']
+                        if counter_id not in self._counters:
+                            self._counters[counter_id] = {}
+                        self._counters[counter_id]['name'] = InfluxDB._clean_name(counter['name'])
+                        self._counters[counter_id]['input'] = counter['input']
+            except CommunicationTimedOutException:
+                self.logger('Error getting pulse counter configuration: CommunicationTimedOutException')
+            except Exception as ex:
+                self.logger('Error getting pulse counter configuration: {0}'.format(ex))
+            try:
+                result = json.loads(self.webinterface.get_pulse_counter_status(None))
+                if result['success'] is False:
+                    self.logger('Failed to get pulse counter status')
+                else:
+                    counters = result['counters']
+                    for counter_id in self._counters:
+                        if len(counters) > counter_id:
+                            self._counters[counter_id]['count'] = counters[counter_id]
+            except CommunicationTimedOutException:
+                self.logger('Error getting pulse counter status: CommunicationTimedOutException')
+            except Exception as ex:
+                self.logger('Error getting pulse counter status: {0}'.format(ex))
+            for counter_id in self._counters:
+                self._process_counter(counter_id)
             self.logger('Sending intermediate update completed')
-            time.sleep(60)
+            sleep = 60 - (time.time() - start)
+            if sleep < 0:
+                sleep = 1
+            time.sleep(sleep)
 
     def _process_input(self, input_id):
         try:
@@ -245,6 +281,13 @@ class InfluxDB(OMPluginBase):
                 'id': module,
                 'name': '{0}\ {1}'.format(types[module[0]], module)}
         self._send('error', data, '{0}i'.format(count))
+
+    def _process_counter(self, counter_id):
+        counter = self._counters[counter_id]
+        if counter['name'] != '':
+            data = {'name': counter['name'],
+                    'input': counter['input']}
+            self._send('counter', data, counter['count'])
 
     def _send(self, key, tags, value):
         try:
