@@ -19,6 +19,41 @@ If you'd like to add your own plugin, please take note of the following rules/gu
 
 **Don't hesitate to send us pull requests with your own plugins.**
 
+## Packaging and publishing
+
+This repository contains two helper scripts for maintaining plugins:
+
+### Packaging
+
+The ```package.sh``` script can be used to create a tgz file that can be uploaded to the OpenMotics gateway. It will print the md5sum and the name of the resulting archive file.
+
+Usage: ```./package.sh <plugin name>```.
+
+Example:
+
+```
+[somebody@computer plugins]$ ./package.sh fibaro
+79cfa774148ee56bcbfbd6372f53afa2  fibaro.tgz
+[somebody@computer plugins]$
+```
+
+### Publishing
+
+The ```publish.sh``` script can be used for uploading a plugin that was packaged before. So first, use the package script, then use the publish script.
+
+Usage: ```./publish.sh <plugin name> <ip/url of openmotics gateway> <username>```.
+
+Example:
+
+```
+[somebody@computer plugins]$ ./publish.sh fibaro 192.168.0.24 john
+Enter password:
+Publish succeeded
+[somebody@computer plugins]$
+```
+
+The gateway interface will reload and after a few seconds, the plugin will be available.
+
 ## Warranty
 
 This repository contains plugins that might not be written by OpenMotics which means we can give no official support on them. However, we'll do our best to help you wherever possible. If you have any problems, please create an issue here in GitHub and mention (@<username>) the creator if known.
