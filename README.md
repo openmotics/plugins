@@ -8,6 +8,7 @@ Repository containing the gateway plugins. It currently contains the following p
 * mqtt-client - An MQTT client to broadcast/send various events/messages to the MQTT broker which can be consumed by other hard- or software.
 * pushetta - A plugin for sending an event to Pushetta (http://www.pushetta.com/) when an input is pressed.
 * influxdb - A plugin for sending output/input events to InfluxDB
+* fibaro - A plugin that can control fibaro hardware through a Fibaro Home Center Lite
 
 ## Contribution
 
