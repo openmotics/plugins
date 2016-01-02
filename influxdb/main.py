@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '0.3.3'
+    version = '0.3.4'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -73,7 +73,6 @@ class InfluxDB(OMPluginBase):
                 on_outputs = {}
                 for entry in status:
                     on_outputs[entry[0]] = entry[1]
-                self.logger('Active outputs: {0}'.format(on_outputs.keys()))
                 for output_id in self._outputs:
                     changed = False
                     if output_id in on_outputs:
@@ -99,7 +98,6 @@ class InfluxDB(OMPluginBase):
     def run(self):
         while True:
             start = time.time()
-            self.logger('Sending intermediate update')
             # Outputs
             try:
                 result = json.loads(self.webinterface.get_output_configurations(None, None))
@@ -212,7 +210,6 @@ class InfluxDB(OMPluginBase):
                 self.logger('Error getting pulse counter status: {0}'.format(ex))
             for counter_id in self._counters:
                 self._process_counter(counter_id)
-            self.logger('Sending intermediate update completed')
             sleep = 60 - (time.time() - start)
             if sleep < 0:
                 sleep = 1
