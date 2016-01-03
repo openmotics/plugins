@@ -14,7 +14,7 @@ class Fibaro(OMPluginBase):
     """
 
     name = 'Fibaro'
-    version = '0.1.6'
+    version = '0.2.0'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'ip',
@@ -89,6 +89,26 @@ class Fibaro(OMPluginBase):
             self.logger('Action executed on Fibaro API')
         except Exception as ex:
             self.logger('Error sending: {0}'.format(ex))
+
+    @om_expose
+    def get_power_usage(self):
+        if self._enabled:
+            response = requests.get(url='http://{0}/api/devices'.format(self._ip),
+                                    headers=self._headers,
+                                    auth=(self._username, self._password))
+            if response.status_code != 200:
+                self.logger('Failed to load power devices')
+                return json.dumps({'success': False, 'error': 'Could not load power devices'})
+            result = response.json()
+            devices = {}
+            for device in result:
+                if 'properties' in device and 'power' in device['properties']:
+                    devices[device['id']] = {'id': device['id'],
+                                             'name': device['name'],
+                                             'power': float(device['properties']['power'])}
+            return json.dumps({'success': True, 'result': devices})
+        else:
+            return json.dumps({'success': False, 'error': 'Fibaro plugin not enabled'})
 
     @om_expose
     def get_config_description(self):
