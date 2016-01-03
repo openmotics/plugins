@@ -20,9 +20,9 @@ If you'd like to add your own plugin, please take note of the following rules/gu
 
 **Don't hesitate to send us pull requests with your own plugins.**
 
-## Packaging and publishing
+## Tools
 
-This repository contains two helper scripts for maintaining plugins:
+This repository contains a few helper scripts for maintaining plugins:
 
 ### Packaging
 
@@ -42,7 +42,7 @@ Example:
 
 The ```publish.sh``` script can be used for uploading a plugin that was packaged before. So first, use the package script, then use the publish script.
 
-Usage: ```./publish.sh <plugin name> <ip/url of openmotics gateway> <username>```.
+Usage: ```./publish.sh <plugin name> <ip/hostname of openmotics gateway> <username>```.
 
 Example:
 
@@ -54,6 +54,28 @@ Publish succeeded
 ```
 
 The gateway interface will reload and after a few seconds, the plugin will be available.
+
+### Log watching
+
+The ```logwatcher.py``` script can be used to watch (or ```tail -f``` if you're used to Linux) the logs of a certain plugin. Please note that plugin names should be the
+plugin name as stated in the code, not the foldername as with the publish and package scripts. This logwatcher depends on a few python modules (e.g. requests).
+
+Usage: ```./logwatcher.py <ip/hostname of openmotics gateway> <username> <plugin name>```
+
+Example:
+
+```
+[kenneth@molniya plugins]$ ./logwatcher.py 192.168.0.24 john InfluxDB
+Password:
+2016-01-03 10:15:19.430031 - Starting InfluxDB plugin...
+2016-01-03 10:15:19.431273 - InfluxDB is enabled
+2016-01-03 10:15:19.432826 - Started InfluxDB plugin
+2016-01-03 10:16:04.790170 - Output 28 changed to ON
+2016-01-03 10:16:04.790435 - Output 28 changed to level 97
+2016-01-03 10:16:04.791925 - Output 29 changed to ON
+2016-01-03 10:16:04.799517 - Output 30 changed to ON
+2016-01-03 10:16:04.811670 - Output 31 changed to ON
+```
 
 ## Warranty
 

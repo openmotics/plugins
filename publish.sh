@@ -1,7 +1,7 @@
 #!/bin/sh
 if [ $# -ne 3 ]
 then
-  echo "Usage: ./`basename $0` <plugin> <ip> <username>"
+  echo "Usage: ./`basename $0` <plugin> <ip/hostname of gateway> <username>"
 else
   checksum=`md5sum $1.tgz | cut -d ' ' -f 1`
   read -s -p "Enter password: " password
