@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '0.3.4'
+    version = '0.4.5'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -39,8 +39,14 @@ class InfluxDB(OMPluginBase):
         self._sensors = {}
         self._errors = {}
         self._counters = {}
+        self._power = {'openmotics': {},
+                       'fibaro': {}}
 
         self._read_config()
+        self._has_fibaro_power = False
+        if self._enabled:
+            thread = Thread(target=self._check_fibaro_power)
+            thread.start()
 
         self.logger("Started InfluxDB plugin")
 
@@ -53,6 +59,11 @@ class InfluxDB(OMPluginBase):
 
         self._enabled = self._url != '' and self._database != ''
         self.logger('InfluxDB is {0}'.format('enabled' if self._enabled else 'disabled'))
+
+    def _check_fibaro_power(self):
+        time.sleep(10)
+        self._has_fibaro_power = self._get_fibaro_power() is not None
+        self.logger('Fibaro plugin {0}detected'.format('' if self._has_fibaro_power else 'not '))
 
     @staticmethod
     def _clean_name(name):
@@ -210,10 +221,30 @@ class InfluxDB(OMPluginBase):
                 self.logger('Error getting pulse counter status: {0}'.format(ex))
             for counter_id in self._counters:
                 self._process_counter(counter_id)
+            # Power (from Fibaro plugin)
+            if self._has_fibaro_power is True:
+                usage = self._get_fibaro_power()
+                for device_id in usage:
+                    self._power['fibaro'][device_id] = usage[device_id]
+                    self._process_power(device_id, 'fibaro')
             sleep = 60 - (time.time() - start)
             if sleep < 0:
                 sleep = 1
             time.sleep(sleep)
+
+    def _process_power(self, power_id, device_type):
+        try:
+            device = self._power[device_type][power_id]
+            name = InfluxDB._clean_name(device['name'])
+            data = {'type': device_type,
+                    'id': power_id,
+                    'name': name}
+            values = {}
+            if device_type == 'fibaro':
+                values['power'] = device['power']
+            self._send('energy', data, values)
+        except Exception as ex:
+            self.logger('Error processing {0} power device {1}: {2}'.format(device_type, power_id, ex))
 
     def _process_input(self, input_id):
         try:
@@ -305,6 +336,20 @@ class InfluxDB(OMPluginBase):
                 self.logger('Send failed, received: {0} ({1})'.format(response.text, response.status_code))
         except Exception as ex:
             self.logger('Error sending: {0}'.format(ex))
+
+    def _get_fibaro_power(self):
+        response = requests.get(url='https://127.0.0.1/plugins/Fibaro/get_power_usage',
+                                params={'token': 'None'},
+                                verify=False)
+        if response.status_code == 200:
+            result = response.json()
+            if result['success'] is True:
+                return result['result']
+            else:
+                self.logger('Error loading Fibaro data: {0}'.format(result['msg']))
+        else:
+            self.logger('Error loading Fibaro data: {0}'.format(response.status_code))
+        return None
 
     @om_expose
     def get_config_description(self):
