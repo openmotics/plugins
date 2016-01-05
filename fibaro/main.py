@@ -14,7 +14,7 @@ class Fibaro(OMPluginBase):
     """
 
     name = 'Fibaro'
-    version = '0.2.0'
+    version = '0.3.0'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'ip',
@@ -73,22 +73,23 @@ class Fibaro(OMPluginBase):
                 self.logger('Error processing event: {0}'.format(ex))
 
     def _send(self, data):
-        try:
-            response = requests.get(url=self._endpoint,
-                                    params=data,
-                                    headers=self._headers,
-                                    auth=(self._username, self._password))
-            self.logger('Executed GET {0}'.format(response.url))
-            if response.status_code != 202:
-                self.logger('Send failed, received: {0} ({1})'.format(response.text, response.status_code))
-                return
-            result = response.json()
-            if result['result']['result'] != 1:
-                self.logger('Send failed, received: {0} ({1})'.format(response.text, response.status_code))
-                return
-            self.logger('Action executed on Fibaro API')
-        except Exception as ex:
-            self.logger('Error sending: {0}'.format(ex))
+        for entry in data:
+            try:
+                response = requests.get(url=self._endpoint,
+                                        params=entry,
+                                        headers=self._headers,
+                                        auth=(self._username, self._password))
+                self.logger('Executed GET {0}'.format(response.url))
+                if response.status_code != 202:
+                    self.logger('Send failed, received: {0} ({1})'.format(response.text, response.status_code))
+                    return
+                result = response.json()
+                if result['result']['result'] != 1:
+                    self.logger('Send failed, received: {0} ({1})'.format(response.text, response.status_code))
+                    return
+                self.logger('Action executed on Fibaro API')
+            except Exception as ex:
+                self.logger('Error sending: {0}'.format(ex))
 
     @om_expose
     def get_power_usage(self):
