@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '0.4.5'
+    version = '0.4.7'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -224,9 +224,10 @@ class InfluxDB(OMPluginBase):
             # Power (from Fibaro plugin)
             if self._has_fibaro_power is True:
                 usage = self._get_fibaro_power()
-                for device_id in usage:
-                    self._power['fibaro'][device_id] = usage[device_id]
-                    self._process_power(device_id, 'fibaro')
+                if usage is not None:
+                    for device_id in usage:
+                        self._power['fibaro'][device_id] = usage[device_id]
+                        self._process_power(device_id, 'fibaro')
             sleep = 60 - (time.time() - start)
             if sleep < 0:
                 sleep = 1
@@ -338,18 +339,22 @@ class InfluxDB(OMPluginBase):
             self.logger('Error sending: {0}'.format(ex))
 
     def _get_fibaro_power(self):
-        response = requests.get(url='https://127.0.0.1/plugins/Fibaro/get_power_usage',
-                                params={'token': 'None'},
-                                verify=False)
-        if response.status_code == 200:
-            result = response.json()
-            if result['success'] is True:
-                return result['result']
+        try:
+            response = requests.get(url='https://127.0.0.1/plugins/Fibaro/get_power_usage',
+                                    params={'token': 'None'},
+                                    verify=False)
+            if response.status_code == 200:
+                result = response.json()
+                if result['success'] is True:
+                    return result['result']
+                else:
+                    self.logger('Error loading Fibaro data: {0}'.format(result['msg']))
             else:
-                self.logger('Error loading Fibaro data: {0}'.format(result['msg']))
-        else:
-            self.logger('Error loading Fibaro data: {0}'.format(response.status_code))
-        return None
+                self.logger('Error loading Fibaro data: {0}'.format(response.status_code))
+            return None
+        except Exception as ex:
+            self.logger('Got unexpected error during Fibaro power load: {0}'.format(ex))
+            return None
 
     @om_expose
     def get_config_description(self):
