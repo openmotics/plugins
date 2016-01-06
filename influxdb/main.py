@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '0.4.7'
+    version = '0.4.12'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -269,17 +269,23 @@ class InfluxDB(OMPluginBase):
             self.logger('Error processing input: {0}'.format(ex))
 
     def _process_output(self, output_id):
-        output_name = self._outputs[output_id].get('name')
-        if output_name != '':
-            level = self._outputs[output_id].get('dimmer', 0)
-            if self._outputs[output_id].get('status', 0) == 0:
-                level = 0
-            data = {'id': output_id,
-                    'name': output_name}
-            for key in ['module_type', 'type', 'floor']:
-                if key in self._outputs[output_id]:
-                    data[key] = self._outputs[output_id][key]
-            self._send('output', data, '{0}i'.format(level))
+        try:
+            output_name = self._outputs[output_id].get('name')
+            if output_name != '':
+                if self._outputs[output_id]['module_type'] == 'output':
+                    level = 100
+                else:
+                    level = self._outputs[output_id].get('dimmer', 0)
+                if self._outputs[output_id].get('status', 0) == 0:
+                    level = 0
+                data = {'id': output_id,
+                        'name': output_name}
+                for key in ['module_type', 'type', 'floor']:
+                    if key in self._outputs[output_id]:
+                        data[key] = self._outputs[output_id][key]
+                self._send('output', data, '{0}i'.format(level))
+        except Exception as ex:
+            self.logger('Error processing output {0}: {1}'.format(output_id, ex))
 
     def _process_sensor(self, sensor_id):
         sensor_name = self._sensors[sensor_id].get('name')
