@@ -1,5 +1,6 @@
 #!/bin/env python2.7
 
+import re
 import sys
 import time
 import requests
@@ -23,11 +24,12 @@ def watch(ip, username, password, plugin):
                 logs = response.json()['logs']
                 if plugin in logs:
                     for line in [l for l in logs[plugin].splitlines() if l]:
-                        timestamp, entry = line.split(' - ', 1)
-                        parsed_ts = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S.%f')
-                        if lastlog is None or parsed_ts > lastlog:
-                            lastlog = parsed_ts
-                            print '{0} - {1}'.format(timestamp, entry)
+                        if re.match('[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]+', line):
+                            timestamp, entry = line.split(' - ', 1)
+                            parsed_ts = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S.%f')
+                            if lastlog is None or parsed_ts > lastlog:
+                                lastlog = parsed_ts
+                                print '{0} - {1}'.format(timestamp, entry)
                 else:
                     print 'Could not find plugin {0}. Available plugins are: {1}'.format(plugin, ', '.join(logs.keys()))
                     sys.exit(1)
