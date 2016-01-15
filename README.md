@@ -65,7 +65,7 @@ Usage: ```./logwatcher.py <ip/hostname of openmotics gateway> <username> <plugin
 Example:
 
 ```
-[kenneth@molniya plugins]$ ./logwatcher.py 192.168.0.24 john InfluxDB
+[somebody@computer plugins]$ ./logwatcher.py 192.168.0.24 john InfluxDB
 Password:
 2016-01-03 10:15:19.430031 - Starting InfluxDB plugin...
 2016-01-03 10:15:19.431273 - InfluxDB is enabled
