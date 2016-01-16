@@ -9,6 +9,7 @@ Repository containing the gateway plugins. It currently contains the following p
 * pushetta - A plugin for sending an event to Pushetta (http://www.pushetta.com/) when an input is pressed.
 * influxdb - A plugin for sending output/input events to InfluxDB
 * fibaro - A plugin that can control fibaro hardware through a Fibaro Home Center Lite
+* ventilation - A ventilation plugin, using statistical humidity data to control the ventilation
 
 ## Contribution
 
