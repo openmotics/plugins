@@ -2,20 +2,35 @@
 
 ## Contents
 
-Repository containing the gateway plugins. It currently contains the following plugins:
+This repository contains the gateway plugins.
+
+## Plugins
+
+### Production ready
+
+A plugin is considered production ready when it's been in use in a real-live production setup for quite some time,
+is stable and has most bugs ironed out. These production ready plugins can be downloaded pre-packaged, see the "Download" section below.
+
+* influxdb - A plugin for sending output/input events to InfluxDB
+* fibaro - A plugin that can control fibaro hardware through a Fibaro Home Center Lite
+* ventilation - A ventilation plugin, using statistical humidity data to control the ventilation
+* astro - An astronomical plugin, for providing the system with astronomical data (e.g. whether it's day or not, based on the sun's location)
+
+### In development
+
+Some plugins are still a work in progress. While they might be suitable for daily usage, they might require some more attention or lack decent
+documentation.
 
 * flooding - A plugin that measures the current on a power port and switches an output if the current is higher then a threshold for 10 minutes.
 * mqtt-client - An MQTT client to broadcast/send various events/messages to the MQTT broker which can be consumed by other hard- or software.
 * pushetta - A plugin for sending an event to Pushetta (http://www.pushetta.com/) when an input is pressed.
-* influxdb - A plugin for sending output/input events to InfluxDB
-* fibaro - A plugin that can control fibaro hardware through a Fibaro Home Center Lite
-* ventilation - A ventilation plugin, using statistical humidity data to control the ventilation
 
 ## Download
 
-Certain plugins will be available for direct download via the releases page. Our "[latest releases](https://github.com/openmotics/plugins/releases/tag/releases)"
-contain the binary ```.tgz``` plugin packages, toghether with their checksum. Plugins available in this repo, but not listed in this release can be packaged manually.
-See below for more info on packaging.
+The production ready plugins will be available for direct download via the releases page. Our "[latest releases](https://github.com/openmotics/plugins/releases/tag/releases)"
+contain the binary ```.tgz``` plugin packages, toghether with their checksum.
+
+When you would like your plugin to be included in these releases, please open an issue.
 
 ## Contribution
 
