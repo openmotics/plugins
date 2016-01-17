@@ -11,6 +11,12 @@ Repository containing the gateway plugins. It currently contains the following p
 * fibaro - A plugin that can control fibaro hardware through a Fibaro Home Center Lite
 * ventilation - A ventilation plugin, using statistical humidity data to control the ventilation
 
+## Download
+
+Certain plugins will be available for direct download via the releases page. Our "[latest releases](https://github.com/openmotics/plugins/releases/tag/releases)"
+contain the binary ```.tgz``` plugin packages, toghether with their checksum. Plugins available in this repo, but not listed in this release can be packaged manually.
+See below for more info on packaging.
+
 ## Contribution
 
 If you'd like to add your own plugin, please take note of the following rules/guidelines:
