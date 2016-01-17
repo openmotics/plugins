@@ -15,7 +15,7 @@ class Ventilation(OMPluginBase):
     """
 
     name = 'Ventilation'
-    version = '0.1.30'
+    version = '0.1.31'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'outputs',
@@ -112,17 +112,17 @@ class Ventilation(OMPluginBase):
                         self._runtime_data[sensor_id]['stats'] = [current, level_2, level_3]
                         self._runtime_data[sensor_id]['difference'] = ''
                         this_ventilation = 1
-                        if current > level_2:
-                            this_ventilation = 2
-                            self._runtime_data[sensor_id]['difference'] = '{0:.2f} > {1:.2f}'.format(current, level_2)
-                        elif current > level_3:
+                        if current > level_3:
                             this_ventilation = 3
                             self._runtime_data[sensor_id]['difference'] = '{0:.2f} > {1:.2f}'.format(current, level_3)
+                        elif current > level_2:
+                            this_ventilation = 2
+                            self._runtime_data[sensor_id]['difference'] = '{0:.2f} > {1:.2f}'.format(current, level_2)
                         if this_ventilation != self._runtime_data[sensor_id]['ventilation']:
                             self._runtime_data[sensor_id]['trigger'] = 0
                         else:
                             self._runtime_data[sensor_id]['trigger'] += 1
-                            if self._runtime_data[sensor_id]['trigger'] > self._trigger:
+                            if self._runtime_data[sensor_id]['trigger'] >= self._trigger:
                                 trigger_sensors[this_ventilation].append(sensor_id)
                                 ventilation = max(ventilation, this_ventilation)
                         self._runtime_data[sensor_id]['ventilation'] = this_ventilation
