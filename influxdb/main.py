@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '0.4.12'
+    version = '0.4.14'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -157,19 +157,16 @@ class InfluxDB(OMPluginBase):
                     for sensor in configs['config']:
                         sensor_id = sensor['id']
                         if sensor_id not in self._sensors:
-                            self._sensors[sensor_id] = {'temperature': -1,
-                                                        'humidity': -1,
-                                                        'brightness': -1}
+                            self._sensors[sensor_id] = {'temperature': 95.5,
+                                                        'humidity': 255,
+                                                        'brightness': 255}
                         self._sensors[sensor_id]['name'] = InfluxDB._clean_name(sensor['name'])
                         if temperatures['success'] is True:
-                            temperature = temperatures['status'][sensor_id]
-                            self._sensors[sensor_id]['temperature'] = -1 if temperature == 95.5 else temperature
+                            self._sensors[sensor_id]['temperature'] = temperatures['status'][sensor_id]
                         if humidities['success'] is True:
-                            humidity = humidities['status'][sensor_id]
-                            self._sensors[sensor_id]['humidity'] = -1 if humidity == 255 else humidity
+                            self._sensors[sensor_id]['humidity'] = humidities['status'][sensor_id]
                         if brightnesses['success'] is True:
-                            brightness = brightnesses['status'][sensor_id]
-                            self._sensors[sensor_id]['brightness'] = -1 if brightness == 255 else brightness
+                            self._sensors[sensor_id]['brightness'] = brightnesses['status'][sensor_id]
             except CommunicationTimedOutException:
                 self.logger('Error getting sensor status: CommunicationTimedOutException')
             except Exception as ex:
@@ -296,11 +293,11 @@ class InfluxDB(OMPluginBase):
             data = {'id': sensor_id,
                     'name': sensor_name}
             values = {}
-            if temperature != -1:
+            if temperature != 95.5:
                 values['temp'] = temperature
-            if humidity != -1:
+            if humidity != 255:
                 values['hum'] = humidity
-            if brightness != -1:
+            if brightness != 255:
                 values['bright'] = brightness
             self._send('sensor', data, values)
 
