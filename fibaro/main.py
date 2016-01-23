@@ -14,7 +14,7 @@ class Fibaro(OMPluginBase):
     """
 
     name = 'Fibaro'
-    version = '0.3.0'
+    version = '0.3.1'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'ip',
@@ -106,7 +106,8 @@ class Fibaro(OMPluginBase):
                 if 'properties' in device and 'power' in device['properties']:
                     devices[device['id']] = {'id': device['id'],
                                              'name': device['name'],
-                                             'power': float(device['properties']['power'])}
+                                             'power': float(device['properties']['power']),
+                                             'counter': float(device['properties']['energy']) * 1000}
             return json.dumps({'success': True, 'result': devices})
         else:
             return json.dumps({'success': False, 'error': 'Fibaro plugin not enabled'})

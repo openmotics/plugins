@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '0.4.14'
+    version = '0.4.15'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -240,6 +240,7 @@ class InfluxDB(OMPluginBase):
             values = {}
             if device_type == 'fibaro':
                 values['power'] = device['power']
+                values['counter'] = device['counter']
             self._send('energy', data, values)
         except Exception as ex:
             self.logger('Error processing {0} power device {1}: {2}'.format(device_type, power_id, ex))
