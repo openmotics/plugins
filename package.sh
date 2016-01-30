@@ -1,6 +1,8 @@
 #!/bin/sh
 cd $1
-tar -czf $1.tgz *
-mv $1.tgz ..
+version=`cat main.py | grep version | cut -d "\"" -f 2 | cut -d "'" -f 2`
+tgzname=$1_$version
+tar -czf $tgzname.tgz *
+mv $tgzname.tgz ..
 cd ..
-md5sum $1.tgz
+md5sum $tgzname.tgz

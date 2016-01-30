@@ -56,7 +56,7 @@ Example:
 
 ```
 [somebody@computer plugins]$ ./package.sh fibaro
-79cfa774148ee56bcbfbd6372f53afa2  fibaro.tgz
+79cfa774148ee56bcbfbd6372f53afa2  fibaro_1.2.3.tgz
 [somebody@computer plugins]$
 ```
 
@@ -64,12 +64,12 @@ Example:
 
 The ```publish.sh``` script can be used for uploading a plugin that was packaged before. So first, use the package script, then use the publish script.
 
-Usage: ```./publish.sh <plugin name> <ip/hostname of openmotics gateway> <username>```.
+Usage: ```./publish.sh <package> <ip/hostname of openmotics gateway> <username>```.
 
 Example:
 
 ```
-[somebody@computer plugins]$ ./publish.sh fibaro 192.168.0.24 john
+[somebody@computer plugins]$ ./publish.sh fibaro_1.2.3.tgz 192.168.0.24 john
 Enter password:
 Publish succeeded
 [somebody@computer plugins]$
