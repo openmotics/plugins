@@ -5,7 +5,7 @@ A ventilation plugin, using statistical humidity data to control the ventilation
 import time
 import simplejson as json
 from math import sqrt
-from plugins.base import om_expose, receive_events, background_task, OMPluginBase, PluginConfigChecker
+from plugins.base import om_expose, receive_events, background_task, OMPluginBase, PluginConfigChecker, on_remove
 from serial_utils import CommunicationTimedOutException
 
 
@@ -15,7 +15,7 @@ class Ventilation(OMPluginBase):
     """
 
     name = 'Ventilation'
-    version = '0.1.31'
+    version = '0.2.15'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'outputs',
@@ -93,7 +93,7 @@ class Ventilation(OMPluginBase):
                             self._entries[sensor_id].append(value)
                             if len(self._entries[sensor_id]) > self._samples:
                                 self._entries[sensor_id].pop(0)
-                    # Calculate which sensors cause which ventilation change
+                    # Calculate required ventilation based on sensor information
                     ventilation = 1
                     trigger_sensors = {1: [],
                                        2: [],
@@ -101,36 +101,42 @@ class Ventilation(OMPluginBase):
                     for sensor_id in self._entries:
                         if sensor_id not in self._runtime_data:
                             self._runtime_data[sensor_id] = {'trigger': 0,
-                                                            'ventilation': 1,
-                                                            'difference': 0,
-                                                            'stats': [0, 0, 0]}
+                                                             'ventilation': 1,
+                                                             'candidate': 1,
+                                                             'difference': '',
+                                                             'name': self._sensors[sensor_id],
+                                                             'stats': [0, 0, 0]}
                         current = self._entries[sensor_id][-1]
                         mean = Ventilation._mean(self._entries[sensor_id])
                         stddev = Ventilation._stddev(self._entries[sensor_id])
                         level_2 = mean + 2 * stddev
                         level_3 = mean + 3 * stddev
                         self._runtime_data[sensor_id]['stats'] = [current, level_2, level_3]
-                        self._runtime_data[sensor_id]['difference'] = ''
-                        this_ventilation = 1
                         if current > level_3:
-                            this_ventilation = 3
-                            self._runtime_data[sensor_id]['difference'] = '{0:.2f} > {1:.2f}'.format(current, level_3)
+                            wanted_ventilation = 3
+                            difference = '{0:.2f} > {1:.2f}'.format(current, level_3)
                         elif current > level_2:
-                            this_ventilation = 2
-                            self._runtime_data[sensor_id]['difference'] = '{0:.2f} > {1:.2f}'.format(current, level_2)
-                        if this_ventilation != self._runtime_data[sensor_id]['ventilation']:
-                            self._runtime_data[sensor_id]['trigger'] = 0
+                            wanted_ventilation = 2
+                            difference = '{0:.2f} > {1:.2f}'.format(current, level_2)
                         else:
+                            wanted_ventilation = 1
+                            difference = '{0:.2f} <= {1:.2f}'.format(current, level_2)
+                        self._runtime_data[sensor_id]['candidate'] = wanted_ventilation
+                        current_ventilation = self._runtime_data[sensor_id]['ventilation']
+                        if current_ventilation != wanted_ventilation:
                             self._runtime_data[sensor_id]['trigger'] += 1
+                            self._runtime_data[sensor_id]['difference'] = difference
                             if self._runtime_data[sensor_id]['trigger'] >= self._trigger:
-                                trigger_sensors[this_ventilation].append(sensor_id)
-                                ventilation = max(ventilation, this_ventilation)
-                        self._runtime_data[sensor_id]['ventilation'] = this_ventilation
+                                self._runtime_data[sensor_id]['ventilation'] = wanted_ventilation
+                                self._runtime_data[sensor_id]['trigger'] = 0
+                                trigger_sensors[wanted_ventilation].append(sensor_id)
+                        else:
+                            self._runtime_data[sensor_id]['difference'] = ''
+                            self._runtime_data[sensor_id]['trigger'] = 0
+                        ventilation = max(ventilation, self._runtime_data[sensor_id]['ventilation'])
                     if ventilation != self._last_ventilation:
                         if self._last_ventilation is None:
                             self.logger('Updating ventilation to 1 (startup)')
-                        elif ventilation == 1:
-                            self.logger('Resetting ventilation back to 1')
                         else:
                             self.logger('Updating ventilation to {0} because of sensors: {1}'.format(
                                 ventilation,
@@ -157,7 +163,8 @@ class Ventilation(OMPluginBase):
                 except CommunicationTimedOutException:
                     self.logger('Error getting sensor status: CommunicationTimedOutException')
                 except Exception as ex:
-                    self.logger('Error getting sensor status: {0}'.format(ex))
+                    self.logger('Error calculating ventilation: {0}'.format(ex))
+                # This loop should run approx. every minute.
                 sleep = 60 - (time.time() - start)
                 if sleep < 0:
                     sleep = 1
@@ -183,7 +190,8 @@ class Ventilation(OMPluginBase):
 
     @om_expose
     def get_debug(self):
-        return json.dumps(self._runtime_data, indent=4)
+        return json.dumps({'runtime_data': self._runtime_data,
+                           'ventilation': self._last_ventilation}, indent=4)
 
     @om_expose
     def get_config_description(self):
