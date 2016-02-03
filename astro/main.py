@@ -15,7 +15,7 @@ class Astro(OMPluginBase):
     """
 
     name = 'Astro'
-    version = '0.2.2'
+    version = '0.2.4'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'location',
@@ -74,16 +74,16 @@ class Astro(OMPluginBase):
         if self._enabled:
             import astral
             import pytz
+            retry = True
             while True:
-                self._location.solar_depression = 6
-                civil_data = self._location.sun(local=False)
-                self._location.solar_depression = 12
-                nautical_data = self._location.sun(local=False)
-                self._location.solar_depression = 18
-                astronomical_data = self._location.sun(local=False)
-                now = datetime.now(pytz.utc)
-                info = ''
                 try:
+                    self._location.solar_depression = 6
+                    civil_data = self._location.sun(local=False)
+                    self._location.solar_depression = 12
+                    nautical_data = self._location.sun(local=False)
+                    self._location.solar_depression = 18
+                    astronomical_data = self._location.sun(local=False)
+                    now = datetime.now(pytz.utc)
                     # Options: sunrise
                     if now < astronomical_data['dawn']:
                         is_day = [False, False, False, False]
@@ -124,10 +124,17 @@ class Astro(OMPluginBase):
                         sleep = (tomorrow - now).total_seconds()
                         info = 'night'
                 except astral.AstralError:
-                    is_day = [False, False, False, False]
-                    now = datetime.now()
-                    tomorrow = datetime(now.year, now.month, now.day) + timedelta(days=11)
-                    sleep = (tomorrow - now).total_seconds()
+                    if retry is True:
+                        time.sleep(5)
+                        retry = False
+                        continue
+                    else:
+                        is_day = [False, False, False, False]
+                        info = '[unknown]'
+                        now = datetime.now()
+                        tomorrow = datetime(now.year, now.month, now.day) + timedelta(hours=1)
+                        sleep = (tomorrow - now).total_seconds()
+                retry = True
                 for index, bit in {0: self._horizon_bit,
                                    1: self._civil_bit,
                                    2: self._nautical_bit,
