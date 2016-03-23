@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '0.4.15'
+    version = '0.5.5'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -339,8 +339,11 @@ class InfluxDB(OMPluginBase):
                                      verify=False)
             if response.status_code != 204:
                 self.logger('Send failed, received: {0} ({1})'.format(response.text, response.status_code))
+                return False, 'Send failed, received: {0} ({1})'.format(response.text, response.status_code)
+            return True, ''
         except Exception as ex:
             self.logger('Error sending: {0}'.format(ex))
+            return False, 'Error sending: {0}'.format(ex)
 
     def _get_fibaro_power(self):
         try:
@@ -359,6 +362,16 @@ class InfluxDB(OMPluginBase):
         except Exception as ex:
             self.logger('Got unexpected error during Fibaro power load: {0}'.format(ex))
             return None
+
+    @om_expose
+    def send_data(self, key, tags, value):
+        if self._enabled is True:
+            tags = json.loads(tags)
+            value = json.loads(value)
+            success, result = self._send(key, tags, value)
+            return json.dumps({'success': success, 'result' if success else 'error': result})
+        else:
+            return json.dumps({'success': False, 'error': 'InfluxDB plugin not enabled'})
 
     @om_expose
     def get_config_description(self):

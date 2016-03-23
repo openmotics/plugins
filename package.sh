@@ -1,6 +1,6 @@
 #!/bin/sh
 cd $1
-version=`cat main.py | grep version | cut -d "\"" -f 2 | cut -d "'" -f 2`
+version=`cat main.py | grep version | cut -d "\"" -f 2 | cut -d "'" -f 2 | head -n 1`
 tgzname=$1_$version
 tar -czf $tgzname.tgz *
 mv $tgzname.tgz ..
