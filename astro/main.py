@@ -15,7 +15,7 @@ class Astro(OMPluginBase):
     """
 
     name = 'Astro'
-    version = '0.2.4'
+    version = '0.2.5'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'location',
@@ -47,6 +47,7 @@ class Astro(OMPluginBase):
             import astral
         except ImportError:
             check_output('mount -o remount,rw /', shell=True)
+            check_output('pip install pytz', shell=True)
             check_output('pip install astral', shell=True)
             check_output('mount -o remount,ro /', shell=True)
             import astral
