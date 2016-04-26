@@ -14,7 +14,7 @@ class Fibaro(OMPluginBase):
     """
 
     name = 'Fibaro'
-    version = '0.3.1'
+    version = '0.3.2'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'ip',
@@ -84,7 +84,7 @@ class Fibaro(OMPluginBase):
                     self.logger('Send failed, received: {0} ({1})'.format(response.text, response.status_code))
                     return
                 result = response.json()
-                if result['result']['result'] != 1:
+                if result['result']['result'] not in [0, 1]:
                     self.logger('Send failed, received: {0} ({1})'.format(response.text, response.status_code))
                     return
                 self.logger('Action executed on Fibaro API')
