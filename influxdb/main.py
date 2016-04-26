@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '0.5.5'
+    version = '0.6.8'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -24,14 +24,19 @@ class InfluxDB(OMPluginBase):
                            'description': 'The enpoint for the InfluxDB using HTTP. E.g. http://1.2.3.4:8086'},
                           {'name': 'database',
                            'type': 'str',
-                           'description': 'The InfluxDB database name to witch statistics need to be send.'}]
+                           'description': 'The InfluxDB database name to witch statistics need to be send.'},
+                          {'name': 'intervals',
+                           'type': 'str',
+                           'description': 'JSON encoded dict with send interval per type (see README.md for information)'}]
 
-    default_config = {'url': '', 'database': 'openmotics'}
+    default_config = {'url': '', 'database': 'openmotics', 'intervals': '{}'}
 
     def __init__(self, webinterface, logger):
         super(InfluxDB, self).__init__(webinterface, logger)
         self.logger('Starting InfluxDB plugin...')
 
+        self._start = time.time()
+        self._last_service_uptime = 0
         self._config = self.read_config(InfluxDB.default_config)
         self._config_checker = PluginConfigChecker(InfluxDB.config_description)
         self._outputs = {}
@@ -41,6 +46,8 @@ class InfluxDB(OMPluginBase):
         self._counters = {}
         self._power = {'openmotics': {},
                        'fibaro': {}}
+        self._runtimes = {}
+        self._timings = []
 
         self._read_config()
         self._has_fibaro_power = False
@@ -53,6 +60,7 @@ class InfluxDB(OMPluginBase):
     def _read_config(self):
         self._url = self._config['url']
         self._database = self._config['database']
+        self._intervals = json.loads(self._config.get('intervals', InfluxDB.default_config['intervals']))
 
         self._endpoint = '{0}/write?db={1}'.format(self._url, self._database)
         self._headers = {'X-Requested-With': 'OpenMotics plugin: InfluxDB'}
@@ -108,127 +116,209 @@ class InfluxDB(OMPluginBase):
     @background_task
     def run(self):
         while True:
-            start = time.time()
+            # System
+            if self._runtimes.get('system', 0) < time.time() - self._intervals.get('system', 60):
+                try:
+                    with open('/proc/uptime', 'r') as f:
+                        system_uptime = float(f.readline().split()[0])
+                    service_uptime = time.time() - self._start
+                    if service_uptime > self._last_service_uptime + 3600:
+                        self._start = time.time()
+                        service_uptime = 0
+                    self._last_service_uptime = service_uptime
+                    self._send('system', {'name': 'gateway'}, {'service_uptime': service_uptime,
+                                                               'system_uptime': system_uptime})
+                except Exception as ex:
+                    self.logger('Error sending system data: {0}'.format(ex))
+                self._runtimes['system'] = time.time()
             # Outputs
-            try:
-                result = json.loads(self.webinterface.get_output_configurations(None, None))
-                if result['success'] is False:
-                    self.logger('Failed to get output configuration')
-                else:
-                    for output in result['config']:
-                        output_id = output['id']
-                        if output_id not in self._outputs:
-                            self._outputs[output_id] = {}
-                        self._outputs[output_id]['name'] = InfluxDB._clean_name(output['name'])
-                        self._outputs[output_id]['module_type'] = {'O': 'output',
-                                                                   'D': 'dimmer'}[output['module_type']]
-                        self._outputs[output_id]['floor'] = output['floor']
-                        self._outputs[output_id]['type'] = 'relay' if output['type'] == 0 else 'light'
-            except CommunicationTimedOutException:
-                self.logger('Error getting output configuration: CommunicationTimedOutException')
-            except Exception as ex:
-                self.logger('Error getting output configuration: {0}'.format(ex))
-            try:
-                result = json.loads(self.webinterface.get_output_status(None))
-                if result['success'] is False:
-                    self.logger('Failed to get output status')
-                else:
-                    for output in result['status']:
-                        output_id = output['id']
-                        if output_id not in self._outputs:
-                            self._outputs[output_id] = {}
-                        self._outputs[output_id]['status'] = output['status']
-                        self._outputs[output_id]['dimmer'] = output['dimmer']
-            except CommunicationTimedOutException:
-                self.logger('Error getting output status: CommunicationTimedOutException')
-            except Exception as ex:
-                self.logger('Error getting output status: {0}'.format(ex))
-            for output_id in self._outputs:
-                self._process_output(output_id)
-            # Temperatures
-            try:
-                configs = json.loads(self.webinterface.get_sensor_configurations(None))
-                temperatures = json.loads(self.webinterface.get_sensor_temperature_status(None))
-                humidities = json.loads(self.webinterface.get_sensor_humidity_status(None))
-                brightnesses = json.loads(self.webinterface.get_sensor_brightness_status(None))
-                if configs['success'] is False:
-                    self.logger('Failed to get sensor configurations')
-                else:
-                    for sensor in configs['config']:
-                        sensor_id = sensor['id']
-                        if sensor_id not in self._sensors:
-                            self._sensors[sensor_id] = {'temperature': 95.5,
-                                                        'humidity': 255,
-                                                        'brightness': 255}
-                        self._sensors[sensor_id]['name'] = InfluxDB._clean_name(sensor['name'])
-                        if temperatures['success'] is True:
-                            self._sensors[sensor_id]['temperature'] = temperatures['status'][sensor_id]
-                        if humidities['success'] is True:
-                            self._sensors[sensor_id]['humidity'] = humidities['status'][sensor_id]
-                        if brightnesses['success'] is True:
-                            self._sensors[sensor_id]['brightness'] = brightnesses['status'][sensor_id]
-            except CommunicationTimedOutException:
-                self.logger('Error getting sensor status: CommunicationTimedOutException')
-            except Exception as ex:
-                self.logger('Error getting sensor status: {0}'.format(ex))
-            for sensor_id in self._sensors:
-                self._process_sensor(sensor_id)
+            if self._runtimes.get('outputs', 0) < time.time() - self._intervals.get('outputs', 60):
+                try:
+                    result = json.loads(self.webinterface.get_output_configurations(None, None))
+                    if result['success'] is False:
+                        self.logger('Failed to get output configuration')
+                    else:
+                        for output in result['config']:
+                            output_id = output['id']
+                            if output_id not in self._outputs:
+                                self._outputs[output_id] = {}
+                            self._outputs[output_id]['name'] = InfluxDB._clean_name(output['name'])
+                            self._outputs[output_id]['module_type'] = {'O': 'output',
+                                                                       'D': 'dimmer'}[output['module_type']]
+                            self._outputs[output_id]['floor'] = output['floor']
+                            self._outputs[output_id]['type'] = 'relay' if output['type'] == 0 else 'light'
+                except CommunicationTimedOutException:
+                    self.logger('Error getting output configuration: CommunicationTimedOutException')
+                except Exception as ex:
+                    self.logger('Error getting output configuration: {0}'.format(ex))
+                try:
+                    result = json.loads(self.webinterface.get_output_status(None))
+                    if result['success'] is False:
+                        self.logger('Failed to get output status')
+                    else:
+                        for output in result['status']:
+                            output_id = output['id']
+                            if output_id not in self._outputs:
+                                self._outputs[output_id] = {}
+                            self._outputs[output_id]['status'] = output['status']
+                            self._outputs[output_id]['dimmer'] = output['dimmer']
+                except CommunicationTimedOutException:
+                    self.logger('Error getting output status: CommunicationTimedOutException')
+                except Exception as ex:
+                    self.logger('Error getting output status: {0}'.format(ex))
+                for output_id in self._outputs:
+                    self._process_output(output_id)
+                self._runtimes['outputs'] = time.time()
+            # Sensors
+            if self._runtimes.get('sensors', 0) < time.time() - self._intervals.get('sensors', 60):
+                try:
+                    configs = json.loads(self.webinterface.get_sensor_configurations(None))
+                    temperatures = json.loads(self.webinterface.get_sensor_temperature_status(None))
+                    humidities = json.loads(self.webinterface.get_sensor_humidity_status(None))
+                    brightnesses = json.loads(self.webinterface.get_sensor_brightness_status(None))
+                    if configs['success'] is False:
+                        self.logger('Failed to get sensor configurations')
+                    else:
+                        for sensor in configs['config']:
+                            sensor_id = sensor['id']
+                            if sensor_id not in self._sensors:
+                                self._sensors[sensor_id] = {'temperature': 95.5,
+                                                            'humidity': 255,
+                                                            'brightness': 255}
+                            self._sensors[sensor_id]['name'] = InfluxDB._clean_name(sensor['name'])
+                            if temperatures['success'] is True:
+                                self._sensors[sensor_id]['temperature'] = temperatures['status'][sensor_id]
+                            if humidities['success'] is True:
+                                self._sensors[sensor_id]['humidity'] = humidities['status'][sensor_id]
+                            if brightnesses['success'] is True:
+                                self._sensors[sensor_id]['brightness'] = brightnesses['status'][sensor_id]
+                except CommunicationTimedOutException:
+                    self.logger('Error getting sensor status: CommunicationTimedOutException')
+                except Exception as ex:
+                    self.logger('Error getting sensor status: {0}'.format(ex))
+                for sensor_id in self._sensors:
+                    self._process_sensor(sensor_id)
+                self._runtimes['sensors'] = time.time()
             # Errors
-            try:
-                errors = json.loads(self.webinterface.get_errors(None))
-                if errors['success'] is False:
-                    self.logger('Failed to get module errors')
-                else:
-                    for error in errors['errors']:
-                        self._errors[error[0]] = error[1]
-            except CommunicationTimedOutException:
-                self.logger('Error getting module errors: CommunicationTimedOutException')
-            except Exception as ex:
-                self.logger('Error getting module errors: {0}'.format(ex))
-            for module in self._errors:
-                self._process_error(module)
+            if self._runtimes.get('errors', 0) < time.time() - self._intervals.get('errors', 120):
+                try:
+                    errors = json.loads(self.webinterface.get_errors(None))
+                    if errors['success'] is False:
+                        self.logger('Failed to get module errors')
+                    else:
+                        for error in errors['errors']:
+                            self._errors[error[0]] = error[1]
+                except CommunicationTimedOutException:
+                    self.logger('Error getting module errors: CommunicationTimedOutException')
+                except Exception as ex:
+                    self.logger('Error getting module errors: {0}'.format(ex))
+                for module in self._errors:
+                    self._process_error(module)
+                self._runtimes['errors'] = time.time()
             # Pulse counters
-            try:
-                result = json.loads(self.webinterface.get_pulse_counter_configurations(None, None))
-                if result['success'] is False:
-                    self.logger('Failed to get pulse counter configuration')
-                else:
-                    for counter in result['config']:
-                        counter_id = counter['id']
-                        if counter_id not in self._counters:
-                            self._counters[counter_id] = {}
-                        self._counters[counter_id]['name'] = InfluxDB._clean_name(counter['name'])
-                        self._counters[counter_id]['input'] = counter['input']
-            except CommunicationTimedOutException:
-                self.logger('Error getting pulse counter configuration: CommunicationTimedOutException')
-            except Exception as ex:
-                self.logger('Error getting pulse counter configuration: {0}'.format(ex))
-            try:
-                result = json.loads(self.webinterface.get_pulse_counter_status(None))
-                if result['success'] is False:
-                    self.logger('Failed to get pulse counter status')
-                else:
-                    counters = result['counters']
-                    for counter_id in self._counters:
-                        if len(counters) > counter_id:
-                            self._counters[counter_id]['count'] = counters[counter_id]
-            except CommunicationTimedOutException:
-                self.logger('Error getting pulse counter status: CommunicationTimedOutException')
-            except Exception as ex:
-                self.logger('Error getting pulse counter status: {0}'.format(ex))
-            for counter_id in self._counters:
-                self._process_counter(counter_id)
+            if self._runtimes.get('pulsecounters', 0) < time.time() - self._intervals.get('pulsecounters', 30):
+                try:
+                    result = json.loads(self.webinterface.get_pulse_counter_configurations(None, None))
+                    if result['success'] is False:
+                        self.logger('Failed to get pulse counter configuration')
+                    else:
+                        for counter in result['config']:
+                            counter_id = counter['id']
+                            if counter_id not in self._counters:
+                                self._counters[counter_id] = {}
+                            self._counters[counter_id]['name'] = InfluxDB._clean_name(counter['name'])
+                            self._counters[counter_id]['input'] = counter['input']
+                except CommunicationTimedOutException:
+                    self.logger('Error getting pulse counter configuration: CommunicationTimedOutException')
+                except Exception as ex:
+                    self.logger('Error getting pulse counter configuration: {0}'.format(ex))
+                try:
+                    result = json.loads(self.webinterface.get_pulse_counter_status(None))
+                    if result['success'] is False:
+                        self.logger('Failed to get pulse counter status')
+                    else:
+                        counters = result['counters']
+                        for counter_id in self._counters:
+                            if len(counters) > counter_id:
+                                self._counters[counter_id]['count'] = counters[counter_id]
+                except CommunicationTimedOutException:
+                    self.logger('Error getting pulse counter status: CommunicationTimedOutException')
+                except Exception as ex:
+                    self.logger('Error getting pulse counter status: {0}'.format(ex))
+                for counter_id in self._counters:
+                    self._process_counter(counter_id)
+                self._runtimes['pulsecounters'] = time.time()
+            # Power (from OpenMotics)
+            if self._runtimes.get('power_openmotics', 0) < time.time() - self._intervals.get('power_openmotics', 5):
+                usage = {}
+                mapping = {}
+                try:
+                    result = json.loads(self.webinterface.get_power_modules(None))
+                    if result['success'] is False:
+                        self.logger('Failed to get power modules')
+                    else:
+                        for module in result['modules']:
+                            device_id = '{0}.{{0}}'.format(module['address'])
+                            mapping[str(module['id'])] = device_id
+                            if module['version'] in [8, 12]:
+                                for i in xrange(module['version']):
+                                    usage[device_id.format(i)] = {'name': module['input{0}'.format(i)]}
+                            else:
+                                self.logger('Unknown power module version: {0}'.format(module['version']))
+                except CommunicationTimedOutException:
+                    self.logger('Error getting power modules: CommunicationTimedOutException')
+                except Exception as ex:
+                    self.logger('Error getting power modules: {0}'.format(ex))
+                self._power['openmotics'] = usage
+                try:
+                    result = json.loads(self.webinterface.get_realtime_power(None))
+                    if result['success'] is False:
+                        self.logger('Failed to get realtime power')
+                    else:
+                        for module_id, device_id in mapping.iteritems():
+                            if module_id in result:
+                                for index, entry in enumerate(result[module_id]):
+                                    if device_id.format(index) in self._power['openmotics']:
+                                        usage = self._power['openmotics'][device_id.format(index)]
+                                        usage.update({'voltage': entry[0],
+                                                      'frequency': entry[1],
+                                                      'current': entry[2],
+                                                      'power': entry[3]})
+                except CommunicationTimedOutException:
+                    self.logger('Error getting realtime power: CommunicationTimedOutException')
+                except Exception as ex:
+                    self.logger('Error getting realtime power: {0}'.format(ex))
+                try:
+                    result = json.loads(self.webinterface.get_total_energy(None))
+                    if result['success'] is False:
+                        self.logger('Failed to get total energy')
+                    else:
+                        for module_id, device_id in mapping.iteritems():
+                            if module_id in result:
+                                for index, entry in enumerate(result[module_id]):
+                                    if device_id.format(index) in self._power['openmotics']:
+                                        usage = self._power['openmotics'][device_id.format(index)]
+                                        usage.update({'counter': entry[0] + entry[1],
+                                                      'counter_day': entry[0],
+                                                      'counter_night': entry[1]})
+                except CommunicationTimedOutException:
+                    self.logger('Error getting total energy: CommunicationTimedOutException')
+                except Exception as ex:
+                    self.logger('Error getting total energy: {0}'.format(ex))
+                for device_id in self._power['openmotics']:
+                    if self._power['openmotics'][device_id]['name'] != '':
+                        self._process_power(device_id, 'openmotics')
+                self._runtimes['power_openmotics'] = time.time()
             # Power (from Fibaro plugin)
             if self._has_fibaro_power is True:
-                usage = self._get_fibaro_power()
-                if usage is not None:
-                    for device_id in usage:
-                        self._power['fibaro'][device_id] = usage[device_id]
-                        self._process_power(device_id, 'fibaro')
-            sleep = 60 - (time.time() - start)
-            if sleep < 0:
-                sleep = 1
-            time.sleep(sleep)
+                if self._runtimes.get('power_fibaro', 0) < time.time() - self._intervals.get('power_fibaro', 15):
+                    usage = self._get_fibaro_power()
+                    if usage is not None:
+                        for device_id in usage:
+                            self._power['fibaro'][device_id] = usage[device_id]
+                            self._process_power(device_id, 'fibaro')
+                    self._runtimes['power_fibaro'] = time.time()
+            time.sleep(0.25)
 
     def _process_power(self, power_id, device_type):
         try:
@@ -241,6 +331,14 @@ class InfluxDB(OMPluginBase):
             if device_type == 'fibaro':
                 values['power'] = device['power']
                 values['counter'] = device['counter']
+            elif device_type == 'openmotics':
+                values['voltage'] = device['voltage']
+                values['current'] = device['current']
+                values['frequency'] = device['frequency']
+                values['power'] = device['power']
+                values['counter'] = device['counter']
+                values['counter_day'] = device['counter_day']
+                values['counter_night'] = device['counter_night']
             self._send('energy', data, values)
         except Exception as ex:
             self.logger('Error processing {0} power device {1}: {2}'.format(device_type, power_id, ex))
