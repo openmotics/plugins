@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '0.7.18'
+    version = '0.7.19'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -504,7 +504,7 @@ class InfluxDB(OMPluginBase):
                                     influx_data.append(data)
                                 else:
                                     self._send(data)
-                                    query = 'SELECT current FROM energy_analytics ORDER BY time DESC LIMIT 1'
+                                    query = 'SELECT current_harmonics FROM energy_analytics ORDER BY time DESC LIMIT 1'
                                     response = requests.get(url=self._query_endpoint,
                                                             params={'q': query},
                                                             headers=self._headers,
