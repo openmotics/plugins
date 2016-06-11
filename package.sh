@@ -13,4 +13,7 @@ else
   md5cmd='md5sum'  
 fi
 
-$md5cmd $tgzname.tgz
+md5sum=$($md5cmd $tgzname.tgz)
+
+echo $md5sum > $tgzname.md5
+echo $md5sum
