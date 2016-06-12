@@ -3,7 +3,9 @@ A Pushetta (http://www.pushetta.com) plugin for pushing events through Pushetta
 """
 
 import requests
+import collections
 import simplejson as json
+from threading import Thread
 from plugins.base import om_expose, input_status, output_status, OMPluginBase, PluginConfigChecker
 
 
@@ -13,7 +15,7 @@ class Pushetta(OMPluginBase):
     """
 
     name = 'Pushetta'
-    version = '1.0.11'
+    version = '1.0.12'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_key',
@@ -56,22 +58,36 @@ class Pushetta(OMPluginBase):
 
         self._enabled = self._api_key != '' and self._input_id > -1 and self._channel != '' and self._message != ''
 
+    def convert(self,data):
+        if isinstance(data,basestring):
+            return str(data)
+        elif isinstance(data,collections.Mapping):
+            return dict(map(self.convert, data.iteritems()))
+        elif isinstance(data,collections.Iterable):
+            return type(data)(map(self.convert,data))
+        else:
+            return data
+
     @input_status
     def input_status(self, status):
         if self._enabled is True:
             input_id = status[0]
             if input_id == self._input_id:
-                try:
-                    data = json.dumps({'body': self._message,
-                                       'message_type': 'text/plain'})
-                    self.logger('Sending: {0}'.format(data))
-                    response = requests.post(url=self._endpoint,
-                                             data=data,
-                                             headers=self._headers,
-                                             verify=False)
-                    self.logger('Received: {0} ({1})'.format(response.text, response.status_code))
-                except Exception as ex:
-                    self.logger('Error sending: {0}'.format(ex))
+                thread = Thread(target=self._process_input, args=(input_id,))
+                thread.start()
+            
+    def _process_input(self,input_id):      
+        try:
+            data = json.dumps({'body': self._message,
+                               'message_type': 'text/plain'})
+            self.logger('Sending: {0}'.format(data))
+            response = requests.post(url=self._endpoint,
+                                     data=data,
+                                     headers=self._headers,
+                                     verify=False)
+            self.logger('Received: {0} ({1})'.format(response.text, response.status_code))
+        except Exception as ex:
+            self.logger('Error sending: {0}'.format(ex))
 
     @om_expose
     def get_config_description(self):
@@ -84,6 +100,7 @@ class Pushetta(OMPluginBase):
     @om_expose
     def set_config(self, config):
         config = json.loads(config)
+        config = self.convert(config)
         self._config_checker.check_config(config)
         self._config = config
         self._read_config()
