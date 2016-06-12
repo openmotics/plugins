@@ -5,4 +5,15 @@ tgzname=$1_$version
 tar -czf $tgzname.tgz *
 mv $tgzname.tgz ..
 cd ..
-md5sum $tgzname.tgz
+
+if [ $(uname -s) == 'Darwin' ]
+then
+  md5cmd='md5'
+else
+  md5cmd='md5sum'  
+fi
+
+md5sum=$($md5cmd $tgzname.tgz)
+
+echo $md5sum > $tgzname.md5
+echo $md5sum
