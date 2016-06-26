@@ -10,7 +10,7 @@ if [ $(uname -s) == 'Darwin' ]
 then
   md5cmd='md5'
 else
-  md5cmd='md5sum'  
+  md5cmd='md5sum'
 fi
 
 md5sum=$($md5cmd $tgzname.tgz)
