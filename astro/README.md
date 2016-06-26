@@ -24,11 +24,16 @@ config_description = [{'name': 'location',
 
 ## Location
 
-The location configured must be one that can be understood by Google, as Google is used to translate it to location
-(longitude and latitude), timezone and elevation. By default, "Brussels,Belgium" will be used.
+This plugin uses the [Google Maps Geocoding](https://developers.google.com/maps/documentation/geocoding/start) API to translate
+a human-friendly location name into longitude and latitude. This means that the location configured in this plugin must be understood by
+the API. By default, "Brussels,Belgium" will be used.
 
 To validate the location, enter ```http://maps.googleapis.com/maps/api/geocode/json?address=<location>``` in a browser, where ```<location>``` is
 changed with the location of your choice.
+
+## Times
+
+This plugin uses [Sunrise Sunset](http://sunrise-sunset.org/)'s API to load the different times (e.g. when the sun rises)
 
 ## Bits
 
@@ -51,10 +56,25 @@ The different bits:
 
 When no bits are set, it's night.
 
+A few examples:
+
+* It's daylight:
+  * ```horizon_bit```: ```1```
+  * ```civil_bit```: ```1```
+  * ```nautical_bit```: ```1```
+  * ```astronomical_bit```: ```1```
+* The sun remains below the horizon (nautical twilight or darker), and is now at it's highest point: 
+  * ```horizon_bit```: ```0```
+  * ```civil_bit```: ```0```
+  * ```nautical_bit```: ```1```
+  * ```astronomical_bit```: ```1```
+* It's daylight, but the sun barely sets (it just slips below the horizon for a few hours)
+  * ```horizon_bit```: ```1```
+  * ```civil_bit```: ```1```
+  * ```nautical_bit```: ```0```
+  * ```astronomical_bit```: ```0```
+
 ## Usage example
 
 For example, a door sensor need to switch on a light when a door is opened. However, it only has to switch on the light when it's dark outside.
 Let's say as soon as it's nautical twilight or darker (night). When it's day or civil twilight the light doesn't need to be switched on.
-
-The bit that is needed here is the ```civil_bit```. When set (```1```), it's either day or civil twilight. When it's cleared (```0```) it's nautical twilight
-or darker (astronomical twilight and night). An IF-structure can be used in a Group Action that only swtiches on the light when the civil bit is cleared.
