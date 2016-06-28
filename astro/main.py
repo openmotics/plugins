@@ -16,7 +16,7 @@ class Astro(OMPluginBase):
     """
 
     name = 'Astro'
-    version = '0.2.18'
+    version = '0.2.20'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'location',
@@ -98,55 +98,73 @@ class Astro(OMPluginBase):
                     )).json()
                     sleep = 24 * 60 * 60
                     bits = [True, True, True, True]  # [day, civil, nautical, astronomical]
-                    times = []
                     if data['status'] == 'OK':
+                        # Load data
                         sunrise = Astro._convert(data['results']['sunrise'])
                         sunset = Astro._convert(data['results']['sunset'])
-                        times += [sunrise, sunset]
-                        if sunrise is None or sunset is None:
-                            bits[0] = False
-                        else:
-                            bits[0] = sunrise < now < sunset
-                            if bits[0] is True:
-                                sleep = min(sleep, (sunset - now).total_seconds())
+                        has_sun = sunrise is not None and sunset is not None
                         civil_start = Astro._convert(data['results']['civil_twilight_begin'])
                         civil_end = Astro._convert(data['results']['civil_twilight_end'])
-                        times += [civil_start, civil_end]
-                        if civil_start is None or civil_end is None:
-                            bits[1] = False
-                        else:
-                            bits[1] = civil_start < now < civil_end
-                            if bits[1] is True:
-                                sleep = min(sleep, (civil_end - now).total_seconds())
+                        has_civil = civil_start is not None and civil_end is not None
                         nautical_start = Astro._convert(data['results']['nautical_twilight_begin'])
                         nautical_end = Astro._convert(data['results']['nautical_twilight_end'])
-                        times += [nautical_start, nautical_end]
-                        if nautical_start is None or nautical_end is None:
-                            bits[2] = False
-                        else:
-                            bits[2] = nautical_start < now < nautical_end
-                            if bits[2] is True:
-                                sleep = min(sleep, (nautical_end - now).total_seconds())
-                        astr_start = Astro._convert(data['results']['astronomical_twilight_begin'])
-                        astr_end = Astro._convert(data['results']['astronomical_twilight_end'])
-                        times += [astr_start, astr_end]
-                        if astr_start is None or astr_end is None:
-                            bits[3] = False
-                        else:
-                            bits[3] = astr_start < now < astr_end
-                            if bits[3] is True:
-                                sleep = min(sleep, (astr_end - now).total_seconds())
-                        sleep = min(sleep, (tomorrow - now).total_seconds())
-                        info = 'night'
-                        if len([item for item in times if item is not None]) == 0:
-                            # This is the case when it's permanent day or permanent night, and this plugin can't
-                            # distinguish the two, it needs to make a guess here. However, since permanent night
-                            # only happens around the poles, and it's unlikely a user of this plugin is at the poles,
-                            # permanent day is here a good guess.
-                            info = 'permanent day'
+                        has_nautical = nautical_start is not None and nautical_end is not None
+                        astronomical_start = Astro._convert(data['results']['astronomical_twilight_begin'])
+                        astronomical_end = Astro._convert(data['results']['astronomical_twilight_end'])
+                        has_astronomical = astronomical_start is not None and astronomical_end is not None
+                        # Analyse data
+                        if not any([has_sun, has_civil, has_nautical, has_astronomical]):
+                            # This is an educated guess; Polar day (sun never sets) and polar night (sun never rises) can
+                            # happen in the polar circles. However, since we have far more "gradients" in the night part,
+                            # polar night (as defined here - pitch black) only happens very close to the poles. So it's
+                            # unlikely this plugin is used there.
+                            info = 'polar day'
                             bits = [True, True, True, True]
                             sleep = (tomorrow - now).total_seconds()
                         else:
+                            if has_sun is False:
+                                bits[0] = False
+                            else:
+                                bits[0] = sunrise < now < sunset
+                                if bits[0] is True:
+                                    sleep = min(sleep, (sunset - now).total_seconds())
+                                elif now < sunrise:
+                                    sleep = min(sleep, (sunrise - now).total_seconds())
+                            if has_civil is False:
+                                if has_sun is True:
+                                    bits[1] = not bits[0]
+                                else:
+                                    bits[1] = False
+                            else:
+                                bits[1] = civil_start < now < civil_end
+                                if bits[1] is True:
+                                    sleep = min(sleep, (civil_end - now).total_seconds())
+                                elif now < sunrise:
+                                    sleep = min(sleep, (civil_start - now).total_seconds())
+                            if has_nautical is False:
+                                if has_sun is True or has_civil is True:
+                                    bits[2] = not bits[1]
+                                else:
+                                    bits[2] = False
+                            else:
+                                bits[2] = nautical_start < now < nautical_end
+                                if bits[2] is True:
+                                    sleep = min(sleep, (nautical_end - now).total_seconds())
+                                elif now < sunrise:
+                                    sleep = min(sleep, (nautical_start - now).total_seconds())
+                            if has_astronomical is False:
+                                if has_sun is True or has_civil is True or has_nautical is True:
+                                    bits[3] = not bits[2]
+                                else:
+                                    bits[3] = False
+                            else:
+                                bits[3] = astronomical_start < now < astronomical_end
+                                if bits[3] is True:
+                                    sleep = min(sleep, (astronomical_end - now).total_seconds())
+                                elif now < sunrise:
+                                    sleep = min(sleep, (astronomical_start - now).total_seconds())
+                            sleep = min(sleep, (tomorrow - now).total_seconds())
+                            info = 'night'
                             if bits[3] is True:
                                 info = 'astronimical twilight'
                             if bits[2] is True:
@@ -155,6 +173,7 @@ class Astro(OMPluginBase):
                                 info = 'civil twilight'
                             if bits[0] is True:
                                 info = 'day'
+                        # Set bits in system
                         for index, bit in {0: self._horizon_bit,
                                            1: self._civil_bit,
                                            2: self._nautical_bit,
@@ -163,7 +182,7 @@ class Astro(OMPluginBase):
                                 result = json.loads(self.webinterface.do_basic_action(None, 237 if bits[index] else 238, bit))
                                 if result['success'] is False:
                                     self.logger('Failed to set bit {0} to {1}'.format(bit, 1 if bits[index] else 0))
-                        self.logger('It\'s {0}. Going to sleep for {1} seconds'.format(info, sleep))
+                        self.logger('It\'s {0}. Going to sleep for {1} seconds'.format(info, round(sleep, 1)))
                         time.sleep(sleep + 5)
                     else:
                         self.logger('Could not load data: {0}'.format(data['status']))
