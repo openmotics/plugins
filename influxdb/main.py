@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '0.7.19'
+    version = '0.7.21'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -256,7 +256,7 @@ class InfluxDB(OMPluginBase):
                     for sensor in configs['config']:
                         sensor_id = sensor['id']
                         name = InfluxDB._clean_name(sensor['name'])
-                        if name == '':
+                        if name == '' or name == 'NOT_IN_USE':
                             continue
                         data = {'id': sensor_id,
                                 'name': name}
@@ -433,7 +433,8 @@ class InfluxDB(OMPluginBase):
                     for module in result['modules']:
                         device_id = '{0}.{{0}}'.format(module['address'])
                         if module['version'] != 12:
-                            self.logger('Unknown power module version: {0}'.format(module['version']))
+                            if module['version'] != 8:
+                                self.logger('Unknown power module version: {0}'.format(module['version']))
                             continue
                         result = json.loads(self.webinterface.get_energy_time(None, module['id']))
                         if result['success'] is False:
