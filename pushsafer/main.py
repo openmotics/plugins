@@ -15,7 +15,7 @@ class Pushsafer(OMPluginBase):
     """
 
     name = 'Pushsafer'
-    version = '1.0.0'
+    version = '1.0.1'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'privatekey',
@@ -50,8 +50,7 @@ class Pushsafer(OMPluginBase):
                            'description': 'the URLs title'}
                           {'name': 'time2live',
                            'type': 'str',
-                           'description': 'Integer number 0-43200: Time in minutes after which message automatically gets purged.'}
-			 ]
+                           'description': 'Integer number 0-43200: Time in minutes after which message automatically gets purged.'}]
 
     default_config = {'privatekey': '', 'input_id': -1, 'message': '', 'title': 'OpenMotics', 'device': '', 'icon': '1', 'sound': '', 'vibration': '', 'url': '', 'urltitle': '', 'time2live': ''}
 
@@ -75,9 +74,9 @@ class Pushsafer(OMPluginBase):
         self._icon = self._config['icon']
         self._sound = self._config['sound']
         self._vibration = self._config['vibration']
-	self._url = self._config['url']
-	self._urltitle = self._config['urltitle']
-	self._time2live = self._config['time2live']
+    self._url = self._config['url']
+    self._urltitle = self._config['urltitle']
+    self._time2live = self._config['time2live']
 
         self._endpoint = 'https://www.pushsafer.com/api'
         self._headers = {'Content-type': 'application/x-www-form-urlencoded',
