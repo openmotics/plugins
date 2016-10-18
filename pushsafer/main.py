@@ -74,9 +74,9 @@ class Pushsafer(OMPluginBase):
         self._icon = self._config['icon']
         self._sound = self._config['sound']
         self._vibration = self._config['vibration']
-    self._url = self._config['url']
-    self._urltitle = self._config['urltitle']
-    self._time2live = self._config['time2live']
+        self._url = self._config['url']
+        self._urltitle = self._config['urltitle']
+        self._time2live = self._config['time2live']
 
         self._endpoint = 'https://www.pushsafer.com/api'
         self._headers = {'Content-type': 'application/x-www-form-urlencoded',
