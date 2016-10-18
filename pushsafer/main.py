@@ -15,7 +15,7 @@ class Pushsafer(OMPluginBase):
     """
 
     name = 'Pushsafer'
-    version = '1.0.0'
+    version = '1.0.1'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'privatekey',
@@ -30,20 +30,29 @@ class Pushsafer(OMPluginBase):
                           {'name': 'title',
                            'type': 'str',
                            'description': 'The title of message to be send.'}
-				          {'name': 'device',
+                          {'name': 'device',
                            'type': 'str',
                            'description': 'The device or device group id where the message to be send.'}
-						  {'name': 'icon',
+                          {'name': 'icon',
                            'type': 'str',
                            'description': 'The icon which is displayed with the message (a number 1-98).'}
-						  {'name': 'sound',
+                          {'name': 'sound',
                            'type': 'str',
                            'description': 'The notification sound of message (a number 0-28 or empty).'}
-						  {'name': 'vibration',
+                          {'name': 'vibration',
                            'type': 'str',
-                           'description': 'How often the device should vibrate (a number 1-3 or empty).'}]
+                           'description': 'How often the device should vibrate (a number 1-3 or empty).'}
+                          {'name': 'url',
+                           'type': 'str',
+                           'description': 'A URL or URL scheme: https://www.pushsafer.com/en/url_schemes'}
+                          {'name': 'urltitle',
+                           'type': 'str',
+                           'description': 'the URLs title'}
+                          {'name': 'time2live',
+                           'type': 'str',
+                           'description': 'Integer number 0-43200: Time in minutes after which message automatically gets purged.'}]
 
-    default_config = {'privatekey': '', 'input_id': -1, 'message': '', 'title': 'OpenMotics', 'device': '', 'icon': '1', 'sound': '', 'vibration': ''}
+    default_config = {'privatekey': '', 'input_id': -1, 'message': '', 'title': 'OpenMotics', 'device': '', 'icon': '1', 'sound': '', 'vibration': '', 'url': '', 'urltitle': '', 'time2live': ''}
 
     def __init__(self, webinterface, logger):
         super(Pushsafer, self).__init__(webinterface, logger)
@@ -60,11 +69,14 @@ class Pushsafer(OMPluginBase):
         self._privatekey = self._config['privatekey']
         self._input_id = self._config['input_id']
         self._message = self._config['message']
-		self._title = self._config['title']
-		self._device = self._config['device']
-		self._icon = self._config['icon']
-		self._sound = self._config['sound']
-		self._vibration = self._config['vibration']
+        self._title = self._config['title']
+        self._device = self._config['device']
+        self._icon = self._config['icon']
+        self._sound = self._config['sound']
+        self._vibration = self._config['vibration']
+        self._url = self._config['url']
+        self._urltitle = self._config['urltitle']
+        self._time2live = self._config['time2live']
 
         self._endpoint = 'https://www.pushsafer.com/api'
         self._headers = {'Content-type': 'application/x-www-form-urlencoded',
@@ -93,12 +105,15 @@ class Pushsafer(OMPluginBase):
     def _process_input(self,input_id):      
         try:
             data = {'k': self._privatekey,
-					'm': self._message,
+                    'm': self._message,
                     't': self._title,
-					'd': self._device,
-					'i': self._icon,
-					's': self._sound,
-					'v': self._vibration}
+                    'd': self._device,
+                    'i': self._icon,
+                    's': self._sound,
+                    'v': self._vibration,
+                    'u': self._url,
+                    'ut': self._urltitle,
+                    'l': self._time2live}
             self.logger('Sending: {0}'.format(data))
             response = requests.post(url=self._endpoint,
                                      data=data,

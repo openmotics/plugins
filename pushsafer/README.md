@@ -31,16 +31,25 @@ config_description = [{'name': 'privatekey',
                       {'name': 'message',
                        'type': 'str',
                        'description': 'The message to be send.'}
-					   {'name': 'device',
+                      {'name': 'device',
                        'type': 'str',
                        'description': 'The device or device group id where the message to be send.'}
-					   {'name': 'icon',
+                      {'name': 'icon',
                        'type': 'str',
                        'description': 'The icon which is displayed with the message (a number 1-98).'}
-					   {'name': 'sound',
+                      {'name': 'sound',
                        'type': 'str',
                        'description': 'The notification sound of message (a number 0-28 or empty).'}
-					   {'name': 'vibration',
+                      {'name': 'vibration',
                        'type': 'str',
-                       'description': 'How often the device should vibrate (a number 1-3 or empty).'}]
+                       'description': 'How often the device should vibrate (a number 1-3 or empty).'}
+                      {'name': 'url',
+                       'type': 'str',
+                       'description': 'A URL or URL scheme: https://www.pushsafer.com/en/url_schemes'}
+                      {'name': 'urltitle',
+                       'type': 'str',
+                       'description': 'the URLs title'}
+                      {'name': 'time2live',
+                       'type': 'str',
+                       'description': 'Integer number 0-43200: Time in minutes after which message automatically gets purged.'}]
 ```
