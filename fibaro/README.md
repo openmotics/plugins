@@ -1,6 +1,97 @@
 # Fibaro
 
-A Fibaro plugin, for controlling devices in a Fibaro Home Center (lite)
+A Fibaro plugin, for controlling devices in a Fibaro Home Center (lite). It supports:
+* Power measurement
+* Sensor readouts
+* Toggle outputs
+
+*The documentation for version 0.x is at the bottom of the page*
+
+## Configuration
+
+```
+config_description = [{'name': 'ip',
+                       'type': 'str',
+                       'description': 'The IP of the Fibaro Home Center (lite) device. E.g. 1.2.3.4'},
+                      {'name': 'username',
+                       'type': 'str',
+                       'description': 'Username of a user with the required access.'},
+                      {'name': 'password',
+                       'type': 'str',
+                       'description': 'Password of the user.'},
+                      {'name': 'output_mapping',
+                       'type': 'section',
+                       'description': 'Mapping betweet OpenMotics (Virtual) Outputs and Fibaro Outputs',
+                       'repeat': True,
+                       'min': 0,
+                       'content': [{'name': 'output_id', 'type': 'int'},
+                                   {'name': 'fibaro_output_id', 'type': 'int'}]},
+                      {'name': 'sensor_mapping',
+                       'type': 'section',
+                       'description': 'Mapping betweet OpenMotics Virtual Sensors and Fibaro Sensors',
+                       'repeat': True,
+                       'min': 0,
+                       'content': [{'name': 'sensor_id', 'type': 'int'},
+                                   {'name': 'fibaro_temperature_id', 'type': 'int'},
+                                   {'name': 'fibaro_brightness_id', 'type': 'int'},
+                                   {'name': 'fibaro_brightness_max', 'type': 'int'}]}]
+```
+
+The ```ip```, ```username``` and ```password``` should be fairly straightforward. These are used to connect to/with the Fibaro gateway.
+
+## Output mapping
+
+Virtual Outputs in the OpenMotics can be linked to Fibaro Outputs. This way, the OpenMotics system can control the virtual Output as any
+other Output, and its state will be reflected in the Fibaro environment.
+
+The ```output_id``` is the OpenMotics Output ID, and the ```fibaro_output_id``` is the ID of the Output in the Fibaro system.
+
+Please note that this plugin only keeps the systems in sync in one way. If a linked Fibaro Output is turned on/off directly (either using the
+physical device, or the Fibaro interface), the OpenMotics Output will not be changed.
+
+### How to add a Virtual Output in OpenMotics
+
+Use the OpenMotics maintenance mode to add a Virtual Output module (8 Virtual Outputs).
+
+```
+[openmotics]$ connect
+Connecting...
+Opening VPN connection...
+VPN connected !
+Opening maintenance socket...
+Starting maintenance mode, waiting for other actions to complete ...
+[openmotics]$ add virtual module o
+[openmotics]$
+```
+
+## Sensor mapping
+
+There are 32 Sensors available in OpenMotics. Each sensor can be marked as Virtual, after which this plugin can update its values.
+
+The ```sensor_id``` is the ID (0-31) of the OpenMotics Sensor. The ```fibaro_temperature_id``` is the ID of the Fibaro device that has a
+temperature sensor. The ```fibaro_brightness_id``` is the ID of the Fibaro device that has a brightness sensor. Assuming its value is in ```lux```,
+the ```fibaro_brightness_max``` holds the maximum expected brightness (in ```lux```) the sensor will return. This is used to calculate a
+relative value (0-100%) in the OpenMotics system.
+
+Set unused values to ```-1```. For example, a Fibaro device that only reports temperature.
+
+### How to mark an OpenMotics sensor as Virtual
+
+Use the OpenMotics maintenance mode to mark a Sensor as Virtual.
+
+```
+[openmotics]$ connect
+Connecting...
+Opening VPN connection...
+VPN connected !
+Opening maintenance socket...
+Starting maintenance mode, waiting for other actions to complete ...
+[openmotics]$ eeprom write 195 <sensor_id> 0
+[openmotics]$ eeprom activate
+[openmotics]$
+```
+
+# Fibaro 0.x (obsolete)
 
 ## Configuration
 
