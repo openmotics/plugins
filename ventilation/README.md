@@ -7,9 +7,9 @@ Statistical mode: The plugin uses the mean and standard deviation of a set of sa
 considered "higher than usual" and thus requires an increased ventilation. It calculates this data foreach individual humidity sensor,
 and will adapt the ventilation to the highest required.
 
-Dew point mode: The plugin tries to keep the dew point between a given range and will (try to) set the ventilation to such level that
-the dew point will eventually be in the given range. It uses the outdoor humidity and current indoor temperature to calculate whether increasing
-the ventilation would actually change the dew point in the good direction.
+Dew point mode: The plugin tries to keep the humidity between a given range and will (try to) set the ventilation to such level that
+the humidity will eventually be in the given range. It uses the outdoor and indoor absolute humidity to calculate whether increasing
+the ventilation would actually change the humidity in the good direction.
 
 The plugin will adapt the ventilation system once per minut, but will only set the ventilation when it detects a change. So it's still possible
 to manually override the ventilation system. The manual setting won't be changed until the plugin detects humidity changes for which it needs
@@ -60,7 +60,7 @@ config_description = [{'name': 'low',
                                                                        'type': 'int'},
                                                                       {'name': 'target_upper',
                                                                        'type': 'int'},
-                                                                      {'name': 'high_offset',
+                                                                      {'name': 'offset',
                                                                        'type': 'int'},
                                                                       {'name': 'trigger',
                                                                        'type': 'int'}]}]}]
@@ -86,19 +86,19 @@ sure that at least X amount of measurements must be above a threshold to change 
 ## Mode: Dew point
 
 The ```outside_sensor_id``` is the ID of the outside Sensor that will influence the air that will get pulled inside. If for example a bathroom
-has a high dew point because there's hot moist air, but the air outside is far more humid, the ventilation will not be increased, since it would
-increase the dew point.
+has a high absolute humidity after a shower, but the air outside is far more humid, the ventilation will not be increased, since it would
+increase the humidity.
 
-The ```target_lower``` and ```target_upper``` values indicate the desired dew point inside. The system will try to get the dew point inside this range.
+The ```target_lower``` and ```target_upper``` values indicate the desired relative humidity range indoors. The system will try to get the
+relative humidity inside this range. If the current relative humidity is not within this range, and the outdoor humidity is right, the ventilation
+is increased to the ```medium``` setting.
 
-The ```high_offset``` is an offset above or below the target range that will cause the ventilation to be set to the high level. If the dew point
-is between the range but below the offset, it will only set to medium.
+The ```offset``` is used to control the ventilation based on how close the dew point is to the actual temperature. If the dew point is higher than
+2 times the offset below the actual temperature, the ventilation is set to ```medium```. If higher than 1 times the offset below the actual
+temperature, the ventilation is set to ```high```.
 
 The ```trigger``` setting covers sensor misreadings. As with every sensor, error readings will occur, and this threshold will make
 sure that at least X amount of measurements must be above a threshold to change the ventilation. A good value is ```3```.
-
-Example: A dew point between 10 and 16 degrees C is considered (very) comfortable. The ```high_offset``` could be set to ```4```, so ventilation
-will be set to medium for ranges 6 to 10 and 16 to 20, and to high when the dew point is below 6 and above 20.
 
 # Ventilation 0.x (obsolete)
 

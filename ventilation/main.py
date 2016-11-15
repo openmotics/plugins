@@ -18,7 +18,7 @@ class Ventilation(OMPluginBase):
     """
 
     name = 'Ventilation'
-    version = '1.0.1'
+    version = '1.1.5'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'low',
@@ -61,7 +61,7 @@ class Ventilation(OMPluginBase):
                                                                            'type': 'int'},
                                                                           {'name': 'target_upper',
                                                                            'type': 'int'},
-                                                                          {'name': 'high_offset',
+                                                                          {'name': 'offset',
                                                                            'type': 'int'},
                                                                           {'name': 'trigger',
                                                                            'type': 'int'}]}]}]
@@ -109,7 +109,7 @@ class Ventilation(OMPluginBase):
             else:
                 for sensor in configs['config']:
                     sensor_id = sensor['id']
-                    if sensor_id in self._used_sensors:
+                    if sensor_id in self._used_sensors or sensor_id == self._settings['outside_sensor_id']:
                         self._samples[sensor_id] = []
                         self._sensors[sensor_id] = sensor['name'] if sensor['name'] != '' else sensor_id
         except CommunicationTimedOutException:
@@ -159,35 +159,40 @@ class Ventilation(OMPluginBase):
     def _process_dew_point(self):
         try:
             dew_points = {}
+            abs_humidities = {}
+            humidities = {}
             sensor_temperatures = {}
-            outdoor_humidity = None
+            outdoor_abs_humidity = None
+            outdoor_dew_point = None
             outdoor_sensor_id = self._settings['outside_sensor_id']
             # Fetch data
-            humidities = json.loads(self.webinterface.get_sensor_humidity_status(None))
-            temperatures = json.loads(self.webinterface.get_sensor_temperature_status(None))
-            if humidities['success'] is True and temperatures['success'] is True:
-                for sensor_id in range(len(humidities['status'])):
+            data_humidities = json.loads(self.webinterface.get_sensor_humidity_status(None))
+            data_temperatures = json.loads(self.webinterface.get_sensor_temperature_status(None))
+            if data_humidities['success'] is True and data_temperatures['success'] is True:
+                for sensor_id in range(len(data_humidities['status'])):
                     if sensor_id not in self._used_sensors + [outdoor_sensor_id]:
                         continue
-                    humidity = humidities['status'][sensor_id]
+                    humidity = data_humidities['status'][sensor_id]
                     if humidity == 255:
                         continue
-                    temperature = temperatures['status'][sensor_id]
+                    temperature = data_temperatures['status'][sensor_id]
                     if temperature == 95.5:
                         continue
-                    dew_point = self._dew_point(temperature, humidity)
+                    humidities[sensor_id] = humidity
                     if sensor_id == outdoor_sensor_id:
-                        outdoor_humidity = humidity
+                        outdoor_dew_point = Ventilation._dew_point(temperature, humidity)
+                        outdoor_abs_humidity = Ventilation._abs_humidity(temperature, humidity)
                     else:
                         sensor_temperatures[sensor_id] = temperature
-                        dew_points[sensor_id] = dew_point
-            if outdoor_humidity is None:
-                self.logger('Could not load outdoor humidity')
+                        dew_points[sensor_id] = Ventilation._dew_point(temperature, humidity)
+                        abs_humidities[sensor_id] = Ventilation._abs_humidity(temperature, humidity)
+            if outdoor_abs_humidity is None or outdoor_dew_point is None:
+                self.logger('Could not load outdoor humidity or temperature')
                 return
             # Calculate required ventilation based on sensor information
             target_lower = self._settings['target_lower']
             target_upper = self._settings['target_upper']
-            high_offset = self._settings['high_offset']
+            offset = self._settings['offset']
             ventilation = 1
             trigger_sensors = {1: [],
                                2: [],
@@ -197,50 +202,56 @@ class Ventilation(OMPluginBase):
                     self._runtime_data[sensor_id] = {'trigger': 0,
                                                      'ventilation': 1,
                                                      'candidate': 1,
-                                                     'difference': '',
+                                                     'reason': '',
                                                      'name': self._sensors[sensor_id],
-                                                     'stats': [0, 0]}
-                temperature = sensor_temperatures[sensor_id]
-                ventilated_dew_point = self._dew_point(temperature, outdoor_humidity)
+                                                     'stats': [0, 0, 0, 0]}
+                humidity = humidities[sensor_id]
                 dew_point = dew_points[sensor_id]
-                self._runtime_data[sensor_id]['stats'] = [dew_point, ventilated_dew_point]
-                if dew_point > target_upper + high_offset and ventilated_dew_point < dew_point:
-                    wanted_ventilation = 3
-                    difference = '{0:.2f} > {1:.2f}'.format(dew_point, target_upper + high_offset)
-                elif dew_point > target_upper and ventilated_dew_point < dew_point:
-                    wanted_ventilation = 2
-                    difference = '{0:.2f} > {1:.2f}'.format(dew_point, target_upper)
-                elif dew_point < target_lower - high_offset and ventilated_dew_point > dew_point:
-                    wanted_ventilation = 3
-                    difference = '{0:.2f} < {1:.2f}'.format(dew_point, target_lower - high_offset)
-                elif dew_point < target_lower and ventilated_dew_point > dew_point:
-                    wanted_ventilation = 2
-                    difference = '{0:.2f} < {1:.2f}'.format(dew_point, target_lower)
-                elif target_lower <= dew_point <= target_upper:
-                    wanted_ventilation = 1
-                    difference = '{0:.2f} <= {0:.2f} <= {1:.2f} or '.format(target_lower, dew_point, target_upper)
-                else:  # The air from the oudside would not make the dew_point better
-                    wanted_ventilation = 1
-                    difference = 'possible {0:.2f} not in [{0:.2f}..{1:.2f}]'.format(ventilated_dew_point, target_lower, target_upper)
+                abs_humidity = abs_humidities[sensor_id]
+                temperature = sensor_temperatures[sensor_id]
+                self._runtime_data[sensor_id]['stats'] = [temperature, dew_point, abs_humidity, outdoor_abs_humidity]
+                reason = ''
+                wanted_ventilation = 1
+                # First, try to get the dew point inside the target range - increasing comfort
+                if humidity < target_lower or humidity > target_upper:
+                    if humidity < target_lower and outdoor_abs_humidity > abs_humidity:
+                        wanted_ventilation = 2
+                        reason = '{0:.2f} < {1:.2f} and {2:.5f} > {3:.5f}'.format(humidity, target_lower, outdoor_abs_humidity, abs_humidity)
+                    if humidity > target_upper and outdoor_abs_humidity < abs_humidity:
+                        wanted_ventilation = 2
+                        reason = '{0:.2f} > {1:.2f} and {2:.5f} < {3:.5f}'.format(humidity, target_lower, outdoor_abs_humidity, abs_humidity)
+                # Second, prevent actual temperature from hitting the dew point - make sure we don't have condense
+                if outdoor_abs_humidity < abs_humidity:
+                    if dew_point > temperature - offset:
+                        wanted_ventilation = 3
+                        reason = '{0:.2f} > {1:.2f} - ({2:.2f})'.format(dew_point, temperature - offset, temperature)
+                    elif dew_point > temperature - 2 * offset:
+                        wanted_ventilation = 2
+                        reason = '{0:.2f} > {1:.2f} - ({2:.2f})'.format(dew_point, temperature - 2 * offset, temperature)
                 self._runtime_data[sensor_id]['candidate'] = wanted_ventilation
                 current_ventilation = self._runtime_data[sensor_id]['ventilation']
                 if current_ventilation != wanted_ventilation:
                     self._runtime_data[sensor_id]['trigger'] += 1
-                    self._runtime_data[sensor_id]['difference'] = difference
+                    self._runtime_data[sensor_id]['reason'] = reason
                     if self._runtime_data[sensor_id]['trigger'] >= self._settings['trigger']:
                         self._runtime_data[sensor_id]['ventilation'] = wanted_ventilation
                         self._runtime_data[sensor_id]['trigger'] = 0
                         current_ventilation = wanted_ventilation
                         trigger_sensors[wanted_ventilation].append(sensor_id)
                 else:
-                    self._runtime_data[sensor_id]['difference'] = ''
+                    self._runtime_data[sensor_id]['reason'] = ''
                     self._runtime_data[sensor_id]['trigger'] = 0
                 ventilation = max(ventilation, self._runtime_data[sensor_id]['ventilation'])
                 self._send_influxdb(tags={'id': sensor_id,
                                           'name': self._sensors[sensor_id].replace(' ', '\ ')},
                                     values={'dewpoint': float(dew_point),
-                                            'ventilated\ dewpoint': float(ventilated_dew_point),
+                                            'absolute\ humidity': float(abs_humidity),
                                             'level': '{0}i'.format(current_ventilation)})
+            self._send_influxdb(tags={'id': outdoor_sensor_id,
+                                      'name': self._sensors[outdoor_sensor_id].replace(' ', '\ ')},
+                                values={'dewpoint': float(outdoor_dew_point),
+                                        'absolute\ humidity': float(outdoor_abs_humidity),
+                                        'level': '0i'})
             if ventilation != self._last_ventilation:
                 if self._last_ventilation is None:
                     self.logger('Updating ventilation to 1 (startup)')
@@ -248,7 +259,7 @@ class Ventilation(OMPluginBase):
                     self.logger('Updating ventilation to {0} because of sensors: {1}'.format(
                         ventilation,
                         ', '.join(['{0} ({1})'.format(self._sensors[sensor_id],
-                                                      self._runtime_data[sensor_id]['difference'])
+                                                      self._runtime_data[sensor_id]['reason'])
                                    for sensor_id in trigger_sensors[ventilation]])
                     ))
                 self._set_ventilation(ventilation)
@@ -377,7 +388,19 @@ class Ventilation(OMPluginBase):
                 self.logger('Got unexpected error while sending data to InfluxDB plugin: {0}'.format(ex))
 
     @staticmethod
+    def _abs_humidity(temperature, humidity):
+        """
+        Calculate the absolute humidity (kg/m3) based on temperature and relative humidity.
+        Formula was taken from http://www.aprweather.com/pages/calc.htm and should be good-enough for this purpose
+        """
+        dew_point = Ventilation._dew_point(temperature, humidity)
+        return ((6.11 * 10.0 ** (7.5 * dew_point / (237.7 + dew_point))) * 100) / ((temperature + 273.16) * 461.5)
+
+    @staticmethod
     def _dew_point(temperature, humidity):
+        """
+        Calculates the dew point for a given temperature and humidity
+        """
         a = 17.27
         b = 237.7
 
