@@ -16,6 +16,10 @@ is stable and has most bugs ironed out. These production ready plugins can be do
 * ventilation - A ventilation plugin, using statistical humidity data to control the ventilation
 * astro - An astronomical plugin, for providing the system with astronomical data (e.g. whether it's day or not, based on the sun's location)
 
+Third party:
+
+* Pushsafer - A plugin for sending events (triggered by OpenMotics (virtual) Inputs) to various devices (phones, browsers, ...)
+
 ### In development
 
 Some plugins are still a work in progress. While they might be suitable for daily usage, they might require some more attention or lack decent
