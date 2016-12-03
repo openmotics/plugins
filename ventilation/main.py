@@ -18,7 +18,7 @@ class Ventilation(OMPluginBase):
     """
 
     name = 'Ventilation'
-    version = '1.1.5'
+    version = '1.1.7'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'low',
@@ -210,7 +210,7 @@ class Ventilation(OMPluginBase):
                 abs_humidity = abs_humidities[sensor_id]
                 temperature = sensor_temperatures[sensor_id]
                 self._runtime_data[sensor_id]['stats'] = [temperature, dew_point, abs_humidity, outdoor_abs_humidity]
-                reason = ''
+                reason = '{0:.2f} <= {1:.2f} <= {2:.2f}'.format(target_lower, humidity, target_upper)
                 wanted_ventilation = 1
                 # First, try to get the dew point inside the target range - increasing comfort
                 if humidity < target_lower or humidity > target_upper:
