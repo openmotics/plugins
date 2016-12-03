@@ -12,22 +12,26 @@ config_description = [{'name': 'url',
                        'type': 'str',
                        'description': 'The InfluxDB database name to witch statistics need to be send.'},
                       {'name': 'intervals',
-                       'type': 'str',
-                       'description': 'JSON encoded dict with send interval per type (see README.md for information)'}]
+                       'type': 'section',
+                       'description': 'Optional interval overrides',
+                       'repeat': True,
+                       'min': 0,
+                       'content': [{'name': 'component', 'type': 'str'},
+                                   {'name': 'interval', 'type': 'int'}]}]
 ```
 
-The ```url``` and ```database``` parameters are self-explaining. The ```intervals``` parameter is an optional JSON
-encoded dict with as key the name of the data, and as value the frequency (in seconds) with which the data should be
-sent (approximately).
+The ```url``` and ```database``` parameters are self-explaining. The ```intervals``` parameter allows to override
+the build-in intervals on which data will be pushed. The components are documented below, the interval is the frequency
+(in seconds) with which the data should be sent (approximately).
 
 ## Data
 
-All data is send using the [Line Protocol](https://influxdb.com/docs/v0.9/write_protocols/line.html):
+All data is send using the [Line Protocol](https://influxdb.com/docs/v1.0/write_protocols/line.html):
 
 ### Outputs
 
 When an output is changed (on, off or changed dimmer value), the data is send to InfluxDB. At a configurable (name
-```outputs```, default```60```) interval, all data is send again. So if for some reason a state change would have been 
+```outputs```, default```60```) interval, all data is send again. So if for some reason a state change would have been
 missed, it will be corrected after that moment.
 
 * *key*: 'output', comma separated with following extra tags:
@@ -73,13 +77,13 @@ InfluxDB.
 * *fields*:
   * *service_uptime*: amount (float) of seconds the service (plugin) is running
   * *system_uptime*: amount (float) of seconds the system is running
-  
+
 Example:
-  
+
 ```
 system,name=gateway service_uptime=145.3,system_uptime=43356.2
 ```
-  
+
 ### Sensors
 
 At a configurable interval (name ```sensors```, default ```60```), all sensor data (where available) is send to InfluxDB.
@@ -108,7 +112,7 @@ At a configurable interval (name ```errors```, default ```120```), module error 
   * *name*: the concatination from the type and the id
 * *fields*:
   * *value*: amount (integer) of errors for this module
-   
+
 Example:
 
 ```
@@ -133,7 +137,7 @@ counter,name=water,input=2 value=274533i
 
 ### Power (OpenMotics - Power Module or Energy Module)
 
-At a configurable interval (name ```power_openmotics```, default ```5```), power data is send to InfluxDB.
+At a configurable interval (name ```power_openmotics```, default ```10```), power data is send to InfluxDB.
 
 * *key*: 'energy', comma separated with following extra tags:
   * *type*: 'openmotics'
@@ -154,7 +158,36 @@ Example:
 energy,type=openmotics,id=E8.2,name=Dryer voltage=231.5,current=2.12,frequency=49.99,power=482.3,counter=5024.0,counter_day2500.0,couner_night=2524.0
 ```
 
-### Power (Fibaro - if the Fibaro plugin is installed and devices reporting power are found)
+### Power analytics (OpenMotics - Energy Module)
+
+At a configurable interval (name ```power_openmotics_analytics```, default ```60```), detailled power analytics data is send to InfluxDB.
+
+Harmonics:
+
+* *key*: 'energy_analytics', comma separated with following extra tags:
+  * *type*: 'frequency',
+  * *id*: concatenation of the module address and power input
+  * *name*: name of the power input - this one is mandatory for a power input to be send to InfluxDB
+* *fields*:
+  * *current_harmonics*: the current harmonics of the corresponding CT
+  * *current_phase*: the current phase of the corresponding CT
+  * *voltage_harmonics*: the voltage harmonics of the corresponding CT
+  * *voltage_phase*: the voltage phase of the corresponding CT
+
+Time based information (So called oscilloscope view)
+
+* *key*: 'energy_analytics', comma separated with following extra tags:
+  * *type*: 'time',
+  * *id*: concatenation of the module address and power input
+  * *name*: name of the power input - this one is mandatory for a power input to be send to InfluxDB
+* *fields*:
+  * *voltage*: the voltage component of the corresponding CT sample
+  * *current*: the current component of the corresponding CT sample
+
+The data send is of a full period of the net frequency in 80 samples. 50Hz = 20ms, so every sample is separated by 250us. For display purposes,
+the sample separation is increased by a factor of 1000, so in InfluxDB, every sample will be 250ms apart.
+
+### Power (Fibaro - If the Fibaro plugin is installed and devices reporting power are found)
 
 At a configurable interval (name ```power_fibaro```, default ```15```), power data is send to InfluxDB.
 
@@ -164,8 +197,8 @@ At a configurable interval (name ```power_fibaro```, default ```15```), power da
   * *name*: name of the device - this one is mandatory for power to be send to InfluxDB
 * *fields*:
   * *power*: the power as reported by the device (in Watt)
-  * *counter*: the total power consumed by the device (in Watt-hours) 
-  
+  * *counter*: the total power consumed by the device (in Watt-hours)
+
 Example:
 
 ```

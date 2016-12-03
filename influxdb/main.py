@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '0.7.21'
+    version = '1.0.8'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -26,8 +26,12 @@ class InfluxDB(OMPluginBase):
                            'type': 'str',
                            'description': 'The InfluxDB database name to witch statistics need to be send.'},
                           {'name': 'intervals',
-                           'type': 'str',
-                           'description': 'JSON encoded dict with send interval per type (see README.md for information)'}]
+                           'type': 'section',
+                           'description': 'Optional interval overrides',
+                           'repeat': True,
+                           'min': 0,
+                           'content': [{'name': 'component', 'type': 'str'},
+                                       {'name': 'interval', 'type': 'int'}]}]
 
     default_config = {'url': '', 'database': 'openmotics', 'intervals': '{}'}
 
@@ -39,10 +43,13 @@ class InfluxDB(OMPluginBase):
         self._last_service_uptime = 0
         self._config = self.read_config(InfluxDB.default_config)
         self._config_checker = PluginConfigChecker(InfluxDB.config_description)
-        self._outputs = {}
-        self._inputs = {}
+        self._environment = {'inputs': {},
+                             'outputs': {},
+                             'sensors': {},
+                             'pulse_counters': {}}
         self._timings = {}
 
+        self._load_environment_configurations()
         self._read_config()
         self._has_fibaro_power = False
         if self._enabled:
@@ -63,17 +70,100 @@ class InfluxDB(OMPluginBase):
         self._enabled = self._url != '' and self._database != ''
         self.logger('InfluxDB is {0}'.format('enabled' if self._enabled else 'disabled'))
 
+    def _load_environment_configurations(self):
+        # Inputs
+        try:
+            result = json.loads(self.webinterface.get_input_configurations(None))
+            if result['success'] is False:
+                self.logger('Failed to load input configurations')
+            else:
+                ids = []
+                for config in result['config']:
+                    input_id = config['id']
+                    ids.append(input_id)
+                    config['clean_name'] = InfluxDB.clean_name(config['name'])
+                    self._environment['inputs'][input_id] = config
+                for input_id in self._environment['inputs'].keys():
+                    if input_id not in ids:
+                        del self._environment['inputs'][input_id]
+        except CommunicationTimedOutException:
+            self.logger('Error while loading input configurations: CommunicationTimedOutException')
+        except Exception as ex:
+            self.logger('Error while loading input configurations: {0}'.format(ex))
+        # Outputs
+        try:
+            result = json.loads(self.webinterface.get_output_configurations(None))
+            if result['success'] is False:
+                self.logger('Failed to load output configurations')
+            else:
+                ids = []
+                for config in result['config']:
+                    output_id = config['id']
+                    ids.append(output_id)
+                    self._environment['outputs'][output_id] = {'name': InfluxDB.clean_name(config['name']),
+                                                               'module_type': {'o': 'output',
+                                                                               'O': 'output',
+                                                                               'd': 'dimmer',
+                                                                               'D': 'dimmer'}[config['module_type']],
+                                                               'floor': config['floor'],
+                                                               'type': 'relay' if config['type'] == 0 else 'light'}
+                for output_id in self._environment['outputs'].keys():
+                    if output_id not in ids:
+                        del self._environment['outputs'][output_id]
+        except CommunicationTimedOutException:
+            self.logger('Error while loading output configurations: CommunicationTimedOutException')
+        except Exception as ex:
+            self.logger('Error while loading output configurations: {0}'.format(ex))
+        # Sensors
+        try:
+            result = json.loads(self.webinterface.get_sensor_configurations(None))
+            if result['success'] is False:
+                self.logger('Failed to load sensor configurations')
+            else:
+                ids = []
+                for config in result['config']:
+                    input_id = config['id']
+                    ids.append(input_id)
+                    config['clean_name'] = InfluxDB.clean_name(config['name'])
+                    self._environment['sensors'][input_id] = config
+                for input_id in self._environment['sensors'].keys():
+                    if input_id not in ids:
+                        del self._environment['sensors'][input_id]
+        except CommunicationTimedOutException:
+            self.logger('Error while loading sensor configurations: CommunicationTimedOutException')
+        except Exception as ex:
+            self.logger('Error while loading sensor configurations: {0}'.format(ex))
+        # Pulse counters
+        try:
+            result = json.loads(self.webinterface.get_pulse_counter_configurations(None))
+            if result['success'] is False:
+                self.logger('Failed to load pulse counter configurations')
+            else:
+                ids = []
+                for config in result['config']:
+                    input_id = config['id']
+                    ids.append(input_id)
+                    config['clean_name'] = InfluxDB.clean_name(config['name'])
+                    self._environment['pulse_counters'][input_id] = config
+                for input_id in self._environment['pulse_counters'].keys():
+                    if input_id not in ids:
+                        del self._environment['pulse_counters'][input_id]
+        except CommunicationTimedOutException:
+            self.logger('Error while loading pulse counter configurations: CommunicationTimedOutException')
+        except Exception as ex:
+            self.logger('Error while loading pulse counter configurations: {0}'.format(ex))
+
     def _check_fibaro_power(self):
         time.sleep(10)
         self._has_fibaro_power = self._get_fibaro_power() is not None
         self.logger('Fibaro plugin {0}detected'.format('' if self._has_fibaro_power else 'not '))
 
     @staticmethod
-    def _clean_name(name):
+    def clean_name(name):
         return name.replace(' ', '\ ')
 
     @input_status
-    def input_status(self, status):
+    def process_input_status(self, status):
         if self._enabled is True:
             input_id = status[0]
             thread = Thread(target=self._process_input, args=(input_id,))
@@ -81,46 +171,47 @@ class InfluxDB(OMPluginBase):
 
     def _process_input(self, input_id):
         try:
-            if input_id not in self._inputs:
-                self.logger('Loading input {0}'.format(input_id))
-                result = json.loads(self.webinterface.get_input_configuration(None, input_id))
-                if result['success'] is False:
-                    self.logger('Failed to load input information')
-                self._inputs[input_id] = result['config']
-            input_name = InfluxDB._clean_name(self._inputs[input_id]['name'])
+            inputs = self._environment['inputs']
+            if input_id not in inputs:
+                return
+            input_name = inputs[input_id]['clean_name']
             if input_name != '':
                 data = {'type': 'input',
                         'id': input_id,
                         'name': input_name}
                 self._send(self._build_command('event', data, 'true'))
+                self.logger('Processed input {0} ({1})'.format(input_id, inputs[input_id]['name']))
             else:
                 self.logger('Not sending input {0}: Name is empty'.format(input_id))
-        except CommunicationTimedOutException:
-            self.logger('Error processing output: CommunicationTimedOutException')
         except Exception as ex:
             self.logger('Error processing input: {0}'.format(ex))
 
     @output_status
-    def output_status(self, status):
+    def process_output_status(self, status):
         if self._enabled is True:
             try:
                 on_outputs = {}
                 for entry in status:
                     on_outputs[entry[0]] = entry[1]
-                for output_id in self._outputs:
+                outputs = self._environment['outputs']
+                for output_id in outputs:
+                    status = outputs[output_id].get('status')
+                    dimmer = outputs[output_id].get('dimmer')
+                    if status is None or dimmer is None:
+                        continue
                     changed = False
                     if output_id in on_outputs:
-                        if self._outputs[output_id]['status'] == 0:
+                        if status != 1:
                             changed = True
-                            self._outputs[output_id]['status'] = 1
+                            outputs[output_id]['status'] = 1
                             self.logger('Output {0} changed to ON'.format(output_id))
-                        if self._outputs[output_id]['dimmer'] != on_outputs[output_id]:
+                        if dimmer != on_outputs[output_id]:
                             changed = True
-                            self._outputs[output_id]['dimmer'] = on_outputs[output_id]
+                            outputs[output_id]['dimmer'] = on_outputs[output_id]
                             self.logger('Output {0} changed to level {1}'.format(output_id, on_outputs[output_id]))
-                    elif self._outputs[output_id]['status'] == 1:
+                    elif status != 0:
                         changed = True
-                        self._outputs[output_id]['status'] = 0
+                        outputs[output_id]['status'] = 0
                         self.logger('Output {0} changed to OFF'.format(output_id))
                     if changed is True:
                         thread = Thread(target=self._process_outputs, args=([output_id],))
@@ -131,20 +222,23 @@ class InfluxDB(OMPluginBase):
     def _process_outputs(self, output_ids):
         try:
             influx_data = []
+            outputs = self._environment['outputs']
             for output_id in output_ids:
-                output_name = self._outputs[output_id].get('name')
-                if output_name != '':
-                    if self._outputs[output_id]['module_type'] == 'output':
+                output_name = outputs[output_id].get('name')
+                status = outputs[output_id].get('status')
+                dimmer = outputs[output_id].get('dimmer')
+                if output_name != '' and status is not None and dimmer is not None:
+                    if outputs[output_id]['module_type'] == 'output':
                         level = 100
                     else:
-                        level = self._outputs[output_id].get('dimmer', 0)
-                    if self._outputs[output_id].get('status', 0) == 0:
+                        level = dimmer
+                    if status == 0:
                         level = 0
                     data = {'id': output_id,
                             'name': output_name}
                     for key in ['module_type', 'type', 'floor']:
-                        if key in self._outputs[output_id]:
-                            data[key] = self._outputs[output_id][key]
+                        if key in outputs[output_id]:
+                            data[key] = outputs[output_id][key]
                     influx_data.append(self._build_command('output', data, '{0}i'.format(level)))
             self._send(influx_data)
         except Exception as ex:
@@ -159,7 +253,8 @@ class InfluxDB(OMPluginBase):
                    InfluxDB._start_thread(self._run_pulsecounters, self._intervals.get('pulsecounters', 30)),
                    InfluxDB._start_thread(self._run_power_openmotics, self._intervals.get('power_openmotics', 10)),
                    InfluxDB._start_thread(self._run_power_openmotics_analytics, self._intervals.get('power_openmotics_analytics', 60)),
-                   InfluxDB._start_thread(self._run_power_fibaro, self._intervals.get('power_fibaro', 15))]
+                   InfluxDB._start_thread(self._run_power_fibaro, self._intervals.get('power_fibaro', 15)),
+                   InfluxDB._start_thread(self._load_environment_configurations, 900)]
         for thread in threads:
             thread.join()
 
@@ -206,68 +301,46 @@ class InfluxDB(OMPluginBase):
         while True:
             start = time.time()
             try:
-                result = json.loads(self.webinterface.get_output_configurations(None, None))
-                if result['success'] is False:
-                    self.logger('Failed to get output configuration')
-                else:
-                    for output in result['config']:
-                        output_id = output['id']
-                        if output_id not in self._outputs:
-                            self._outputs[output_id] = {}
-                        self._outputs[output_id]['name'] = InfluxDB._clean_name(output['name'])
-                        self._outputs[output_id]['module_type'] = {'O': 'output',
-                                                                   'D': 'dimmer'}[output['module_type']]
-                        self._outputs[output_id]['floor'] = output['floor']
-                        self._outputs[output_id]['type'] = 'relay' if output['type'] == 0 else 'light'
-            except CommunicationTimedOutException:
-                self.logger('Error getting output configuration: CommunicationTimedOutException')
-            except Exception as ex:
-                self.logger('Error getting output configuration: {0}'.format(ex))
-            try:
                 result = json.loads(self.webinterface.get_output_status(None))
                 if result['success'] is False:
                     self.logger('Failed to get output status')
                 else:
                     for output in result['status']:
                         output_id = output['id']
-                        if output_id not in self._outputs:
-                            self._outputs[output_id] = {}
-                        self._outputs[output_id]['status'] = output['status']
-                        self._outputs[output_id]['dimmer'] = output['dimmer']
+                        if output_id not in self._environment['outputs']:
+                            continue
+                        self._environment['outputs'][output_id]['status'] = output['status']
+                        self._environment['outputs'][output_id]['dimmer'] = output['dimmer']
             except CommunicationTimedOutException:
                 self.logger('Error getting output status: CommunicationTimedOutException')
             except Exception as ex:
                 self.logger('Error getting output status: {0}'.format(ex))
-            self._process_outputs(self._outputs.keys())
+            self._process_outputs(self._environment['outputs'].keys())
             self._pause(start, interval, 'outputs')
 
     def _run_sensors(self, interval):
         while True:
             start = time.time()
             try:
-                configs = json.loads(self.webinterface.get_sensor_configurations(None))
                 temperatures = json.loads(self.webinterface.get_sensor_temperature_status(None))
                 humidities = json.loads(self.webinterface.get_sensor_humidity_status(None))
                 brightnesses = json.loads(self.webinterface.get_sensor_brightness_status(None))
-                if configs['success'] is False:
-                    self.logger('Failed to get sensor configurations')
-                else:
-                    influx_data = []
-                    for sensor in configs['config']:
-                        sensor_id = sensor['id']
-                        name = InfluxDB._clean_name(sensor['name'])
-                        if name == '' or name == 'NOT_IN_USE':
-                            continue
-                        data = {'id': sensor_id,
-                                'name': name}
-                        values = {}
-                        if temperatures['success'] is True:
-                            values['temp'] = temperatures['status'][sensor_id]
-                        if humidities['success'] is True:
-                            values['hum'] = humidities['status'][sensor_id]
-                        if brightnesses['success'] is True:
-                            values['bright'] = brightnesses['status'][sensor_id]
-                        influx_data.append(self._build_command('sensor', data, values))
+                influx_data = []
+                for sensor_id, sensor in self._environment['sensors'].iteritems():
+                    name = sensor['clean_name']
+                    if name == '' or name == 'NOT_IN_USE':
+                        continue
+                    data = {'id': sensor_id,
+                            'name': name}
+                    values = {}
+                    if temperatures['success'] is True:
+                        values['temp'] = temperatures['status'][sensor_id]
+                    if humidities['success'] is True:
+                        values['hum'] = humidities['status'][sensor_id]
+                    if brightnesses['success'] is True:
+                        values['bright'] = brightnesses['status'][sensor_id]
+                    influx_data.append(self._build_command('sensor', data, values))
+                if len(influx_data) > 0:
                     self._send(influx_data)
             except CommunicationTimedOutException:
                 self.logger('Error getting sensor status: CommunicationTimedOutException')
@@ -287,11 +360,15 @@ class InfluxDB(OMPluginBase):
                     for error in errors['errors']:
                         module = error[0]
                         count = error[1]
-                        types = {'I': 'Input',
+                        types = {'i': 'Input',
+                                 'I': 'Input',
                                  'T': 'Temperature',
+                                 'o': 'Output',
                                  'O': 'Output',
+                                 'd': 'Dimmer',
                                  'D': 'Dimmer',
                                  'R': 'Shutter',
+                                 'C': 'CAN',
                                  'L': 'OLED'}
                         data = {'type': types[module[0]],
                                 'id': module,
@@ -309,16 +386,9 @@ class InfluxDB(OMPluginBase):
             start = time.time()
             counters_data = {}
             try:
-                result = json.loads(self.webinterface.get_pulse_counter_configurations(None, None))
-                if result['success'] is False:
-                    self.logger('Failed to get pulse counter configuration')
-                else:
-                    for counter in result['config']:
-                        counter_id = counter['id']
-                        counters_data[counter_id] = {'name': InfluxDB._clean_name(counter['name']),
-                                                     'input': counter['input']}
-            except CommunicationTimedOutException:
-                self.logger('Error getting pulse counter configuration: CommunicationTimedOutException')
+                for counter_id, counter in self._environment['pulse_counters'].iteritems():
+                    counters_data[counter_id] = {'name': counter['clean_name'],
+                                                 'input': counter['input']}
             except Exception as ex:
                 self.logger('Error getting pulse counter configuration: {0}'.format(ex))
             try:
@@ -359,7 +429,7 @@ class InfluxDB(OMPluginBase):
                         mapping[str(module['id'])] = device_id
                         if module['version'] in [8, 12]:
                             for i in xrange(module['version']):
-                                power_data[device_id.format(i)] = {'name': InfluxDB._clean_name(module['input{0}'.format(i)])}
+                                power_data[device_id.format(i)] = {'name': InfluxDB.clean_name(module['input{0}'.format(i)])}
                         else:
                             self.logger('Unknown power module version: {0}'.format(module['version']))
             except CommunicationTimedOutException:
@@ -445,7 +515,7 @@ class InfluxDB(OMPluginBase):
                         for i in xrange(12):
                             if abort is True:
                                 break
-                            name = InfluxDB._clean_name(module['input{0}'.format(i)])
+                            name = InfluxDB.clean_name(module['input{0}'.format(i)])
                             if name == '':
                                 continue
                             timestamp = base_timestamp
@@ -485,7 +555,7 @@ class InfluxDB(OMPluginBase):
                         for i in xrange(12):
                             if abort is True:
                                 break
-                            name = InfluxDB._clean_name(module['input{0}'.format(i)])
+                            name = InfluxDB.clean_name(module['input{0}'.format(i)])
                             if name == '':
                                 continue
                             timestamp = base_timestamp
@@ -534,7 +604,7 @@ class InfluxDB(OMPluginBase):
                     for device_id in usage:
                         try:
                             device = usage[device_id]
-                            name = InfluxDB._clean_name(device['name'])
+                            name = InfluxDB.clean_name(device['name'])
                             if name == '':
                                 return
                             data = {'type': 'fibaro',
@@ -626,5 +696,8 @@ class InfluxDB(OMPluginBase):
         self._config_checker.check_config(config)
         self._config = config
         self._read_config()
+        if self._enabled:
+            thread = Thread(target=self._load_environment_configurations)
+            thread.start()
         self.write_config(config)
         return json.dumps({'success': True})
