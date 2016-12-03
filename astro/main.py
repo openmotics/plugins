@@ -16,7 +16,7 @@ class Astro(OMPluginBase):
     """
 
     name = 'Astro'
-    version = '0.2.20'
+    version = '0.3.3'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'location',
@@ -33,9 +33,21 @@ class Astro(OMPluginBase):
                            'description': 'The bit that indicates whether it is day, civil or nautical twilight. -1 when not in use.'},
                           {'name': 'astronomical_bit',
                            'type': 'int',
-                           'description': 'The bit that indicates whether it is day, civil, nautical or astronomical twilight. -1 when not in use.'}]
+                           'description': 'The bit that indicates whether it is day, civil, nautical or astronomical twilight. -1 when not in use.'},
+                          {'name': 'bright_bit',
+                           'type': 'int',
+                           'description': 'The bit that indicates the brightest part of the day, -1 when not in use.'},
+                          {'name': 'bright_offset',
+                           'type': 'int',
+                           'description': 'The offset (in minutes) after sunrise and before sunset on which the bright_bit should be set.'}]
 
-    default_config = {'location': 'Brussels,Belgium', 'horizon_bit': -1, 'civil_bit': -1, 'nautical_bit': -1, 'astronomical_bit': -1}
+    default_config = {'location': 'Brussels,Belgium',
+                      'horizon_bit': -1,
+                      'civil_bit': -1,
+                      'nautical_bit': -1,
+                      'astronomical_bit': -1,
+                      'bright_bit': -1,
+                      'bright_offset': 60}
 
     def __init__(self, webinterface, logger):
         super(Astro, self).__init__(webinterface, logger)
@@ -57,8 +69,9 @@ class Astro(OMPluginBase):
 
     def _read_config(self):
         import pytz
-        for bit in ['horizon_bit', 'civil_bit', 'nautical_bit', 'astronomical_bit']:
+        for bit in ['bright_bit', 'horizon_bit', 'civil_bit', 'nautical_bit', 'astronomical_bit']:
             setattr(self, '_{0}'.format(bit), int(self._config.get(bit, Astro.default_config[bit])))
+        self._bright_offset = int(self._config.get('bright_offset', Astro.default_config['bright_offset']))
 
         self._enabled = False
         if self._config['location'] != '':
@@ -97,12 +110,18 @@ class Astro(OMPluginBase):
                         self._latitude, self._longitude
                     )).json()
                     sleep = 24 * 60 * 60
-                    bits = [True, True, True, True]  # [day, civil, nautical, astronomical]
+                    bits = [True, True, True, True, True]  # ['bright', day, civil, nautical, astronomical]
                     if data['status'] == 'OK':
                         # Load data
                         sunrise = Astro._convert(data['results']['sunrise'])
                         sunset = Astro._convert(data['results']['sunset'])
                         has_sun = sunrise is not None and sunset is not None
+                        if has_sun is True:
+                            bright_start = sunrise + timedelta(minutes=self._bright_offset)
+                            bright_end = sunset - timedelta(minutes=self._bright_offset)
+                            has_bright = bright_start < bright_end
+                        else:
+                            has_bright = False
                         civil_start = Astro._convert(data['results']['civil_twilight_begin'])
                         civil_end = Astro._convert(data['results']['civil_twilight_end'])
                         has_civil = civil_start is not None and civil_end is not None
@@ -119,65 +138,76 @@ class Astro(OMPluginBase):
                             # polar night (as defined here - pitch black) only happens very close to the poles. So it's
                             # unlikely this plugin is used there.
                             info = 'polar day'
-                            bits = [True, True, True, True]
+                            bits = [True, True, True, True, True]
                             sleep = (tomorrow - now).total_seconds()
                         else:
-                            if has_sun is False:
+                            if has_bright is False:
                                 bits[0] = False
                             else:
-                                bits[0] = sunrise < now < sunset
+                                bits[0] = bright_start < now < bright_end
                                 if bits[0] is True:
+                                    sleep = min(sleep, (bright_end - now).total_seconds())
+                                elif now < bright_start:
+                                    sleep = min(sleep, (bright_start - now).total_seconds())
+                            if has_sun is False:
+                                bits[1] = False
+                            else:
+                                bits[1] = sunrise < now < sunset
+                                if bits[1] is True:
                                     sleep = min(sleep, (sunset - now).total_seconds())
                                 elif now < sunrise:
                                     sleep = min(sleep, (sunrise - now).total_seconds())
                             if has_civil is False:
                                 if has_sun is True:
-                                    bits[1] = not bits[0]
+                                    bits[2] = not bits[1]
                                 else:
-                                    bits[1] = False
+                                    bits[2] = False
                             else:
-                                bits[1] = civil_start < now < civil_end
-                                if bits[1] is True:
+                                bits[2] = civil_start < now < civil_end
+                                if bits[2] is True:
                                     sleep = min(sleep, (civil_end - now).total_seconds())
                                 elif now < sunrise:
                                     sleep = min(sleep, (civil_start - now).total_seconds())
                             if has_nautical is False:
                                 if has_sun is True or has_civil is True:
-                                    bits[2] = not bits[1]
+                                    bits[3] = not bits[2]
                                 else:
-                                    bits[2] = False
+                                    bits[3] = False
                             else:
-                                bits[2] = nautical_start < now < nautical_end
-                                if bits[2] is True:
+                                bits[3] = nautical_start < now < nautical_end
+                                if bits[3] is True:
                                     sleep = min(sleep, (nautical_end - now).total_seconds())
                                 elif now < sunrise:
                                     sleep = min(sleep, (nautical_start - now).total_seconds())
                             if has_astronomical is False:
                                 if has_sun is True or has_civil is True or has_nautical is True:
-                                    bits[3] = not bits[2]
+                                    bits[4] = not bits[3]
                                 else:
-                                    bits[3] = False
+                                    bits[4] = False
                             else:
-                                bits[3] = astronomical_start < now < astronomical_end
-                                if bits[3] is True:
+                                bits[4] = astronomical_start < now < astronomical_end
+                                if bits[4] is True:
                                     sleep = min(sleep, (astronomical_end - now).total_seconds())
                                 elif now < sunrise:
                                     sleep = min(sleep, (astronomical_start - now).total_seconds())
                             sleep = min(sleep, (tomorrow - now).total_seconds())
                             info = 'night'
-                            if bits[3] is True:
+                            if bits[4] is True:
                                 info = 'astronimical twilight'
-                            if bits[2] is True:
+                            if bits[3] is True:
                                 info = 'nautical twilight'
-                            if bits[1] is True:
+                            if bits[2] is True:
                                 info = 'civil twilight'
-                            if bits[0] is True:
+                            if bits[1] is True:
                                 info = 'day'
+                            if bits[0] is True:
+                                info = 'day (bright)'
                         # Set bits in system
-                        for index, bit in {0: self._horizon_bit,
-                                           1: self._civil_bit,
-                                           2: self._nautical_bit,
-                                           3: self._astronomical_bit}.iteritems():
+                        for index, bit in {0: self._bright_bit,
+                                           1: self._horizon_bit,
+                                           2: self._civil_bit,
+                                           3: self._nautical_bit,
+                                           4: self._astronomical_bit}.iteritems():
                             if bit > -1:
                                 result = json.loads(self.webinterface.do_basic_action(None, 237 if bits[index] else 238, bit))
                                 if result['success'] is False:

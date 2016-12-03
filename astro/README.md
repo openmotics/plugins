@@ -19,7 +19,13 @@ config_description = [{'name': 'location',
                        'description': 'The bit that indicates whether it is day, civil or nautical twilight. -1 when not in use.'},
                       {'name': 'astronomical_bit',
                        'type': 'int',
-                       'description': 'The bit that indicates whether it is day, civil, nautical or astronomical twilight. -1 when not in use.'}]
+                       'description': 'The bit that indicates whether it is day, civil, nautical or astronomical twilight. -1 when not in use.'},
+                      {'name': 'bright_bit',
+                       'type': 'int',
+                       'description': 'The bit that indicates the brightest part of the day, -1 when not in use.'},
+                      {'name': 'bright_offset',
+                       'type': 'int',
+                       'description': 'The offset (in minutes) after sunrise and before sunset on which the bright_bit should be set.'}]
 ```
 
 ## Location
@@ -37,9 +43,12 @@ This plugin uses [Sunrise Sunset](http://sunrise-sunset.org/)'s API to load the 
 
 ## Bits
 
-This plugin can set 4 different bits. You can configure the desired bit or set them to ```-1``` when not in use. There is a bit indicating
+This plugin can set 5 different bits. You can configure the desired bit or set them to ```-1``` when not in use. There is a bit indicating
 whether it's day, civil twilight, nautical twilight and astronomical twilight. One (or a combination of multiple) bit(s) can be used in for
 example Group Actions to decide on certain things.
+
+An extra special bit (```bright_bit```) is available to indicate a smaller part of the day, for example, when something needs to be
+executed when it's at least X minutes after sunrise. The offset after sunrise and before sunset can be set in the ```bright_offset``` configuration.
 
 The below image will give you some insights in how to read/interprete the different bits. More can be read on [Wikipedia](https://en.wikipedia.org/wiki/Twilight).
 
@@ -54,21 +63,32 @@ The different bits:
 * The ```nautical_bit``` is ```1``` when it's day, civil twilight or nautical twilight
 * The ```astronomical_bit``` is ```1``` when it's day, civil twilight, nautical twilight or astronomical twilight.
 
+The extra bit ```bright_bit``` is ```1``` when it's a given amount of minutes after sunrise and before sunset.
+
 When no bits are set, it's night.
 
-A few examples:
+A few examples, where ```bright_offset``` is set to ```60```.
 
-* It's daylight:
+* It's right before noon:
+  * ```bright_bit```: ```1```
   * ```horizon_bit```: ```1```
   * ```civil_bit```: ```1```
   * ```nautical_bit```: ```1```
   * ```astronomical_bit```: ```1```
-* The sun remains below the horizon (nautical twilight or darker), and is now at it's highest point: 
+* It's daylight, but sunrise was only 15 minutes ago:
+  * ```bright_bit```: ```0```
+  * ```horizon_bit```: ```1```
+  * ```civil_bit```: ```1```
+  * ```nautical_bit```: ```1```
+  * ```astronomical_bit```: ```1```
+* The sun remains below the horizon (nautical twilight or darker), and is now at it's highest point:
+ * ```bright_bit```: ```0```
   * ```horizon_bit```: ```0```
   * ```civil_bit```: ```0```
   * ```nautical_bit```: ```1```
   * ```astronomical_bit```: ```1```
-* It's daylight, but the sun barely sets (it just slips below the horizon for a few hours)
+* It's two hours before sunset, but the sun barely sets (it just slips below the horizon for a few hours)
+  * ```bright_bit```: ```1```
   * ```horizon_bit```: ```1```
   * ```civil_bit```: ```1```
   * ```nautical_bit```: ```0```
