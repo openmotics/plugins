@@ -8,11 +8,6 @@ This is a work in progress and might or might not be suitable for real-life usag
 feedback and/or contributions. Please only use this plugin if you know what you're doing and if you're willing to debug
 issues you might encounter. As always, feel free to report issues and/or make pull requests.
 
-## Todo
-
-* Find/create a way of installing pip packages in a non-hacked way
-* Make things more configurable (e.g. filter certain events)
-
 ## Configuration
 
 ```
@@ -21,25 +16,44 @@ config_description = [{'name': 'broker_ip',
                        'description': 'IP or hostname of the MQTT broker.'},
                       {'name': 'broker_port',
                        'type': 'int',
-                       'description': 'Port of the MQTT broker. Default: 1883'},
-                      {'name': 'send_events',
-                       'type': 'bool',
-                       'description': 'Should the client send events (inputs, outputs)'}]
-```
-
-## Data
-
-### Events
-
-Events can be send (if configured) for input and output changes. The message data has the form of a JSON string.
-
-```
-{ "id": 1234, "name": "my_input", "timestamp": 1234567.89 }
+                       'description': 'Port of the MQTT broker. Default: 1883'}]
 ```
 
 ## Topics
 
-The client will publish messages under the configured base_topic. Below that topic following structure will be used:
-* Events
-  * Input: openmotics/events/input/{id}
-  * Output: openmotics/events/output/{id}
+### Events
+
+The system will publish events for Inputs pressed and Outputs that change. It publishes to following topics:
+
+* Input: openmotics/events/input/{id}
+* Output: openmotics/events/output/{id}
+
+For Inputs, the data is a JSON object:
+
+```
+{
+    "id": "<input id>",
+    "name": "<name of the Input>",
+    "timestamp": <unix timestamp>
+}
+```
+
+For Outputs, the data is a JSON object:
+
+```
+{
+    "id": "<output id>",
+    "name": "<name of the Output>",
+    "value": <level of the Output, value 0-100>,
+    "timestamp": <unix timestamp>
+}
+```
+
+### Control
+
+The system can also be controlled by letting clients publish to a given topic.
+
+* Outputs: openmotics/set/output/{id}
+
+For Outputs, the value should be an integer (0-100) representing the desired output state. In case
+the Output is a relay, only 0 and 100 are considered valid values.

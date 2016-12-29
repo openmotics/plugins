@@ -18,7 +18,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '1.0.27'
+    version = '1.1.1'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'broker_ip',
@@ -26,10 +26,7 @@ class MQTTClient(OMPluginBase):
                            'description': 'IP or hostname of the MQTT broker.'},
                           {'name': 'broker_port',
                            'type': 'int',
-                           'description': 'Port of the MQTT broker. Default: 1883'},
-                          {'name': 'send_events',
-                           'type': 'bool',
-                           'description': 'Send input/output events. Default: True'}]
+                           'description': 'Port of the MQTT broker. Default: 1883'}]
 
     default_config = {'broker_port': 1883}
 
@@ -62,9 +59,8 @@ class MQTTClient(OMPluginBase):
     def _read_config(self):
         self._ip = self._config.get('broker_ip')
         self._port = self._config.get('broker_port', MQTTClient.default_config['broker_port'])
-        self._send_events = self._config.get('send_events', False)
 
-        self._enabled = self._ip is not None and self._port is not None and self._send_events is True
+        self._enabled = self._ip is not None and self._port is not None
         self.logger('MQTTClient is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     def _load_configuration(self):
@@ -133,29 +129,31 @@ class MQTTClient(OMPluginBase):
             try:
                 import paho.mqtt.client as client
                 self.client = client.Client()
+                self.client.on_message = self.on_message
                 self.client.connect(self._ip, self._port, 5)
                 self.client.loop_start()
+                self.client.subscribe('openmotics/set/output/#')
                 self.logger('Connected to MQTT broker {0}:{1}'.format(self._ip, self._port))
             except Exception as ex:
                 self.logger('Error connecting to MQTT broker: {0}'.format(ex))
 
     def _log(self, info):
-        thread = Thread(target=self._send, args=('openmotics/logging', info))
+        thread = Thread(target=self._send, args=('openmotics/logging', info), kwargs={'retain': False})
         thread.start()
 
-    def _send(self, topic, data):
+    def _send(self, topic, data, retain=True):
         try:
-            self.client.publish(topic, json.dumps(data))
+            self.client.publish(topic, json.dumps(data), retain=retain)
         except:
             try:
                 self.client.connect(self._ip, self._port, 5)
-                self.client.publish(topic, json.dumps(data))
+                self.client.publish(topic, json.dumps(data), retain=retain)
             except Exception as ex:
                 self.logger('Error sending data to broker: {0}'.format(ex))
 
     @input_status
     def input_status(self, status):
-        if self._enabled is True and self._send_events is True:
+        if self._enabled is True:
             input_id = status[0]
             try:
                 if input_id in self._inputs:
@@ -174,7 +172,7 @@ class MQTTClient(OMPluginBase):
 
     @output_status
     def output_status(self, status):
-        if self._enabled is True and self._send_events is True:
+        if self._enabled is True:
             try:
                 on_outputs = {}
                 for entry in status:
@@ -218,6 +216,36 @@ class MQTTClient(OMPluginBase):
                         thread.start()
             except Exception as ex:
                 self.logger('Error processing outputs: {0}'.format(ex))
+
+    def on_message(self, client, userdata, msg):
+        _ = client, userdata
+        base_topic = 'openmotics/set/output/'
+        if msg.topic.startswith(base_topic):
+            try:
+                output_id = int(msg.topic.replace(base_topic, ''))
+                if output_id in self._outputs:
+                    output = self._outputs[output_id]
+                    value = int(msg.payload)
+                    if value > 0:
+                        is_on = 'true'
+                        log_value = 'ON'
+                    else:
+                        is_on = 'false'
+                        log_value = 'OFF'
+                    dimmer = None
+                    if output['module_type'] == 'dimmer':
+                        dimmer = None if value == 0 else max(0, min(100, value))
+                        if value > 0:
+                            log_value = 'ON ({0}%)'.format(value)
+                    result = json.loads(self.webinterface.set_output(None, output_id, is_on, dimmer, None))
+                    if result['success'] is False:
+                        self._log('Failed to set output {0} to {1}: {2}'.format(output_id, log_value, result.get('msg', 'Unknown error')))
+                    else:
+                        self._log('Output {0} set to {1}'.format(output_id, log_value))
+                else:
+                    self._log('Unknown output: {0}'.format(output_id))
+            except Exception as ex:
+                self._log('Failed to process message: {0}'.format(ex))
 
     @om_expose
     def get_config_description(self):
