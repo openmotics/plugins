@@ -37,16 +37,9 @@ Events can be send (if configured) for input and output changes. The message dat
 { "id": 1234, "name": "my_input", "timestamp": 1234567.89 }
 ```
 
-Topic
------
+## Topics
 
 The client will publish messages under the configured base_topic. Below that topic following structure will be used:
 * Events
-  * Input: openmotics/events/input
-  * Output: openmotics/events/output
-* Sensor data: openmotics/sensor
-* Power data: openmotics/power
-
-Message format
---------------
-
+  * Input: openmotics/events/input/{id}
+  * Output: openmotics/events/output/{id}
