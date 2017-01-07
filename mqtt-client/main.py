@@ -18,7 +18,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '1.1.1'
+    version = '1.1.4'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'broker_ip',
@@ -130,9 +130,9 @@ class MQTTClient(OMPluginBase):
                 import paho.mqtt.client as client
                 self.client = client.Client()
                 self.client.on_message = self.on_message
+                self.client.on_connect = self.on_connect
                 self.client.connect(self._ip, self._port, 5)
                 self.client.loop_start()
-                self.client.subscribe('openmotics/set/output/#')
                 self.logger('Connected to MQTT broker {0}:{1}'.format(self._ip, self._port))
             except Exception as ex:
                 self.logger('Error connecting to MQTT broker: {0}'.format(ex))
@@ -144,12 +144,8 @@ class MQTTClient(OMPluginBase):
     def _send(self, topic, data, retain=True):
         try:
             self.client.publish(topic, json.dumps(data), retain=retain)
-        except:
-            try:
-                self.client.connect(self._ip, self._port, 5)
-                self.client.publish(topic, json.dumps(data), retain=retain)
-            except Exception as ex:
-                self.logger('Error sending data to broker: {0}'.format(ex))
+        except Exception as ex:
+            self.logger('Error sending data to broker: {0}'.format(ex))
 
     @input_status
     def input_status(self, status):
@@ -216,6 +212,14 @@ class MQTTClient(OMPluginBase):
                         thread.start()
             except Exception as ex:
                 self.logger('Error processing outputs: {0}'.format(ex))
+
+    def on_connect(self, client, userdata, flags, rc):
+        _ = client, userdata, flags, rc
+        try:
+            self.client.subscribe('openmotics/set/output/#')
+            self.logger('Subscribed to openmotics/set/output/#')
+        except Exception as ex:
+            self.logger('Could not subscribe: {0}'.format(ex))
 
     def on_message(self, client, userdata, msg):
         _ = client, userdata
