@@ -16,7 +16,7 @@ class Astro(OMPluginBase):
     """
 
     name = 'Astro'
-    version = '0.3.3'
+    version = '0.3.9'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'location',
@@ -76,12 +76,20 @@ class Astro(OMPluginBase):
         self._enabled = False
         if self._config['location'] != '':
             address = self._config['location']
-            location = requests.get('https://maps.googleapis.com/maps/api/geocode/json?address={0}'.format(address)).json()
+            api = 'https://maps.googleapis.com/maps/api/geocode/json?address={0}'.format(address)
+            try:
+                location = requests.get(api).json()
+            except:
+                self.logger('Error calling Google Maps API, waiting 2 minutes to try again')
+                time.sleep(120)
+                location = requests.get(api).json()
             if location['status'] == 'OK':
                 self._latitude = location['results'][0]['geometry']['location']['lat']
                 self._longitude = location['results'][0]['geometry']['location']['lng']
                 self.logger('Latitude: {0} - Longitude: {1}'.format(self._latitude, self._longitude))
                 now = datetime.now(pytz.utc)
+                local_now = datetime.now()
+                self.logger('It\'s now {0} Local time'.format(local_now.strftime('%Y-%m-%d %H:%M:%S')))
                 self.logger('It\'s now {0} UTC'.format(now.strftime('%Y-%m-%d %H:%M:%S')))
                 self._enabled = True
             else:
@@ -104,10 +112,11 @@ class Astro(OMPluginBase):
             import pytz
             while True:
                 now = datetime.now(pytz.utc)
-                tomorrow = pytz.utc.localize(datetime(now.year, now.month, now.day) + timedelta(days=1))
+                local_now = datetime.now()
+                local_tomorrow = datetime(local_now.year, local_now.month, local_now.day) + timedelta(days=1)
                 try:
-                    data = requests.get('http://api.sunrise-sunset.org/json?lat={0}&lng={1}&formatted=0'.format(
-                        self._latitude, self._longitude
+                    data = requests.get('http://api.sunrise-sunset.org/json?lat={0}&lng={1}&date={2}&formatted=0'.format(
+                        self._latitude, self._longitude, local_now.strftime('%Y-%m-%d')
                     )).json()
                     sleep = 24 * 60 * 60
                     bits = [True, True, True, True, True]  # ['bright', day, civil, nautical, astronomical]
@@ -139,7 +148,7 @@ class Astro(OMPluginBase):
                             # unlikely this plugin is used there.
                             info = 'polar day'
                             bits = [True, True, True, True, True]
-                            sleep = (tomorrow - now).total_seconds()
+                            sleep = (local_tomorrow - local_now).total_seconds()
                         else:
                             if has_bright is False:
                                 bits[0] = False
@@ -190,7 +199,7 @@ class Astro(OMPluginBase):
                                     sleep = min(sleep, (astronomical_end - now).total_seconds())
                                 elif now < sunrise:
                                     sleep = min(sleep, (astronomical_start - now).total_seconds())
-                            sleep = min(sleep, (tomorrow - now).total_seconds())
+                            sleep = min(sleep, (local_tomorrow - local_now).total_seconds())
                             info = 'night'
                             if bits[4] is True:
                                 info = 'astronimical twilight'
@@ -216,11 +225,11 @@ class Astro(OMPluginBase):
                         time.sleep(sleep + 5)
                     else:
                         self.logger('Could not load data: {0}'.format(data['status']))
-                        sleep = (tomorrow - now).total_seconds()
+                        sleep = (local_tomorrow - local_now).total_seconds()
                         time.sleep(sleep + 5)
                 except Exception as ex:
                     self.logger('Error figuring out where the sun is: {0}'.format(ex))
-                    sleep = (tomorrow - now).total_seconds()
+                    sleep = (local_tomorrow - local_now).total_seconds()
                     time.sleep(sleep + 5)
 
     @om_expose
