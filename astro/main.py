@@ -16,7 +16,7 @@ class Astro(OMPluginBase):
     """
 
     name = 'Astro'
-    version = '0.3.9'
+    version = '0.4.3'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'location',
@@ -36,10 +36,13 @@ class Astro(OMPluginBase):
                            'description': 'The bit that indicates whether it is day, civil, nautical or astronomical twilight. -1 when not in use.'},
                           {'name': 'bright_bit',
                            'type': 'int',
-                           'description': 'The bit that indicates the brightest part of the day, -1 when not in use.'},
+                           'description': 'The bit that indicates the brightest part of the day. -1 when not in use.'},
                           {'name': 'bright_offset',
                            'type': 'int',
-                           'description': 'The offset (in minutes) after sunrise and before sunset on which the bright_bit should be set.'}]
+                           'description': 'The offset (in minutes) after sunrise and before sunset on which the bright_bit should be set.'},
+                          {'name': 'group_action',
+                           'type': 'int',
+                           'description': 'The ID of a Group Action to be called when another zone is entered. -1 when not in use.'}]
 
     default_config = {'location': 'Brussels,Belgium',
                       'horizon_bit': -1,
@@ -47,7 +50,8 @@ class Astro(OMPluginBase):
                       'nautical_bit': -1,
                       'astronomical_bit': -1,
                       'bright_bit': -1,
-                      'bright_offset': 60}
+                      'bright_offset': 60,
+                      'group_action': -1}
 
     def __init__(self, webinterface, logger):
         super(Astro, self).__init__(webinterface, logger)
@@ -70,8 +74,19 @@ class Astro(OMPluginBase):
     def _read_config(self):
         import pytz
         for bit in ['bright_bit', 'horizon_bit', 'civil_bit', 'nautical_bit', 'astronomical_bit']:
-            setattr(self, '_{0}'.format(bit), int(self._config.get(bit, Astro.default_config[bit])))
-        self._bright_offset = int(self._config.get('bright_offset', Astro.default_config['bright_offset']))
+            try:
+                value = int(self._config.get(bit, Astro.default_config[bit]))
+            except ValueError:
+                value = Astro.default_config[bit]
+            setattr(self, '_{0}'.format(bit), value)
+        try:
+            self._bright_offset = int(self._config.get('bright_offset', Astro.default_config['bright_offset']))
+        except ValueError:
+            self._bright_offset = Astro.default_config['bright_offset']
+        try:
+            self._group_action = int(self._config.get('group_action', Astro.default_config['group_action']))
+        except ValueError:
+            self._group_action = Astro.default_config['group_action']
 
         self._enabled = False
         if self._config['location'] != '':
@@ -110,6 +125,7 @@ class Astro(OMPluginBase):
     def run(self):
         if self._enabled:
             import pytz
+            previous_bits = [None, None, None, None, None]
             while True:
                 now = datetime.now(pytz.utc)
                 local_now = datetime.now()
@@ -221,6 +237,14 @@ class Astro(OMPluginBase):
                                 result = json.loads(self.webinterface.do_basic_action(None, 237 if bits[index] else 238, bit))
                                 if result['success'] is False:
                                     self.logger('Failed to set bit {0} to {1}'.format(bit, 1 if bits[index] else 0))
+                        if previous_bits != bits:
+                            if self._group_action != -1:
+                                result = json.loads(self.webinterface.do_basic_action(None, 2, self._group_action))
+                                if result['success'] is True:
+                                    self.logger('Group Action {0} triggered'.format(self._group_action))
+                                else:
+                                    self.logger('Failed to trigger Group Action {0}'.format(self._group_action))
+                            previous_bits = bits
                         self.logger('It\'s {0}. Going to sleep for {1} seconds'.format(info, round(sleep, 1)))
                         time.sleep(sleep + 5)
                     else:
