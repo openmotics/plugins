@@ -16,18 +16,24 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '1.0.12'
+    version = '1.1.0'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
                            'type': 'str',
                            'description': 'The enpoint for the InfluxDB using HTTP. E.g. http://1.2.3.4:8086'},
+                          {'name': 'username',
+                           'type': 'str',
+                           'description': 'Optional username for InfluxDB authentication.'},
+                          {'name': 'password',
+                           'type': 'str',
+                           'description': 'Optional password for InfluxDB authentication.'},
                           {'name': 'database',
                            'type': 'str',
                            'description': 'The InfluxDB database name to witch statistics need to be send.'},
                           {'name': 'intervals',
                            'type': 'section',
-                           'description': 'Optional interval overrides',
+                           'description': 'Optional interval overrides.',
                            'repeat': True,
                            'min': 0,
                            'content': [{'name': 'component', 'type': 'str'},
@@ -65,6 +71,9 @@ class InfluxDB(OMPluginBase):
         self._intervals = {}
         for item in intervals:
             self._intervals[item['component']] = item['interval']
+        username = self._config.get('username', '')
+        password = self._config.get('password', '')
+        self._auth = None if username == '' else (username, password)
 
         self._endpoint = '{0}/write?db={1}'.format(self._url, self._database)
         self._query_endpoint = '{0}/query?db={1}&epoch=ns'.format(self._url, self._database)
@@ -552,6 +561,7 @@ class InfluxDB(OMPluginBase):
                                     response = requests.get(url=self._query_endpoint,
                                                             params={'q': query},
                                                             headers=self._headers,
+                                                            auth=self._auth,
                                                             verify=False)
                                     if response.status_code != 200:
                                         self.logger('Query time failed, received: {0} ({1})'.format(response.text, response.status_code))
@@ -594,6 +604,7 @@ class InfluxDB(OMPluginBase):
                                     response = requests.get(url=self._query_endpoint,
                                                             params={'q': query},
                                                             headers=self._headers,
+                                                            auth=self._auth,
                                                             verify=False)
                                     if response.status_code != 200:
                                         self.logger('Query frequency failed, received: {0} ({1})'.format(response.text, response.status_code))
@@ -657,6 +668,7 @@ class InfluxDB(OMPluginBase):
             response = requests.post(url=self._endpoint,
                                      data='\n'.join(data),
                                      headers=self._headers,
+                                     auth=self._auth,
                                      verify=False)
             if response.status_code != 204:
                 self.logger('Send failed, received: {0} ({1})'.format(response.text, response.status_code))
