@@ -26,7 +26,13 @@ class MQTTClient(OMPluginBase):
                            'description': 'IP or hostname of the MQTT broker.'},
                           {'name': 'broker_port',
                            'type': 'int',
-                           'description': 'Port of the MQTT broker. Default: 1883'}]
+                           'description': 'Port of the MQTT broker. Default: 1883'},
+                          {'name': 'username',
+                           'type': 'str',
+                           'description': 'Username'},
+                          {'name': 'password',
+                           'type': 'str',
+                           'description': 'Password'}]
 
     default_config = {'broker_port': 1883}
 
@@ -59,6 +65,8 @@ class MQTTClient(OMPluginBase):
     def _read_config(self):
         self._ip = self._config.get('broker_ip')
         self._port = self._config.get('broker_port', MQTTClient.default_config['broker_port'])
+        self._username = self._config.get('username')
+        self._password = self._config.get('password')
 
         self._enabled = self._ip is not None and self._port is not None
         self.logger('MQTTClient is {0}'.format('enabled' if self._enabled else 'disabled'))
@@ -129,11 +137,13 @@ class MQTTClient(OMPluginBase):
             try:
                 import paho.mqtt.client as client
                 self.client = client.Client()
+                if self._username is not None:
+                    self.logger("MQTTClient is using username/password")
+                    self.client.username_pw_set(self._username, self._password)
                 self.client.on_message = self.on_message
                 self.client.on_connect = self.on_connect
                 self.client.connect(self._ip, self._port, 5)
                 self.client.loop_start()
-                self.logger('Connected to MQTT broker {0}:{1}'.format(self._ip, self._port))
             except Exception as ex:
                 self.logger('Error connecting to MQTT broker: {0}'.format(ex))
 
@@ -214,7 +224,11 @@ class MQTTClient(OMPluginBase):
                 self.logger('Error processing outputs: {0}'.format(ex))
 
     def on_connect(self, client, userdata, flags, rc):
-        _ = client, userdata, flags, rc
+        if rc != 0:
+            self.logger('Error connecting: rc={0}', rc)
+            return
+
+        self.logger('Connected to MQTT broker {0}:{1}'.format(self._ip, self._port))
         try:
             self.client.subscribe('openmotics/set/output/#')
             self.logger('Subscribed to openmotics/set/output/#')
@@ -222,7 +236,6 @@ class MQTTClient(OMPluginBase):
             self.logger('Could not subscribe: {0}'.format(ex))
 
     def on_message(self, client, userdata, msg):
-        _ = client, userdata
         base_topic = 'openmotics/set/output/'
         if msg.topic.startswith(base_topic):
             try:
@@ -262,6 +275,10 @@ class MQTTClient(OMPluginBase):
     @om_expose
     def set_config(self, config):
         config = json.loads(config)
+        # Convert unicode to str
+        config['broker_ip'] = config['broker_ip'].encode('ascii', 'ignore')
+        config['username'] = config['username'].encode('ascii', 'ignore')
+        config['password'] = config['password'].encode('ascii', 'ignore')
         self._config_checker.check_config(config)
         self.write_config(config)
         self._config = config
