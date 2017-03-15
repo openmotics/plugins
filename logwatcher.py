@@ -56,14 +56,14 @@ def connect(ip, username, password):
     sys.exit(1)
 
 if __name__ == '__main__':
-    if len(sys.argv) != 4:
-        print 'Usage: ./logwatcher.py <ip/hostname of gateway> <username> <plugin>'
+    if len(sys.argv) < 4:
+        print 'Usage: ./logwatcher.py <ip/hostname of gateway> <username> <plugin> <password>'
         sys.exit(1)
     try:
         _ip = sys.argv[1]
         _username = sys.argv[2]
         _plugin = sys.argv[3]
-        _password = getpass.getpass('Password: ')
+        _password = sys.argv[4] if len(sys.argv) > 4 else getpass.getpass('Password: ')
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", exceptions.InsecureRequestWarning)
             watch(_ip, _username, _password, _plugin)
