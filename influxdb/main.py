@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '1.1.0'
+    version = '1.1.1'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -357,11 +357,11 @@ class InfluxDB(OMPluginBase):
                     data = {'id': sensor_id,
                             'name': name}
                     values = {}
-                    if temperatures['success'] is True:
+                    if temperatures['success'] is True and temperatures['status'][sensor_id] is not None:
                         values['temp'] = temperatures['status'][sensor_id]
-                    if humidities['success'] is True:
+                    if humidities['success'] is True and humidities['status'][sensor_id] is not None:
                         values['hum'] = humidities['status'][sensor_id]
-                    if brightnesses['success'] is True:
+                    if brightnesses['success'] is True and brightnesses['status'][sensor_id] is not None:
                         values['bright'] = brightnesses['status'][sensor_id]
                     influx_data.append(self._build_command('sensor', data, values))
                 if len(influx_data) > 0:

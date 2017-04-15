@@ -15,7 +15,7 @@ class Fibaro(OMPluginBase):
     """
 
     name = 'Fibaro'
-    version = '1.0.3'
+    version = '1.1.4'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'ip',
@@ -105,12 +105,10 @@ class Fibaro(OMPluginBase):
             url = self._endpoint.format(action)
             params = '&'.join(['{0}={1}'.format(key, value) for key, value in data.iteritems()])
             self.logger('Calling {0}?{1}'.format(url, params))
-            start = time.time()
             response = requests.get(url=url,
                                     params=data,
                                     headers=self._headers,
                                     auth=(self._username, self._password))
-            self.logger('Call took {0}s'.format(round(time.time() - start, 2)))
             if response.status_code != 202:
                 self.logger('Call failed, received: {0} ({1})'.format(response.text, response.status_code))
                 return
@@ -118,7 +116,6 @@ class Fibaro(OMPluginBase):
             if result['result']['result'] not in [0, 1]:
                 self.logger('Call failed, received: {0} ({1})'.format(response.text, response.status_code))
                 return
-            self.logger('Call successful')
         except Exception as ex:
             self.logger('Error during call: {0}'.format(ex))
 
@@ -129,8 +126,8 @@ class Fibaro(OMPluginBase):
                 start = time.time()
                 try:
                     response = requests.get(url='http://{0}/api/devices'.format(self._ip),
-                                    headers=self._headers,
-                                    auth=(self._username, self._password))
+                                            headers=self._headers,
+                                            auth=(self._username, self._password))
                     if response.status_code != 200:
                         self.logger('Failed to load power devices')
                     else:
@@ -142,14 +139,14 @@ class Fibaro(OMPluginBase):
                                     sensor_id = sensor['sensor_id']
                                     if sensor.get('fibaro_temperature_id', -1) == device['id'] and 'value' in device['properties']:
                                         if sensor_id not in sensor_values:
-                                            sensor_values[sensor_id] = [95.5, 0, 0]
-                                        sensor_values[sensor_id][0] = max(-32.0, min(95.5, float(device['properties']['value'])))
+                                            sensor_values[sensor_id] = [None, None, None]
+                                        sensor_values[sensor_id][0] = max(-32.0, min(95.0, float(device['properties']['value'])))
                                     if sensor.get('fibaro_brightness_id', -1) == device['id'] and 'value' in device['properties']:
                                         if sensor_id not in sensor_values:
-                                            sensor_values[sensor_id] = [95.5, 0, 0]
+                                            sensor_values[sensor_id] = [None, None, None]
                                         limit = float(sensor.get('fibaro_brightness_max', 500))
                                         value = float(device['properties']['value'])
-                                        sensor_values[sensor_id][2] = max(0, min(100, value / limit * 100))
+                                        sensor_values[sensor_id][2] = max(0.0, min(100.0, value / limit * 100))
                         for sensor_id, values in sensor_values.iteritems():
                             result = json.loads(self.webinterface.set_virtual_sensor(None, sensor_id, *values))
                             if result['success'] is False:
