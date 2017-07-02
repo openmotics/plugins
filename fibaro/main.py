@@ -15,7 +15,7 @@ class Fibaro(OMPluginBase):
     """
 
     name = 'Fibaro'
-    version = '1.1.4'
+    version = '1.1.5'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'ip',
@@ -121,8 +121,8 @@ class Fibaro(OMPluginBase):
 
     @background_task
     def run(self):
-        if self._enabled:
-            while True:
+        while True:
+            if self._enabled:
                 start = time.time()
                 try:
                     response = requests.get(url='http://{0}/api/devices'.format(self._ip),
@@ -158,6 +158,8 @@ class Fibaro(OMPluginBase):
                 if sleep < 0:
                     sleep = 1
                 time.sleep(sleep)
+            else:
+                time.sleep(5)
 
     @om_expose
     def get_power_usage(self):
