@@ -18,7 +18,7 @@ class Ventilation(OMPluginBase):
     """
 
     name = 'Ventilation'
-    version = '1.1.7'
+    version = '1.1.8'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'low',
@@ -142,9 +142,9 @@ class Ventilation(OMPluginBase):
 
     @background_task
     def run(self):
-        if self._enabled:
-            self._runtime_data = {}
-            while True:
+        self._runtime_data = {}
+        while True:
+            if self._enabled:
                 start = time.time()
                 if self._mode == 'statistical':
                     self._process_statistics()
@@ -155,6 +155,8 @@ class Ventilation(OMPluginBase):
                 if sleep < 0:
                     sleep = 1
                 time.sleep(sleep)
+            else:
+                time.sleep(5)
 
     def _process_dew_point(self):
         try:
