@@ -2,11 +2,11 @@
 An astronomical plugin, for providing the system with astronomical data (e.g. whether it's day or not, based on the sun's location)
 """
 
+import sys
 import time
 import requests
 import simplejson as json
 from datetime import datetime, timedelta
-from subprocess import check_output
 from plugins.base import om_expose, receive_events, background_task, OMPluginBase, PluginConfigChecker
 
 
@@ -16,7 +16,7 @@ class Astro(OMPluginBase):
     """
 
     name = 'Astro'
-    version = '0.4.3'
+    version = '0.5.1'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'location',
@@ -60,13 +60,10 @@ class Astro(OMPluginBase):
         self._config = self.read_config(Astro.default_config)
         self._config_checker = PluginConfigChecker(Astro.config_description)
 
-        try:
-            import pytz
-        except ImportError:
-            check_output('mount -o remount,rw /', shell=True)
-            check_output('pip install pytz', shell=True)
-            check_output('mount -o remount,ro /', shell=True)
-            import pytz
+        pytz_egg = '/opt/openmotics/python/plugins/Astro/pytz-2017.2-py2.7.egg'
+        if pytz_egg not in sys.path:
+            sys.path.append(pytz_egg)
+
         self._read_config()
 
         self.logger("Started Astro plugin")
@@ -123,10 +120,10 @@ class Astro(OMPluginBase):
 
     @background_task
     def run(self):
-        if self._enabled:
-            import pytz
-            previous_bits = [None, None, None, None, None]
-            while True:
+        import pytz
+        previous_bits = [None, None, None, None, None]
+        while True:
+            if self._enabled:
                 now = datetime.now(pytz.utc)
                 local_now = datetime.now()
                 local_tomorrow = datetime(local_now.year, local_now.month, local_now.day) + timedelta(days=1)
@@ -255,6 +252,8 @@ class Astro(OMPluginBase):
                     self.logger('Error figuring out where the sun is: {0}'.format(ex))
                     sleep = (local_tomorrow - local_now).total_seconds()
                     time.sleep(sleep + 5)
+            else:
+                time.sleep(5)
 
     @om_expose
     def get_config_description(self):
