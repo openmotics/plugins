@@ -3,10 +3,10 @@ An MQTT client plugin for sending/receiving data to/from an MQTT broker.
 For more info: https://github.com/openmotics/plugins/blob/master/mqtt-client/README.md
 """
 
+import sys
 import time
 import simplejson as json
 from threading import Thread
-from subprocess import check_output
 from plugins.base import om_expose, input_status, output_status, OMPluginBase, PluginConfigChecker
 from serial_utils import CommunicationTimedOutException
 
@@ -18,7 +18,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '1.1.4'
+    version = '1.2.0'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'broker_ip',
@@ -43,13 +43,9 @@ class MQTTClient(OMPluginBase):
         self._config = self.read_config(MQTTClient.default_config)
         self._config_checker = PluginConfigChecker(MQTTClient.config_description)
 
-        try:
-            import paho.mqtt.client as client
-        except ImportError:
-            check_output('mount -o remount,rw /', shell=True)
-            check_output('pip install paho-mqtt', shell=True)
-            check_output('mount -o remount,ro /', shell=True)
-            import paho.mqtt.client as client
+        paho_mqtt_egg = '/opt/openmotics/python/plugins/MQTTClient/paho_mqtt-1.2.3-py2.7.egg'
+        if paho_mqtt_egg not in sys.path:
+            sys.path.append(paho_mqtt_egg)
 
         self.client = None
         self._outputs = {}
