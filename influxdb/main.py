@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '1.1.1'
+    version = '1.2.2'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -273,6 +273,7 @@ class InfluxDB(OMPluginBase):
         threads = [InfluxDB._start_thread(self._run_system, self._intervals.get('system', 60)),
                    InfluxDB._start_thread(self._run_outputs, self._intervals.get('outputs', 60)),
                    InfluxDB._start_thread(self._run_sensors, self._intervals.get('sensors', 60)),
+                   InfluxDB._start_thread(self._run_thermostats, self._intervals.get('thermostats', 60)),
                    InfluxDB._start_thread(self._run_errors, self._intervals.get('errors', 120)),
                    InfluxDB._start_thread(self._run_pulsecounters, self._intervals.get('pulsecounters', 30)),
                    InfluxDB._start_thread(self._run_power_openmotics, self._intervals.get('power_openmotics', 10)),
@@ -371,6 +372,42 @@ class InfluxDB(OMPluginBase):
             except Exception as ex:
                 self.logger('Error getting sensor status: {0}'.format(ex))
             self._pause(start, interval, 'sensors')
+
+    def _run_thermostats(self, interval):
+        while True:
+            start = time.time()
+            try:
+                thermostats = json.loads(self.webinterface.get_thermostat_status(None))
+                if thermostats['success'] is False:
+                    self.logger('Failed to get thermostat status')
+                else:
+                    influx_data = [self._build_command('thermostat',
+                                                       {'id': 'G.0',
+                                                        'name': 'Global\ configuration'},
+                                                       {'on': str(thermostats['thermostats_on']),
+                                                        'cooling': str(thermostats['cooling'])})]
+                    for thermostat in thermostats['status']:
+                        values = {'setpoint': '{0}i'.format(thermostat['setpoint']),
+                                  'output0': thermostat['output0'],
+                                  'output1': thermostat['output1'],
+                                  'outside': thermostat['outside'],
+                                  'mode': '{0}i'.format(thermostat['mode']),
+                                  'type': '"tbs"' if thermostat['sensor_nr'] == 240 else '"normal"',
+                                  'automatic': str(thermostat['automatic']),
+                                  'current_setpoint': thermostat['csetp']}
+                        if thermostat['sensor_nr'] != 240:
+                            values['temperature'] = thermostat['act']
+                        influx_data.append(self._build_command('thermostat',
+                                                               {'id': '{0}.{1}'.format('C' if thermostats['cooling'] is True else 'H',
+                                                                                       thermostat['id']),
+                                                                'name': InfluxDB.clean_name(thermostat['name'])},
+                                                               values))
+                    self._send(influx_data)
+            except CommunicationTimedOutException:
+                self.logger('Error getting thermostat status: CommunicationTimedOutException')
+            except Exception as ex:
+                self.logger('Error getting thermostat status: {0}'.format(ex))
+            self._pause(start, interval, 'thermostats')
 
     def _run_errors(self, interval):
         while True:
@@ -724,7 +761,9 @@ class InfluxDB(OMPluginBase):
         self._config = config
         self._read_config()
         if self._enabled:
-            thread = Thread(target=self._load_environment_configurations)
-            thread.start()
+            cthread = Thread(target=self._load_environment_configurations)
+            cthread.start()
+            fthread = Thread(target=self._check_fibaro_power)
+            fthread.start()
         self.write_config(config)
         return json.dumps({'success': True})

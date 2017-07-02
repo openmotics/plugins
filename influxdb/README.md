@@ -102,6 +102,38 @@ Example:
 sensor,id=5,name=outdoors temp=8.5,hum=83.5,bright=23.0
 ```
 
+### Thermostats
+
+At a configurable interval (name ```thermostats```, default ```60```), thermostat information is send to InfluxDB.
+
+* *key*: 'thermostat', comma separated with following extra tags:
+  * *id*: id of the thermostat:
+    * G.0 for global thermostat information
+    * H.*xx* for heating thermostat *xx*
+    * C.*xx* for cooling thermostat *xx*
+  * *name*: name of the thermostat
+* *fields*:
+  * Global thermostat:
+    * *on*: whether the global thermostat is on (boolean) or not
+    * *cooling*: whether the global thermostat mode is on cooling (true) or heating (false) (boolean)
+  * Heating/cooling thermostats:
+    * *setpoint*: setpoint id (integer) of the thermostat. ```0```-```2``` for day/night temperatures, ```3``` for away, ```4``` for vacation and ```5``` for party
+    * *output0*: id of the primary output (integer) of the thermostat. *255* if not in use
+    * *output1*: id of the secondairy output (integer) of the thermostat. *255* if not in use
+    * *outside*: outside temperature (float)
+    * *mode*: thermostat mode (integer). See the wiki for more information
+    * *type*: thermostat type (string). ```tbs``` indicate "time based switching", ```normal``` otherwise
+    * *automatic*: indicates (boolean) whether the thermostat is on automatic mode
+    * *current_setpoint*: the current setpoint (float)
+    * *temperature*: the current temperature of the linked sensor (only in ```normal``` mode)
+
+Example:
+
+```
+thermostat,id=G.0,name=Global\ thermostat on=true,cooling=false
+thermostat,id=H.12,name=Living setpoint=0,output0=12,output1=255,outside=8.5,mode=7,type=normal,automatic=true,current_setpoint=22,temperature=21.5
+```
+
 ### Errors
 
 At a configurable interval (name ```errors```, default ```120```), module error statistics are send to InfluxDB.
