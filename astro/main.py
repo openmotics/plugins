@@ -16,7 +16,7 @@ class Astro(OMPluginBase):
     """
 
     name = 'Astro'
-    version = '0.5.1'
+    version = '0.5.2'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'location',
@@ -62,7 +62,7 @@ class Astro(OMPluginBase):
 
         pytz_egg = '/opt/openmotics/python/plugins/Astro/pytz-2017.2-py2.7.egg'
         if pytz_egg not in sys.path:
-            sys.path.append(pytz_egg)
+            sys.path.insert(0, pytz_egg)
 
         self._read_config()
 
