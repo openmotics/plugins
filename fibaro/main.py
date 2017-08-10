@@ -6,7 +6,7 @@ import time
 import requests
 import simplejson as json
 from threading import Thread
-from plugins.base import om_expose, output_status, OMPluginBase, PluginConfigChecker, background_task
+from plugins.base import om_expose, output_status, OMPluginBase, PluginConfigChecker, background_task, om_metric_data
 
 
 class Fibaro(OMPluginBase):
@@ -15,8 +15,9 @@ class Fibaro(OMPluginBase):
     """
 
     name = 'Fibaro'
-    version = '1.1.5'
-    interfaces = [('config', '1.0')]
+    version = '2.0.11'
+    interfaces = [('config', '1.0'),
+                  ('metrics', '1.0')]
 
     config_description = [{'name': 'ip',
                            'type': 'str',
@@ -43,6 +44,18 @@ class Fibaro(OMPluginBase):
                                        {'name': 'fibaro_temperature_id', 'type': 'int'},
                                        {'name': 'fibaro_brightness_id', 'type': 'int'},
                                        {'name': 'fibaro_brightness_max', 'type': 'int'}]}]
+    metric_definitions = [{'type': 'energy',
+                           'name': 'power',
+                           'description': 'Current power consumption',
+                           'mtype': 'gauge',
+                           'unit': 'W',
+                           'tags': ['name', 'id', 'brand']},
+                          {'type': 'energy',
+                           'name': 'power_counter',
+                           'description': 'Total energy consumed',
+                           'mtype': 'counter',
+                           'unit': 'Wh',
+                           'tags': ['name', 'id', 'brand']}]
 
     default_config = {'ip': '', 'username': '', 'password': ''}
 
@@ -161,26 +174,33 @@ class Fibaro(OMPluginBase):
             else:
                 time.sleep(5)
 
-    @om_expose
-    def get_power_usage(self):
+    @om_metric_data(interval=15)
+    def get_metric_data(self):
         if self._enabled:
+            now = time.time()
             response = requests.get(url='http://{0}/api/devices'.format(self._ip),
                                     headers=self._headers,
                                     auth=(self._username, self._password))
             if response.status_code != 200:
                 self.logger('Failed to load power devices')
-                return json.dumps({'success': False, 'error': 'Could not load power devices'})
+                return
             result = response.json()
-            devices = {}
             for device in result:
                 if 'properties' in device and 'power' in device['properties']:
-                    devices[device['id']] = {'id': device['id'],
-                                             'name': device['name'],
-                                             'power': float(device['properties']['power']),
-                                             'counter': float(device['properties']['energy']) * 1000}
-            return json.dumps({'success': True, 'result': devices})
-        else:
-            return json.dumps({'success': False, 'error': 'Fibaro plugin not enabled'})
+                    yield {'type': 'energy',
+                           'metric': 'power',
+                           'timestamp': now,
+                           'brand': 'fibaro',
+                           'name': device['name'],
+                           'id': str(device['id']),
+                           'value': float(device['properties']['power'])}
+                    yield {'type': 'energy',
+                           'metric': 'power_counter',
+                           'timestamp': now,
+                           'brand': 'fibaro',
+                           'name': device['name'],
+                           'id': str(device['id']),
+                           'value': float(device['properties']['energy']) * 1000}
 
     @om_expose
     def get_config_description(self):
