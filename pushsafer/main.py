@@ -3,10 +3,10 @@ A Pushsafer (http://www.pushsafer.com) plugin for pushing events through Pushsaf
 """
 
 import collections
-from threading import Thread
-
+import time
 import requests
 import simplejson as json
+from threading import Thread
 from plugins.base import om_expose, input_status, OMPluginBase, PluginConfigChecker
 
 
@@ -16,7 +16,7 @@ class Pushsafer(OMPluginBase):
     """
 
     name = 'Pushsafer'
-    version = '2.0.3'
+    version = '2.1.0'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'privatekey',
@@ -68,6 +68,7 @@ class Pushsafer(OMPluginBase):
         self._config = self.read_config(Pushsafer.default_config)
         self._config_checker = PluginConfigChecker(Pushsafer.config_description)
 
+        self._cooldown = {}
         self._read_config()
 
         self.logger("Started Pushsafer plugin")
@@ -95,8 +96,13 @@ class Pushsafer(OMPluginBase):
 
     @input_status
     def input_status(self, status):
+        now = time.time()
         if self._enabled is True:
             input_id = status[0]
+            if self._cooldown.get(input_id, 0) > now - 10:
+                self.logger('Ignored duplicate Input in 10 seconds.')
+                return
+            data_send = False
             for mapping in self._mapping:
                 if input_id == mapping['input_id']:
                     data = {'k': self._privatekey,
@@ -111,6 +117,9 @@ class Pushsafer(OMPluginBase):
                             'l': mapping['time2live']}
                     thread = Thread(target=self._send_data, args=(data,))
                     thread.start()
+                    data_send = True
+            if data_send is True:
+                self._cooldown[input_id] = now
 
     def _send_data(self, data):
         try:
