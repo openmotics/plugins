@@ -4,7 +4,6 @@ A ventilation plugin, using statistical humidity data or the dew point to contro
 
 import time
 import math
-import requests
 import simplejson as json
 from math import sqrt
 from Queue import Queue, Empty
@@ -18,7 +17,7 @@ class Ventilation(OMPluginBase):
     """
 
     name = 'Ventilation'
-    version = '2.0.2'
+    version = '2.0.3'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
@@ -137,29 +136,6 @@ class Ventilation(OMPluginBase):
             self.logger('Error getting sensor status: CommunicationTimedOutException')
         except Exception as ex:
             self.logger('Error getting sensor status: {0}'.format(ex))
-
-    def _check_influxdb(self):
-        time.sleep(10)
-        self._has_influxdb = False
-        try:
-            response = requests.get(url='https://127.0.0.1/get_plugins',
-                                    params={'token': 'None'},
-                                    verify=False)
-            if response.status_code == 200:
-                result = response.json()
-                if result['success'] is True:
-                    for plugin in result['plugins']:
-                        if plugin['name'] == 'InfluxDB':
-                            version = plugin['version']
-                            self._has_influxdb = version >= '0.5.1'
-                            break
-                else:
-                    self.logger('Error loading plugin data: {0}'.format(result['msg']))
-            else:
-                self.logger('Error loading plugin data: {0}'.format(response.status_code))
-        except Exception as ex:
-            self.logger('Got unexpected error during plugin load: {0}'.format(ex))
-        self.logger('InfluxDB plugin {0}detected'.format('' if self._has_influxdb else 'not '))
 
     @background_task
     def run(self):
@@ -393,17 +369,17 @@ class Ventilation(OMPluginBase):
         return success
 
     def _enqueue_metrics(self, tags, values):
-            try:
-                now = time.time()
-                for key, value in values.iteritems():
-                    metric = {'type': 'ventilation',
-                              'metric': key,
-                              'value': value,
-                              'timestamp': now}
-                    metric.update(tags)
-                    self._metrics_queue.put(metric)
-            except Exception as ex:
-                self.logger('Got unexpected error while sending data to InfluxDB plugin: {0}'.format(ex))
+        try:
+            now = time.time()
+            for key, value in values.iteritems():
+                metric = {'type': 'ventilation',
+                          'metric': key,
+                          'value': value,
+                          'timestamp': now}
+                metric.update(tags)
+                self._metrics_queue.put(metric)
+        except Exception as ex:
+            self.logger('Got unexpected error while enqueing metrics: {0}'.format(ex))
 
     @om_metric_data(interval=5)
     def collect_metrics(self):

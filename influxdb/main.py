@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '2.0.25'
+    version = '2.0.27'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -30,14 +30,7 @@ class InfluxDB(OMPluginBase):
                            'description': 'Optional password for InfluxDB authentication.'},
                           {'name': 'database',
                            'type': 'str',
-                           'description': 'The InfluxDB database name to witch statistics need to be send.'},
-                          {'name': 'intervals',
-                           'type': 'section',
-                           'description': 'Optional interval overrides.',
-                           'repeat': True,
-                           'min': 0,
-                           'content': [{'name': 'component', 'type': 'str'},
-                                       {'name': 'interval', 'type': 'int'}]}]
+                           'description': 'The InfluxDB database name to witch statistics need to be send.'}]
 
     default_config = {'url': '', 'database': 'openmotics'}
 
@@ -61,10 +54,6 @@ class InfluxDB(OMPluginBase):
     def _read_config(self):
         self._url = self._config['url']
         self._database = self._config['database']
-        intervals = self._config.get('intervals', [])
-        self._intervals = {}
-        for item in intervals:
-            self._intervals[item['component']] = item['interval']
         username = self._config.get('username', '')
         password = self._config.get('password', '')
         self._auth = None if username == '' else (username, password)
@@ -104,6 +93,9 @@ class InfluxDB(OMPluginBase):
         >                   "voltage": 234}]
         """
         try:
+            if self._enabled is False:
+                return
+
             metric_type = metric['type']
             plugin = metric['plugin'].lower()
             timestamp = metric['timestamp'] * 1000000000
