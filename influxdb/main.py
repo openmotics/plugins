@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '2.0.27'
+    version = '2.0.28'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -65,7 +65,7 @@ class InfluxDB(OMPluginBase):
         self._enabled = self._url != '' and self._database != ''
         self.logger('InfluxDB is {0}'.format('enabled' if self._enabled else 'disabled'))
 
-    @om_metric_receive(plugin='.*', metric='.*', include_definition=True)
+    @om_metric_receive(source='.*', metric='.*', include_definition=True)
     def _receive_metric_data(self, metric, definition):
         """
         All metrics are collected, as filtering is done more finegraded when mapping to tables
@@ -75,14 +75,14 @@ class InfluxDB(OMPluginBase):
         >                       "mtype": "counter",
         >                       "unit": "Wh",
         >                       "tags": ["device", "id"]}
-        > example_metric = {"plugin": "OpenMotics",
+        > example_metric = {"source": "OpenMotics",
         >                   "type": "energy",
         >                   "metric": "power",
         >                   "timestamp": 1497677091,
         >                   "device": "OpenMotics energy ID1",
         >                   "id": 0,
         >                   "value": 1234}
-        All metrics are grouped by their plugin, type and tags. As soon as a new timestamp is received, the pending
+        All metrics are grouped by their source, type and tags. As soon as a new timestamp is received, the pending
         group is send to InfluxDB and a new group is started. The tags from a group are based on the metric's definition's
         tags. The fields (values) are the metric > value pairs.
         > example_group = ["energy",
@@ -97,7 +97,7 @@ class InfluxDB(OMPluginBase):
                 return
 
             metric_type = metric['type']
-            plugin = metric['plugin'].lower()
+            source = metric['source'].lower()
             timestamp = metric['timestamp'] * 1000000000
             value = metric['value']
 
@@ -107,14 +107,14 @@ class InfluxDB(OMPluginBase):
                 value = str(value)
             if isinstance(value, int):
                 value = '{0}i'.format(value)
-            tags = {'type': plugin}
+            tags = {'type': source}
             for tag in definition['tags']:
                 if isinstance(metric[tag], basestring):
                     tags[tag] = metric[tag].replace(' ', '\ ')
                 else:
                     tags[tag] = metric[tag]
 
-            entries = self._pending_metrics.setdefault(plugin, {}).setdefault(metric_type, [])
+            entries = self._pending_metrics.setdefault(source, {}).setdefault(metric_type, [])
             found = False
             for pending in entries[:]:
                 this_one = True
