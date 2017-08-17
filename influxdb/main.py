@@ -6,7 +6,7 @@ import time
 import requests
 import simplejson as json
 from threading import Thread
-from Queue import Queue, Empty
+from collections import deque
 from plugins.base import om_expose, OMPluginBase, PluginConfigChecker, om_metric_receive
 
 
@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '2.0.28'
+    version = '2.0.36'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -30,7 +30,10 @@ class InfluxDB(OMPluginBase):
                            'description': 'Optional password for InfluxDB authentication.'},
                           {'name': 'database',
                            'type': 'str',
-                           'description': 'The InfluxDB database name to witch statistics need to be send.'}]
+                           'description': 'The InfluxDB database name to witch statistics need to be send.'},
+                          {'name': 'batch_size',
+                           'type': 'int',
+                           'description': 'The maximum batch size of grouped metrics to be send to InfluxDB.'}]
 
     default_config = {'url': '', 'database': 'openmotics'}
 
@@ -41,7 +44,10 @@ class InfluxDB(OMPluginBase):
         self._config = self.read_config(InfluxDB.default_config)
         self._config_checker = PluginConfigChecker(InfluxDB.config_description)
         self._pending_metrics = {}
-        self._send_queue = Queue()
+        self._send_queue = deque()
+        self._batch_sizes = []
+        self._queue_sizes = []
+        self._stats_time = 0
 
         self._send_thread = Thread(target=self._sender)
         self._send_thread.setName('InfluxDB batch sender')
@@ -54,6 +60,7 @@ class InfluxDB(OMPluginBase):
     def _read_config(self):
         self._url = self._config['url']
         self._database = self._config['database']
+        self._batch_size = self._config.get('batch_size', 10)
         username = self._config.get('username', '')
         password = self._config.get('password', '')
         self._auth = None if username == '' else (username, password)
@@ -127,7 +134,8 @@ class InfluxDB(OMPluginBase):
                         found = True
                         pending[2][metric['metric']] = value
                     else:
-                        self._enqueue(self._build_command(metric_type, pending[1], pending[2], pending[0]))
+                        data = self._build_entry(metric_type, pending[1], pending[2], pending[0])
+                        self._send_queue.appendleft(data)
                         entries.remove(pending)
                     break
             if found is False:
@@ -136,7 +144,7 @@ class InfluxDB(OMPluginBase):
             self.logger('Error receiving metrics: {0}'.format(ex))
 
     @staticmethod
-    def _build_command(key, tags, value, timestamp):
+    def _build_entry(key, tags, value, timestamp):
         if isinstance(value, dict):
                 values = ','.join('{0}={1}'.format(vname, vvalue)
                                   for vname, vvalue in value.iteritems())
@@ -148,27 +156,20 @@ class InfluxDB(OMPluginBase):
                                        values,
                                        '' if timestamp is None else ' {:.0f}'.format(timestamp))
 
-    def _enqueue(self, data):
-        if not isinstance(data, list) and not isinstance(data, basestring):
-            raise RuntimeError('Invalid data enqueued ({0})'.format(type(data)))
-        if isinstance(data, basestring):
-            data = [data]
-        if len(data) > 0:
-            for entry in data:
-                self._send_queue.put(entry)
-
     def _sender(self):
         while True:
             try:
                 data = []
                 try:
                     while True:
-                        data.append(self._send_queue.get(False))
-                        if len(data) == 10:
-                            raise Empty()
-                except Empty:
+                        data.append(self._send_queue.pop())
+                        if len(data) == self._batch_size:
+                            raise IndexError()
+                except IndexError:
                     pass
                 if len(data) > 0:
+                    self._batch_sizes.append(len(data))
+                    self._queue_sizes.append(len(self._send_queue))
                     response = requests.post(url=self._endpoint,
                                              data='\n'.join(data),
                                              headers=self._headers,
@@ -176,6 +177,20 @@ class InfluxDB(OMPluginBase):
                                              verify=False)
                     if response.status_code != 204:
                         self.logger('Send failed, received: {0} ({1})'.format(response.text, response.status_code))
+                    if self._stats_time < time.time() - 300:
+                        self._stats_time = time.time()
+                        self.logger('Queue size stats: {0:.2f} min, {1:.2f} avg, {2:.2f} max'.format(
+                            min(self._queue_sizes),
+                            sum(self._queue_sizes) / float(len(self._queue_sizes)),
+                            max(self._queue_sizes)
+                        ))
+                        self.logger('Batch size stats: {0:.2f} min, {1:.2f} avg, {2:.2f} max'.format(
+                            min(self._batch_sizes),
+                            sum(self._batch_sizes) / float(len(self._batch_sizes)),
+                            max(self._batch_sizes)
+                        ))
+                        self._batch_sizes = []
+                        self._queue_sizes = []
             except Exception as ex:
                 self.logger('Error sending from queue: {0}'.format(ex))
             time.sleep(0.1)

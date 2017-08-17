@@ -6,7 +6,7 @@ import time
 import math
 import simplejson as json
 from math import sqrt
-from Queue import Queue, Empty
+from collections import deque
 from plugins.base import om_expose, background_task, OMPluginBase, PluginConfigChecker, om_metric_data
 from serial_utils import CommunicationTimedOutException
 
@@ -17,7 +17,7 @@ class Ventilation(OMPluginBase):
     """
 
     name = 'Ventilation'
-    version = '2.0.3'
+    version = '2.0.4'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
@@ -105,7 +105,7 @@ class Ventilation(OMPluginBase):
         self._runtime_data = {}
         self._settings = {}
         self._last_ventilation = None
-        self._metrics_queue = Queue()
+        self._metrics_queue = deque()
 
         self._read_config()
         self._load_sensors()
@@ -377,7 +377,7 @@ class Ventilation(OMPluginBase):
                           'value': value,
                           'timestamp': now}
                 metric.update(tags)
-                self._metrics_queue.put(metric)
+                self._metrics_queue.appendleft(metric)
         except Exception as ex:
             self.logger('Got unexpected error while enqueing metrics: {0}'.format(ex))
 
@@ -386,8 +386,8 @@ class Ventilation(OMPluginBase):
         # Yield all metrics in the Queue
         try:
             while True:
-                yield self._metrics_queue.get(False)
-        except Empty:
+                yield self._metrics_queue.pop()
+        except IndexError:
             pass
 
     @staticmethod
