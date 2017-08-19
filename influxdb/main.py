@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '2.0.36'
+    version = '2.0.40'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -72,7 +72,7 @@ class InfluxDB(OMPluginBase):
         self._enabled = self._url != '' and self._database != ''
         self.logger('InfluxDB is {0}'.format('enabled' if self._enabled else 'disabled'))
 
-    @om_metric_receive(source='.*', metric='.*', include_definition=True)
+    @om_metric_receive(include_definition=True, interval=10)
     def _receive_metric_data(self, metric, definition):
         """
         All metrics are collected, as filtering is done more finegraded when mapping to tables
@@ -177,7 +177,7 @@ class InfluxDB(OMPluginBase):
                                              verify=False)
                     if response.status_code != 204:
                         self.logger('Send failed, received: {0} ({1})'.format(response.text, response.status_code))
-                    if self._stats_time < time.time() - 300:
+                    if self._stats_time < time.time() - 1800:
                         self._stats_time = time.time()
                         self.logger('Queue size stats: {0:.2f} min, {1:.2f} avg, {2:.2f} max'.format(
                             min(self._queue_sizes),
