@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '2.0.40'
+    version = '2.0.44'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -48,11 +48,16 @@ class InfluxDB(OMPluginBase):
         self._batch_sizes = []
         self._queue_sizes = []
         self._stats_time = 0
+        self._definitions = None
 
         self._send_thread = Thread(target=self._sender)
         self._send_thread.setName('InfluxDB batch sender')
         self._send_thread.daemon = True
         self._send_thread.start()
+        self._definition_thread = Thread(target=self._load_definitions)
+        self._definition_thread.setName('InfluxDB definition loader')
+        self._definition_thread.daemon = True
+        self._definition_thread.start()
 
         self._read_config()
         self.logger("Started InfluxDB plugin")
@@ -70,10 +75,22 @@ class InfluxDB(OMPluginBase):
         self._headers = {'X-Requested-With': 'OpenMotics plugin: InfluxDB'}
 
         self._enabled = self._url != '' and self._database != ''
+
         self.logger('InfluxDB is {0}'.format('enabled' if self._enabled else 'disabled'))
 
-    @om_metric_receive(include_definition=True, interval=10)
-    def _receive_metric_data(self, metric, definition):
+    def _load_definitions(self):
+        while self._definitions is None:
+            try:
+                result = json.loads(self.webinterface.get_metric_definitions(None))
+                if result['success'] is True:
+                    self._definitions = result['definitions']
+                    self.logger('Definitions loaded')
+            except Exception as ex:
+                self.logger('Error loading definitions, retrying'.format(ex))
+            time.sleep(5)
+
+    @om_metric_receive(interval=10)
+    def _receive_metric_data(self, metric):
         """
         All metrics are collected, as filtering is done more finegraded when mapping to tables
         > example_definition = {"type": "energy",
@@ -100,13 +117,17 @@ class InfluxDB(OMPluginBase):
         >                   "voltage": 234}]
         """
         try:
-            if self._enabled is False:
+            if self._enabled is False or self._definitions is None:
                 return
 
             metric_type = metric['type']
             source = metric['source'].lower()
             timestamp = metric['timestamp'] * 1000000000
             value = metric['value']
+
+            definition = self._definitions.get(metric['source'], {}).get(metric_type, {}).get(metric['metric'])
+            if definition is None:
+                return
 
             if isinstance(value, basestring):
                 value = '"{0}"'.format(value)
