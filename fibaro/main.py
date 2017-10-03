@@ -15,7 +15,7 @@ class Fibaro(OMPluginBase):
     """
 
     name = 'Fibaro'
-    version = '2.0.11'
+    version = '2.0.16'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
@@ -45,17 +45,15 @@ class Fibaro(OMPluginBase):
                                        {'name': 'fibaro_brightness_id', 'type': 'int'},
                                        {'name': 'fibaro_brightness_max', 'type': 'int'}]}]
     metric_definitions = [{'type': 'energy',
-                           'name': 'power',
-                           'description': 'Current power consumption',
-                           'mtype': 'gauge',
-                           'unit': 'W',
-                           'tags': ['name', 'id', 'brand']},
-                          {'type': 'energy',
-                           'name': 'power_counter',
-                           'description': 'Total energy consumed',
-                           'mtype': 'counter',
-                           'unit': 'Wh',
-                           'tags': ['name', 'id', 'brand']}]
+                           'tags': ['name', 'id', 'brand'],
+                           'metrics': [{'name': 'power',
+                                        'description': 'Current power consumption',
+                                        'type': 'gauge',
+                                        'unit': 'W'},
+                                       {'name': 'power_counter',
+                                        'description': 'Total energy consumed',
+                                        'type': 'counter',
+                                        'unit': 'Wh'}]}]
 
     default_config = {'ip': '', 'username': '', 'password': ''}
 
@@ -188,19 +186,12 @@ class Fibaro(OMPluginBase):
             for device in result:
                 if 'properties' in device and 'power' in device['properties']:
                     yield {'type': 'energy',
-                           'metric': 'power',
                            'timestamp': now,
-                           'brand': 'fibaro',
-                           'name': device['name'],
-                           'id': str(device['id']),
-                           'value': float(device['properties']['power'])}
-                    yield {'type': 'energy',
-                           'metric': 'power_counter',
-                           'timestamp': now,
-                           'brand': 'fibaro',
-                           'name': device['name'],
-                           'id': str(device['id']),
-                           'value': float(device['properties']['energy']) * 1000}
+                           'tags': {'brand': 'fibaro',
+                                    'name': device['name'],
+                                    'id': str(device['id'])},
+                           'values': {'power': float(device['properties']['power']),
+                                      'power_counter': float(device['properties']['energy']) * 1000}}
 
     @om_expose
     def get_config_description(self):

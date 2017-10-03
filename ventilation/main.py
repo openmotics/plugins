@@ -17,7 +17,7 @@ class Ventilation(OMPluginBase):
     """
 
     name = 'Ventilation'
-    version = '2.0.4'
+    version = '2.0.10'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
@@ -65,30 +65,32 @@ class Ventilation(OMPluginBase):
                                                                            'type': 'int'},
                                                                           {'name': 'trigger',
                                                                            'type': 'int'}]}]}]
-    metric_definitions = [{'name': 'dewpoint',
-                           'description': 'Dew point',
-                           'type': 'ventilation', 'mtype': 'gauge', 'unit': 'degree C', 'tags': ['name', 'id']},
-                          {'name': 'absolute_humidity',
-                           'description': 'Absolute humidity',
-                           'type': 'ventilation', 'mtype': 'gauge', 'unit': 'g/m3', 'tags': ['name', 'id']},
-                          {'name': 'level',
-                           'description': 'Ventilation level',
-                           'type': 'ventilation', 'mtype': 'gauge', 'unit': '', 'tags': ['name', 'id']},
-                          {'name': 'medium',
-                           'description': 'Medium ventilation limit',
-                           'type': 'ventilation', 'mtype': 'gauge', 'unit': '%', 'tags': ['name', 'id']},
-                          {'name': 'high',
-                           'description': 'High ventilation limit',
-                           'type': 'ventilation', 'mtype': 'gauge', 'unit': '%', 'tags': ['name', 'id']},
-                          {'name': 'mean',
-                           'description': 'Average relative humidity level',
-                           'type': 'ventilation', 'mtype': 'gauge', 'unit': '%', 'tags': ['name', 'id']},
-                          {'name': 'stddev',
-                           'description': 'Stddev relative humidity level',
-                           'type': 'ventilation', 'mtype': 'gauge', 'unit': '%', 'tags': ['name', 'id']},
-                          {'name': 'samples',
-                           'description': 'Amount of samples',
-                           'type': 'ventilation', 'mtype': 'gauge', 'unit': '', 'tags': ['name', 'id']}]
+    metric_definitions = [{'type': 'ventilation',
+                           'tags': ['name', 'id'],
+                           'metrics': [{'name': 'dewpoint',
+                                        'description': 'Dew point',
+                                        'type': 'gauge', 'unit': 'degree C'},
+                                       {'name': 'absolute_humidity',
+                                        'description': 'Absolute humidity',
+                                        'type': 'gauge', 'unit': 'g/m3'},
+                                       {'name': 'level',
+                                        'description': 'Ventilation level',
+                                        'type': 'gauge', 'unit': ''},
+                                       {'name': 'medium',
+                                        'description': 'Medium ventilation limit',
+                                        'type': 'gauge', 'unit': '%'},
+                                       {'name': 'high',
+                                        'description': 'High ventilation limit',
+                                        'type': 'gauge', 'unit': '%'},
+                                       {'name': 'mean',
+                                        'description': 'Average relative humidity level',
+                                        'type': 'gauge', 'unit': '%'},
+                                       {'name': 'stddev',
+                                        'description': 'Stddev relative humidity level',
+                                        'type': 'gauge', 'unit': '%'},
+                                       {'name': 'samples',
+                                        'description': 'Amount of samples',
+                                        'type': 'gauge', 'unit': ''}]}]
 
     default_config = {}
 
@@ -371,13 +373,10 @@ class Ventilation(OMPluginBase):
     def _enqueue_metrics(self, tags, values):
         try:
             now = time.time()
-            for key, value in values.iteritems():
-                metric = {'type': 'ventilation',
-                          'metric': key,
-                          'value': value,
-                          'timestamp': now}
-                metric.update(tags)
-                self._metrics_queue.appendleft(metric)
+            self._metrics_queue.appendleft({'type': 'ventilation',
+                                            'timestamp': now,
+                                            'tags': tags,
+                                            'values': values})
         except Exception as ex:
             self.logger('Got unexpected error while enqueing metrics: {0}'.format(ex))
 
