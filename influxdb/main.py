@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '2.0.44'
+    version = '2.0.53'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -48,16 +48,11 @@ class InfluxDB(OMPluginBase):
         self._batch_sizes = []
         self._queue_sizes = []
         self._stats_time = 0
-        self._definitions = None
 
         self._send_thread = Thread(target=self._sender)
         self._send_thread.setName('InfluxDB batch sender')
         self._send_thread.daemon = True
         self._send_thread.start()
-        self._definition_thread = Thread(target=self._load_definitions)
-        self._definition_thread.setName('InfluxDB definition loader')
-        self._definition_thread.daemon = True
-        self._definition_thread.start()
 
         self._read_config()
         self.logger("Started InfluxDB plugin")
@@ -75,92 +70,46 @@ class InfluxDB(OMPluginBase):
         self._headers = {'X-Requested-With': 'OpenMotics plugin: InfluxDB'}
 
         self._enabled = self._url != '' and self._database != ''
-
         self.logger('InfluxDB is {0}'.format('enabled' if self._enabled else 'disabled'))
-
-    def _load_definitions(self):
-        while self._definitions is None:
-            try:
-                result = json.loads(self.webinterface.get_metric_definitions(None))
-                if result['success'] is True:
-                    self._definitions = result['definitions']
-                    self.logger('Definitions loaded')
-            except Exception as ex:
-                self.logger('Error loading definitions, retrying'.format(ex))
-            time.sleep(5)
 
     @om_metric_receive(interval=10)
     def _receive_metric_data(self, metric):
         """
         All metrics are collected, as filtering is done more finegraded when mapping to tables
-        > example_definition = {"type": "energy",
-        >                       "name": "power",
-        >                       "description": "Total energy consumed (in kWh)",
-        >                       "mtype": "counter",
-        >                       "unit": "Wh",
-        >                       "tags": ["device", "id"]}
         > example_metric = {"source": "OpenMotics",
         >                   "type": "energy",
-        >                   "metric": "power",
         >                   "timestamp": 1497677091,
-        >                   "device": "OpenMotics energy ID1",
-        >                   "id": 0,
-        >                   "value": 1234}
-        All metrics are grouped by their source, type and tags. As soon as a new timestamp is received, the pending
-        group is send to InfluxDB and a new group is started. The tags from a group are based on the metric's definition's
-        tags. The fields (values) are the metric > value pairs.
-        > example_group = ["energy",
-        >                  {"device": "OpenMotics energy ID1",
-        >                   "id": 0},
-        >                  {"power": 1234,
-        >                   "power_counter": 1234567,
-        >                   "voltage": 234}]
+        >                   "tags": {"device": "OpenMotics energy ID1",
+        >                            "id": 0},
+        >                   "values": {"power": 1234,
+        >                              "power_counter": 1234567}}
         """
         try:
-            if self._enabled is False or self._definitions is None:
+            if self._enabled is False:
                 return
 
-            metric_type = metric['type']
-            source = metric['source'].lower()
-            timestamp = metric['timestamp'] * 1000000000
-            value = metric['value']
+            values = metric['values']
+            _values = {}
+            for key in values.keys()[:]:
+                value = values[key]
+                if isinstance(value, basestring):
+                    value = '"{0}"'.format(value)
+                if isinstance(value, bool):
+                    value = str(value)
+                if isinstance(value, int):
+                    value = '{0}i'.format(value)
+                _values[key] = value
 
-            definition = self._definitions.get(metric['source'], {}).get(metric_type, {}).get(metric['metric'])
-            if definition is None:
-                return
-
-            if isinstance(value, basestring):
-                value = '"{0}"'.format(value)
-            if isinstance(value, bool):
-                value = str(value)
-            if isinstance(value, int):
-                value = '{0}i'.format(value)
-            tags = {'type': source}
-            for tag in definition['tags']:
-                if isinstance(metric[tag], basestring):
-                    tags[tag] = metric[tag].replace(' ', '\ ')
+            tags = {'type': metric['source'].lower()}
+            for tag, tvalue in metric['tags'].iteritems():
+                if isinstance(tvalue, basestring):
+                    tags[tag] = tvalue.replace(' ', '\ ')
                 else:
-                    tags[tag] = metric[tag]
+                    tags[tag] = tvalue
 
-            entries = self._pending_metrics.setdefault(source, {}).setdefault(metric_type, [])
-            found = False
-            for pending in entries[:]:
-                this_one = True
-                for tag in definition['tags']:
-                    if tags[tag] != pending[1].get(tag):
-                        this_one = False
-                        break
-                if this_one is True:
-                    if pending[0] == timestamp:
-                        found = True
-                        pending[2][metric['metric']] = value
-                    else:
-                        data = self._build_entry(metric_type, pending[1], pending[2], pending[0])
-                        self._send_queue.appendleft(data)
-                        entries.remove(pending)
-                    break
-            if found is False:
-                entries.append([timestamp, tags, {metric['metric']: value}])
+            entry = self._build_entry(metric['type'], tags, _values, metric['timestamp'] * 1000000000)
+            self._send_queue.appendleft(entry)
+
         except Exception as ex:
             self.logger('Error receiving metrics: {0}'.format(ex))
 
