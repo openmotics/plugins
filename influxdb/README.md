@@ -16,13 +16,33 @@ config_description = [{'name': 'url',
                        'description': 'Optional interval overrides',
                        'repeat': True,
                        'min': 0,
-                       'content': [{'name': 'component', 'type': 'str'},
-                                   {'name': 'interval', 'type': 'int'}]}]
+                        'content': [{'name': 'component', 'type': 'str'},
+                                    {'name': 'interval', 'type': 'int'}]},
+                       {'name': 'tags',
+                        'type': 'section',
+                        'description': 'Additional tags which are added based on the name of a power sensor',
+                        'repeat': True,
+                        'min': 0,
+                        'content': [{'name': 'name',
+                                     'type': 'str',
+                                     'description': 'name of the power input'},
+                                    {'name': 'tags',
+                                     'type': 'section',
+                                     'repeat': True,
+                                     'description': 'Key/Value pairs indicating the additional tags to be added for the selected name. Don\'t use name, type or id as key',
+                                     'content': [{'name': 'tag key',
+                                                  'type': 'str',
+                                                  'description': 'tag key'},
+                                                 {'name': 'tag value',
+                                                  'type': 'str',
+                                                  'description': 'tag value'}]},
+                                   ]
+                       }]
 ```
 
 The ```url``` and ```database``` parameters are self-explaining. The ```intervals``` parameter allows to override
 the build-in intervals on which data will be pushed. The components are documented below, the interval is the frequency
-(in seconds) with which the data should be sent (approximately).
+(in seconds) with which the data should be sent (approximately). The ```tags``` parameter allows to add additional tags to the power metrics. As such you can add additional logical tags to your measurements linked to the name of the sensor. More detail and an example is provided below.
 
 ## Data
 
@@ -236,3 +256,28 @@ Example:
 ```
 energy,type=fibaro,id=13,name=xbox360 power=253.4,counter=58223.0
 ```
+
+### Additional tags on power metrics
+
+Suppose you have multiple power sensors deployed, possibly across multiple modules. By default, only 3 tags are added to your measurement:
+
+* type: hardcoded to openmotics
+* name: the name you chose for this power sensor
+* id: the device ID
+
+Without any additional tags, you can only encode additional metadata in the name and afterwards use regular expressions within influxdb to create more powerful queries. By adding additional tags, writing such queries becomes much easier and straight forward.
+
+Imagine you have several measuring points for a single room. Some are outlets, others on lights. Or you have multiple lines covering a single device (multi phase). You can now add additional tags to each measurement, encoding the actual location or a device name.
+
+As an example: have a house with 2 floors, each floor has 2 rooms. Every room has 2 sensors, one for all outlets and one covering all lights. The sensors are named according to their position on the module, e.g., no information encoded in the name. We could now add tags to the sensors. 
+
+sensor_1, room=kitchen, floor=groundfloor, category=outlet
+sensor_2, room=kitchen, floor=groundfloor, category=light
+sensor_3, room=badroom, floor=upper, category=outlet
+sensor_3, room=bedroom, floor=upper, category=light
+
+In influxdb, we now have the power to calculate overall light consumption or get the values for the entire groundfloor. 
+
+Tag name and tag value can be specified independently for each sensor.
+
+
