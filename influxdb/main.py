@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '1.2.2'
+    version = '1.2.3'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -37,7 +37,27 @@ class InfluxDB(OMPluginBase):
                            'repeat': True,
                            'min': 0,
                            'content': [{'name': 'component', 'type': 'str'},
-                                       {'name': 'interval', 'type': 'int'}]}]
+                                       {'name': 'interval', 'type': 'int'}]},
+                          {'name': 'tags',
+                           'type': 'section',
+                           'description': 'Additional tags which are added based on the name of a power sensor',
+                           'repeat': True,
+                           'min': 0,
+                           'content': [{'name': 'name',
+                                        'type': 'str',
+                                        'description': 'name of the power input'},
+                                       {'name': 'tags',
+                                        'type': 'section',
+                                        'repeat': True,
+                                        'description': 'Key/Value pairs indicating the additional tags to be added for the selected name. Don\'t use name, type or id as key',
+                                        'content': [{'name': 'tag key',
+                                                     'type': 'str',
+                                                     'description': 'tag key'},
+                                                    {'name': 'tag value',
+                                                     'type': 'str',
+                                                     'description': 'tag value'}]},
+                                      ]
+                          }]
 
     default_config = {'url': '', 'database': 'openmotics'}
 
@@ -71,6 +91,14 @@ class InfluxDB(OMPluginBase):
         self._intervals = {}
         for item in intervals:
             self._intervals[item['component']] = item['interval']
+
+        tags = self._config.get('tags',[])
+        self._tags = {}
+        for item in tags:
+            self._tags[item['name']] = {}
+            for tagdef in item['tags']:
+                self._tags[item['name']][tagdef['tag key']] = tagdef['tag value']
+
         username = self._config.get('username', '')
         password = self._config.get('password', '')
         self._auth = None if username == '' else (username, password)
@@ -540,6 +568,10 @@ class InfluxDB(OMPluginBase):
                         data = {'type': 'openmotics',
                                 'id': device_id,
                                 'name': device['name']}
+
+                        tags = self._tags.get(device['name'], "")
+                        data.update(tags)
+
                         values = {'voltage': device['voltage'],
                                   'current': device['current'],
                                   'frequency': device['frequency'],
