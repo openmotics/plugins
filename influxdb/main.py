@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '2.0.54'
+    version = '2.0.56'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -100,7 +100,7 @@ class InfluxDB(OMPluginBase):
                     value = '{0}i'.format(value)
                 _values[key] = value
 
-            tags = {'type': metric['source'].lower()}
+            tags = {'source': metric['source'].lower()}
             for tag, tvalue in metric['tags'].iteritems():
                 if isinstance(tvalue, basestring):
                     tags[tag] = tvalue.replace(' ', '\ ').replace(',', '\,')
