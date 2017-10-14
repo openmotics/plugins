@@ -1,0 +1,54 @@
+{
+    "version": "1.0",
+    "apps": [
+        {
+            "name": "Fibaro",
+            "checksum": "414d3106b9227ced531db62fdf7a80b3",
+            "vendor": "openmotics",
+            "version": "1.1.5",
+            "url": "https://github.com/openmotics/plugins/releases/download/releases/fibaro_${version}.tgz"
+        },
+        {
+            "name": "InfluxDB",
+            "checksum": "c1496755925cf6e1170acbf408db063d",
+            "vendor": "openmotics",
+            "version": "1.2.2",
+            "url": "https://github.com/openmotics/plugins/releases/download/releases/influxdb_${version}.tgz"
+        },
+        {
+            "name": "Ventilation",
+            "checksum": "6448f7587c07d89c88fd68eced10ca10",
+            "vendor": "openmotics",
+            "version": "1.1.8",
+            "url": "https://github.com/openmotics/plugins/releases/download/releases/ventilation_${version}.tgz"
+        },
+        {
+            "name": "Astro",
+            "checksum": "78d48e8147364fbb05854325788b86ef",
+            "vendor": "openmotics",
+            "version": "0.5.2",
+            "url": "https://github.com/openmotics/plugins/releases/download/releases/astro_${version}.tgz"
+        },
+        {
+            "name": "MQTTClient",
+            "checksum": "555e6198aa4a84fd96dd72d7002416c4",
+            "vendor": "openmotics",
+            "version": "1.2.1",
+            "url": "https://github.com/openmotics/plugins/releases/download/releases/mqtt-client_${version}.tgz"
+        },
+        {
+            "name": "Pushsafer",
+            "checksum": "fda6bfba0eb1871ccd8a5493a66c3655",
+            "vendor": "community",
+            "version": "2.1.0",
+            "url": "https://github.com/openmotics/plugins/releases/download/third-party/pushsafer_${version}.tgz"
+        },
+        {
+            "name": "Hue",
+            "checksum": "e64dcaa67b6adfe9b6dafd9fac5820ae",
+            "vendor": "community",
+            "version": "1.0.0",
+            "url": "https://github.com/openmotics/plugins/releases/download/third-party/hue_${version}.tgz"
+        }
+    ]
+}
