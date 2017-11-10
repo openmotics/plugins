@@ -4,11 +4,10 @@ A ventilation plugin, using statistical humidity data or the dew point to contro
 
 import time
 import math
-import requests
 import simplejson as json
 from math import sqrt
-from threading import Thread
-from plugins.base import om_expose, receive_events, background_task, OMPluginBase, PluginConfigChecker, on_remove
+from collections import deque
+from plugins.base import om_expose, background_task, OMPluginBase, PluginConfigChecker, om_metric_data
 from serial_utils import CommunicationTimedOutException
 
 
@@ -18,8 +17,9 @@ class Ventilation(OMPluginBase):
     """
 
     name = 'Ventilation'
-    version = '1.1.8'
-    interfaces = [('config', '1.0')]
+    version = '2.0.10'
+    interfaces = [('config', '1.0'),
+                  ('metrics', '1.0')]
 
     config_description = [{'name': 'low',
                            'type': 'section',
@@ -65,6 +65,32 @@ class Ventilation(OMPluginBase):
                                                                            'type': 'int'},
                                                                           {'name': 'trigger',
                                                                            'type': 'int'}]}]}]
+    metric_definitions = [{'type': 'ventilation',
+                           'tags': ['name', 'id'],
+                           'metrics': [{'name': 'dewpoint',
+                                        'description': 'Dew point',
+                                        'type': 'gauge', 'unit': 'degree C'},
+                                       {'name': 'absolute_humidity',
+                                        'description': 'Absolute humidity',
+                                        'type': 'gauge', 'unit': 'g/m3'},
+                                       {'name': 'level',
+                                        'description': 'Ventilation level',
+                                        'type': 'gauge', 'unit': ''},
+                                       {'name': 'medium',
+                                        'description': 'Medium ventilation limit',
+                                        'type': 'gauge', 'unit': '%'},
+                                       {'name': 'high',
+                                        'description': 'High ventilation limit',
+                                        'type': 'gauge', 'unit': '%'},
+                                       {'name': 'mean',
+                                        'description': 'Average relative humidity level',
+                                        'type': 'gauge', 'unit': '%'},
+                                       {'name': 'stddev',
+                                        'description': 'Stddev relative humidity level',
+                                        'type': 'gauge', 'unit': '%'},
+                                       {'name': 'samples',
+                                        'description': 'Amount of samples',
+                                        'type': 'gauge', 'unit': ''}]}]
 
     default_config = {}
 
@@ -81,14 +107,10 @@ class Ventilation(OMPluginBase):
         self._runtime_data = {}
         self._settings = {}
         self._last_ventilation = None
+        self._metrics_queue = deque()
 
         self._read_config()
         self._load_sensors()
-
-        self._has_influxdb = False
-        if self._enabled:
-            thread = Thread(target=self._check_influxdb)
-            thread.start()
 
         self.logger("Started Ventilation plugin")
 
@@ -116,29 +138,6 @@ class Ventilation(OMPluginBase):
             self.logger('Error getting sensor status: CommunicationTimedOutException')
         except Exception as ex:
             self.logger('Error getting sensor status: {0}'.format(ex))
-
-    def _check_influxdb(self):
-        time.sleep(10)
-        self._has_influxdb = False
-        try:
-            response = requests.get(url='https://127.0.0.1/get_plugins',
-                                    params={'token': 'None'},
-                                    verify=False)
-            if response.status_code == 200:
-                result = response.json()
-                if result['success'] is True:
-                    for plugin in result['plugins']:
-                        if plugin['name'] == 'InfluxDB':
-                            version = plugin['version']
-                            self._has_influxdb = version >= '0.5.1'
-                            break
-                else:
-                    self.logger('Error loading plugin data: {0}'.format(result['msg']))
-            else:
-                self.logger('Error loading plugin data: {0}'.format(response.status_code))
-        except Exception as ex:
-            self.logger('Got unexpected error during plugin load: {0}'.format(ex))
-        self.logger('InfluxDB plugin {0}detected'.format('' if self._has_influxdb else 'not '))
 
     @background_task
     def run(self):
@@ -244,16 +243,16 @@ class Ventilation(OMPluginBase):
                     self._runtime_data[sensor_id]['reason'] = ''
                     self._runtime_data[sensor_id]['trigger'] = 0
                 ventilation = max(ventilation, self._runtime_data[sensor_id]['ventilation'])
-                self._send_influxdb(tags={'id': sensor_id,
-                                          'name': self._sensors[sensor_id].replace(' ', '\ ')},
-                                    values={'dewpoint': float(dew_point),
-                                            'absolute\ humidity': float(abs_humidity),
-                                            'level': '{0}i'.format(current_ventilation)})
-            self._send_influxdb(tags={'id': outdoor_sensor_id,
-                                      'name': self._sensors[outdoor_sensor_id].replace(' ', '\ ')},
-                                values={'dewpoint': float(outdoor_dew_point),
-                                        'absolute\ humidity': float(outdoor_abs_humidity),
-                                        'level': '0i'})
+                self._enqueue_metrics(tags={'id': sensor_id,
+                                            'name': self._sensors[sensor_id]},
+                                      values={'dewpoint': float(dew_point),
+                                              'absolute_humidity': float(abs_humidity),
+                                              'level': int(current_ventilation)})
+            self._enqueue_metrics(tags={'id': outdoor_sensor_id,
+                                        'name': self._sensors[outdoor_sensor_id]},
+                                  values={'dewpoint': float(outdoor_dew_point),
+                                          'absolute_humidity': float(outdoor_abs_humidity),
+                                          'level': 0})
             if ventilation != self._last_ventilation:
                 if self._last_ventilation is None:
                     self.logger('Updating ventilation to 1 (startup)')
@@ -327,14 +326,14 @@ class Ventilation(OMPluginBase):
                     self._runtime_data[sensor_id]['difference'] = ''
                     self._runtime_data[sensor_id]['trigger'] = 0
                 ventilation = max(ventilation, self._runtime_data[sensor_id]['ventilation'])
-                self._send_influxdb(tags={'id': sensor_id,
-                                          'name': self._sensors[sensor_id].replace(' ', '\ ')},
-                                    values={'medium': float(level_2),
-                                            'high': float(level_3),
-                                            'mean': float(mean),
-                                            'stddev': float(stddev),
-                                            'samples': '{0}i'.format(len(self._samples[sensor_id])),
-                                            'level': '{0}i'.format(current_ventilation)})
+                self._enqueue_metrics(tags={'id': sensor_id,
+                                            'name': self._sensors[sensor_id]},
+                                      values={'medium': float(level_2),
+                                              'high': float(level_3),
+                                              'mean': float(mean),
+                                              'stddev': float(stddev),
+                                              'samples': len(self._samples[sensor_id]),
+                                              'level': int(current_ventilation)})
             if ventilation != self._last_ventilation:
                 if self._last_ventilation is None:
                     self.logger('Updating ventilation to 1 (startup)')
@@ -371,23 +370,24 @@ class Ventilation(OMPluginBase):
             success = False
         return success
 
-    def _send_influxdb(self, tags, values):
-        if self._has_influxdb is True:
-            try:
-                response = requests.get(url='https://127.0.0.1/plugins/InfluxDB/send_data',
-                                        params={'token': 'None',
-                                                'key': 'ventilation',
-                                                'tags': json.dumps(tags),
-                                                'value': json.dumps(values)},
-                                        verify=False)
-                if response.status_code == 200:
-                    result = response.json()
-                    if result['success'] is False:
-                        self.logger('Error sending data to InfluxDB plugin: {0}'.format(result['error']))
-                else:
-                    self.logger('Error sending data to InfluxDB plugin: {0}'.format(response.status_code))
-            except Exception as ex:
-                self.logger('Got unexpected error while sending data to InfluxDB plugin: {0}'.format(ex))
+    def _enqueue_metrics(self, tags, values):
+        try:
+            now = time.time()
+            self._metrics_queue.appendleft({'type': 'ventilation',
+                                            'timestamp': now,
+                                            'tags': tags,
+                                            'values': values})
+        except Exception as ex:
+            self.logger('Got unexpected error while enqueing metrics: {0}'.format(ex))
+
+    @om_metric_data(interval=5)
+    def collect_metrics(self):
+        # Yield all metrics in the Queue
+        try:
+            while True:
+                yield self._metrics_queue.pop()
+        except IndexError:
+            pass
 
     @staticmethod
     def _abs_humidity(temperature, humidity):
