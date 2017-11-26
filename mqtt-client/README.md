@@ -23,10 +23,11 @@ config_description = [{'name': 'broker_ip',
 
 ### Events
 
-The system will publish events for Inputs pressed and Outputs that change. It publishes to following topics:
+The system will publish events for Inputs pressed, Outputs that change and Events. It publishes to following topics:
 
 * Input: openmotics/events/input/{id}
 * Output: openmotics/events/output/{id}
+* Events: openmotics/events/events/{id}
 
 For Inputs, the data is a JSON object:
 
@@ -48,6 +49,16 @@ For Outputs, the data is a JSON object:
     "timestamp": <unix timestamp>
 }
 ```
+
+For Events, the data is a JSON object:
+```
+{
+    "id": "<event id>",
+    "timestamp": <unix timestamp>
+}
+```
+
+More information on how to send these OpenMotics events can be found on the [OpenMotics wiki: Action Types](http://wiki.openmotics.com/index.php/Action_Types), number 60.
 
 ### Control
 

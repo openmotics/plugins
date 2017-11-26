@@ -7,7 +7,7 @@ import sys
 import time
 import simplejson as json
 from threading import Thread
-from plugins.base import om_expose, input_status, output_status, OMPluginBase, PluginConfigChecker
+from plugins.base import om_expose, input_status, output_status, OMPluginBase, PluginConfigChecker, receive_events
 from serial_utils import CommunicationTimedOutException
 
 
@@ -18,7 +18,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '1.2.1'
+    version = '1.3.0'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'broker_ip',
@@ -218,6 +218,18 @@ class MQTTClient(OMPluginBase):
                         thread.start()
             except Exception as ex:
                 self.logger('Error processing outputs: {0}'.format(ex))
+
+    @receive_events
+    def recv_events(self, id):
+        if self._enabled is True:
+            try:
+                self.logger('Got event {0}'.format(id))
+                data = {'id': id,
+                        'timestamp': time.time()}
+                thread = Thread(target=self._send, args=('openmotics/events/events/{0}'.format(id), data))
+                thread.start()
+            except Exception as ex:
+                self.logger('Error processing event: {0}'.format(ex))
 
     def on_connect(self, client, userdata, flags, rc):
         if rc != 0:
