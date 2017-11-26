@@ -18,7 +18,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '1.3.0'
+    version = '1.3.2'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'broker_ip',
@@ -226,7 +226,7 @@ class MQTTClient(OMPluginBase):
                 self.logger('Got event {0}'.format(id))
                 data = {'id': id,
                         'timestamp': time.time()}
-                thread = Thread(target=self._send, args=('openmotics/events/events/{0}'.format(id), data))
+                thread = Thread(target=self._send, args=('openmotics/events/event/{0}'.format(id), data))
                 thread.start()
             except Exception as ex:
                 self.logger('Error processing event: {0}'.format(ex))
@@ -264,9 +264,13 @@ class MQTTClient(OMPluginBase):
                             log_value = 'ON ({0}%)'.format(value)
                     result = json.loads(self.webinterface.set_output(None, output_id, is_on, dimmer, None))
                     if result['success'] is False:
-                        self._log('Failed to set output {0} to {1}: {2}'.format(output_id, log_value, result.get('msg', 'Unknown error')))
+                        log_message = 'Failed to set output {0} to {1}: {2}'.format(output_id, log_value, result.get('msg', 'Unknown error'))
+                        self._log(log_message)
+                        self.logger(log_message)
                     else:
-                        self._log('Output {0} set to {1}'.format(output_id, log_value))
+                        log_message = 'Output {0} set to {1}'.format(output_id, log_value)
+                        self._log(log_message)
+                        self.logger(log_message)
                 else:
                     self._log('Unknown output: {0}'.format(output_id))
             except Exception as ex:

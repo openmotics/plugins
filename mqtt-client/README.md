@@ -27,7 +27,7 @@ The system will publish events for Inputs pressed, Outputs that change and Event
 
 * Input: openmotics/events/input/{id}
 * Output: openmotics/events/output/{id}
-* Events: openmotics/events/events/{id}
+* Events: openmotics/events/event/{id}
 
 For Inputs, the data is a JSON object:
 
