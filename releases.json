@@ -49,27 +49,6 @@
             "vendor": "community",
             "version": "1.0.0",
             "url": "https://github.com/openmotics/plugins/releases/download/third-party/hue_${version}.tgz"
-        },
-        {
-            "_remark": "Added some 'dummy' plugins below for testing purposes",
-            "name": "Ring",
-            "version": "0.2.1"   
-        },
-        {
-            "name": "EnergySaver",
-            "version": "1.2.2"
-        },
-        {
-            "name": "AutoThermostat",
-            "version": "0.2.31"
-        },
-        {
-            "name": "Elderly",
-            "version": "1.7.0"
-        },
-        {
-            "name": "Alarm",
-            "version": "0.2.3"
         }
     ]
 }
