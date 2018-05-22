@@ -2,12 +2,14 @@
 An astronomical plugin, for providing the system with astronomical data (e.g. whether it's day or not, based on the sun's location)
 """
 
+import re
 import sys
 import time
 import requests
 import simplejson as json
+from threading import Thread, Event
 from datetime import datetime, timedelta
-from plugins.base import om_expose, receive_events, background_task, OMPluginBase, PluginConfigChecker
+from plugins.base import om_expose, background_task, OMPluginBase, PluginConfigChecker
 
 
 class Astro(OMPluginBase):
@@ -16,12 +18,15 @@ class Astro(OMPluginBase):
     """
 
     name = 'Astro'
-    version = '0.5.2'
+    version = '0.6.2'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'location',
                            'type': 'str',
-                           'description': 'A location which will be passed to Google to fetch location, timezone and elevation.'},
+                           'description': 'A written location to be translated to coordinates using Google. Leave empty and provide coordinates below to prevent using the Google services.'},
+                          {'name': 'coordinates',
+                           'type': 'str',
+                           'description': 'Coordinates in the form of `lat;long` where both are a decimal numbers with dot as decimal separator. Leave empty to fill automatically using the location above.'},
                           {'name': 'horizon_bit',
                            'type': 'int',
                            'description': 'The bit that indicates whether it is day. -1 when not in use.'},
@@ -64,12 +69,23 @@ class Astro(OMPluginBase):
         if pytz_egg not in sys.path:
             sys.path.insert(0, pytz_egg)
 
+        self._bright_bit = -1
+        self._horizon_bit = -1
+        self._civil_bit = -1
+        self._nautical_bit = -1
+        self._astronomical_bit = -1
+        self._previous_bits = [None, None, None, None, None]
+        self._sleeper = Event()
+        self._sleep_until = 0
+
+        thread = Thread(target=self._sleep_manager)
+        thread.start()
+
         self._read_config()
 
         self.logger("Started Astro plugin")
 
     def _read_config(self):
-        import pytz
         for bit in ['bright_bit', 'horizon_bit', 'civil_bit', 'nautical_bit', 'astronomical_bit']:
             try:
                 value = int(self._config.get(bit, Astro.default_config[bit]))
@@ -85,29 +101,75 @@ class Astro(OMPluginBase):
         except ValueError:
             self._group_action = Astro.default_config['group_action']
 
+        self._previous_bits = [None, None, None, None, None]
+        self._coordinates = None
         self._enabled = False
-        if self._config['location'] != '':
-            address = self._config['location']
-            api = 'https://maps.googleapis.com/maps/api/geocode/json?address={0}'.format(address)
-            try:
-                location = requests.get(api).json()
-            except:
-                self.logger('Error calling Google Maps API, waiting 2 minutes to try again')
-                time.sleep(120)
-                location = requests.get(api).json()
-            if location['status'] == 'OK':
-                self._latitude = location['results'][0]['geometry']['location']['lat']
-                self._longitude = location['results'][0]['geometry']['location']['lng']
-                self.logger('Latitude: {0} - Longitude: {1}'.format(self._latitude, self._longitude))
-                now = datetime.now(pytz.utc)
-                local_now = datetime.now()
-                self.logger('It\'s now {0} Local time'.format(local_now.strftime('%Y-%m-%d %H:%M:%S')))
-                self.logger('It\'s now {0} UTC'.format(now.strftime('%Y-%m-%d %H:%M:%S')))
-                self._enabled = True
-            else:
-                self.logger('Could not translate {0} to coordinates: {1}'.format(address, location['status']))
 
-        self.logger('Astro is {0}'.format('enabled' if self._enabled else 'disabled'))
+        coordinates = self._config.get('coordinates', '').strip()
+        match = re.match(r'^(\d+\.\d+);(\d+\.\d+)$', coordinates)
+        if match:
+            self._latitude = match.group(0)
+            self._longitude = match.group(1)
+            self._enable_plugin()
+        else:
+            thread = Thread(target=self._translate_address)
+            thread.start()
+            self.logger('Astro is disabled')
+
+    def _translate_address(self):
+        wait = 0
+        location = self._config.get('location', '').strip()
+        if not location:
+            self.logger('No coordinates and no location. Please fill in one of both to enable the Astro plugin.')
+            return
+        while True:
+            api = 'https://maps.googleapis.com/maps/api/geocode/json?address={0}'.format(location)
+            try:
+                coordinates = requests.get(api).json()
+                if coordinates['status'] == 'OK':
+                    self._latitude = coordinates['results'][0]['geometry']['location']['lat']
+                    self._longitude = coordinates['results'][0]['geometry']['location']['lng']
+                    self._config['coordinates'] = '{0};{1}'.format(self._latitude, self._longitude)
+                    self.write_config(self._config)
+                    self._enable_plugin()
+                    return
+                error = coordinates['status']
+            except Exception as ex:
+                error = ex.message
+            if wait == 0:
+                wait = 1
+            elif wait == 1:
+                wait = 5
+            elif wait < 60:
+                wait = wait + 5
+            self.logger('Error calling Google Maps API, waiting {0} minutes to try again: {1}'.format(wait, error))
+            time.sleep(wait * 60)
+            if self._enabled is True:
+                return  # It might have been set in the mean time
+
+    def _enable_plugin(self):
+        import pytz
+        now = datetime.now(pytz.utc)
+        local_now = datetime.now()
+        self.logger('Latitude: {0} - Longitude: {1}'.format(self._latitude, self._longitude))
+        self.logger('It\'s now {0} Local time'.format(local_now.strftime('%Y-%m-%d %H:%M:%S')))
+        self.logger('It\'s now {0} UTC'.format(now.strftime('%Y-%m-%d %H:%M:%S')))
+        self.logger('Astro is enabled')
+        self._enabled = True
+        # Trigger complete recalculation
+        self._previous_bits = [None, None, None, None, None]
+        self._sleep_until = 0
+
+    def _sleep_manager(self):
+        while True:
+            if not self._sleeper.is_set() and self._sleep_until < time.time():
+                self._sleeper.set()
+            time.sleep(5)
+
+    def _sleep(self, timestamp):
+        self._sleep_until = timestamp
+        self._sleeper.clear()
+        self._sleeper.wait()
 
     @staticmethod
     def _convert(dt_string):
@@ -121,7 +183,7 @@ class Astro(OMPluginBase):
     @background_task
     def run(self):
         import pytz
-        previous_bits = [None, None, None, None, None]
+        self._previous_bits = [None, None, None, None, None]
         while True:
             if self._enabled:
                 now = datetime.now(pytz.utc)
@@ -168,9 +230,9 @@ class Astro(OMPluginBase):
                             else:
                                 bits[0] = bright_start < now < bright_end
                                 if bits[0] is True:
-                                    sleep = min(sleep, (bright_end - now).total_seconds())
+                                    sleep = min(sleep, int((bright_end - now).total_seconds()))
                                 elif now < bright_start:
-                                    sleep = min(sleep, (bright_start - now).total_seconds())
+                                    sleep = min(sleep, int((bright_start - now).total_seconds()))
                             if has_sun is False:
                                 bits[1] = False
                             else:
@@ -212,7 +274,7 @@ class Astro(OMPluginBase):
                                     sleep = min(sleep, (astronomical_end - now).total_seconds())
                                 elif now < sunrise:
                                     sleep = min(sleep, (astronomical_start - now).total_seconds())
-                            sleep = min(sleep, (local_tomorrow - local_now).total_seconds())
+                            sleep = min(sleep, int((local_tomorrow - local_now).total_seconds()))
                             info = 'night'
                             if bits[4] is True:
                                 info = 'astronimical twilight'
@@ -234,26 +296,26 @@ class Astro(OMPluginBase):
                                 result = json.loads(self.webinterface.do_basic_action(None, 237 if bits[index] else 238, bit))
                                 if result['success'] is False:
                                     self.logger('Failed to set bit {0} to {1}'.format(bit, 1 if bits[index] else 0))
-                        if previous_bits != bits:
+                        if self._previous_bits != bits:
                             if self._group_action != -1:
                                 result = json.loads(self.webinterface.do_basic_action(None, 2, self._group_action))
                                 if result['success'] is True:
                                     self.logger('Group Action {0} triggered'.format(self._group_action))
                                 else:
                                     self.logger('Failed to trigger Group Action {0}'.format(self._group_action))
-                            previous_bits = bits
+                            self._previous_bits = bits
                         self.logger('It\'s {0}. Going to sleep for {1} seconds'.format(info, round(sleep, 1)))
-                        time.sleep(sleep + 5)
+                        self._sleep(time.time() + sleep + 5)
                     else:
                         self.logger('Could not load data: {0}'.format(data['status']))
                         sleep = (local_tomorrow - local_now).total_seconds()
-                        time.sleep(sleep + 5)
+                        self._sleep(time.time() + sleep + 5)
                 except Exception as ex:
                     self.logger('Error figuring out where the sun is: {0}'.format(ex))
                     sleep = (local_tomorrow - local_now).total_seconds()
-                    time.sleep(sleep + 5)
+                    self._sleep(time.time() + sleep + 5)
             else:
-                time.sleep(5)
+                self._sleep(time.time() + 30)
 
     @om_expose
     def get_config_description(self):
