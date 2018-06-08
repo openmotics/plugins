@@ -18,7 +18,7 @@ class Astro(OMPluginBase):
     """
 
     name = 'Astro'
-    version = '0.6.2'
+    version = '0.6.3'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'location',
@@ -108,8 +108,8 @@ class Astro(OMPluginBase):
         coordinates = self._config.get('coordinates', '').strip()
         match = re.match(r'^(\d+\.\d+);(\d+\.\d+)$', coordinates)
         if match:
-            self._latitude = match.group(0)
-            self._longitude = match.group(1)
+            self._latitude = match.group(1)
+            self._longitude = match.group(2)
             self._enable_plugin()
         else:
             thread = Thread(target=self._translate_address)
