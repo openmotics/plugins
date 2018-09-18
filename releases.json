@@ -3,37 +3,37 @@
     "apps": [
         {
             "name": "Fibaro",
-            "checksum": "414d3106b9227ced531db62fdf7a80b3",
+            "checksum": "6b549cbaf3ecb745e430aacca66c32b1",
             "vendor": "openmotics",
-            "version": "1.1.5",
+            "version": "2.0.17",
             "url": "https://github.com/openmotics/plugins/releases/download/releases/fibaro_${version}.tgz"
         },
         {
             "name": "InfluxDB",
-            "checksum": "c1496755925cf6e1170acbf408db063d",
+            "checksum": "a4a4d9ec7027a5f515bd3211ff8a6617",
             "vendor": "openmotics",
-            "version": "1.2.2",
+            "version": "2.0.56",
             "url": "https://github.com/openmotics/plugins/releases/download/releases/influxdb_${version}.tgz"
         },
         {
             "name": "Ventilation",
-            "checksum": "6448f7587c07d89c88fd68eced10ca10",
+            "checksum": "998be0cb1d681531d2274412d534f235",
             "vendor": "openmotics",
-            "version": "1.1.8",
+            "version": "2.0.10",
             "url": "https://github.com/openmotics/plugins/releases/download/releases/ventilation_${version}.tgz"
         },
         {
             "name": "Astro",
-            "checksum": "78d48e8147364fbb05854325788b86ef",
+            "checksum": "cc564493767fbfff13b614392eceece9",
             "vendor": "openmotics",
-            "version": "0.5.2",
+            "version": "0.6.3",
             "url": "https://github.com/openmotics/plugins/releases/download/releases/astro_${version}.tgz"
         },
         {
             "name": "MQTTClient",
-            "checksum": "555e6198aa4a84fd96dd72d7002416c4",
+            "checksum": "8b371e0a320c1363505f8400726ce7bf",
             "vendor": "openmotics",
-            "version": "1.2.1",
+            "version": "1.3.2",
             "url": "https://github.com/openmotics/plugins/releases/download/releases/mqtt-client_${version}.tgz"
         },
         {
