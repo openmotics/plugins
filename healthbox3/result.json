@@ -1,0 +1,63 @@
+{
+    "device_type":"HEALTHBOX3",
+    "description":"Healtbox 3.0",
+    "serial":"180424P0029",
+    "warranty_number":"I4O636870003B11",
+    "global":{"parameter":{"city":{"unit":"","value":"Zwijnaarde"},
+    "country":{"unit":"","value":"BE"},
+    "device name":{"unit":"","value":"HEALTHBOX3[I4O636870003B11]"},
+    "legislation country":{"unit":"","value":"BE"},
+    "postal code":{"unit":"","value":"9052"},
+    "street":{"unit":"","value":"Heerweg-noord 28"}}},
+    "room":[
+        {"id":1,
+        "name":"Toilet",
+        "type":"Toilet",
+        "parameter":{"icon":{"unit":"","value":""},
+        "subzone":{"unit":"","value":"[]\\n"},
+        "valve":{"unit":"","value":"3"},
+        "valve_warranty":{"unit":"","value":"I4O709540000C58"},
+        "nominal":{"unit":"m\xc2\xb3/h","value":25.0}},
+        "actuator":[
+            {"name":"air valve[3]_HealthBox 3[Healthbox3]",
+            "type":"air valve",
+            "basic id":3,
+            "parameter":{"flow_rate":{"unit":"m\xc2\xb3/h","value":7.5}}}
+            ]},
+        {"id":2,
+        "name":"Kitchen",
+        "type":"Kitchen",
+        "parameter":{"icon":{"unit":"","value":""},
+        "subzone":{"unit":"","value":"[]\\n"},
+        "valve":{"unit":"","value":"4"},
+        "valve_warranty":{"unit":"","value":"I4O923270000B11"},
+        "nominal":{"unit":"m\xc2\xb3/h","value":75.0}},
+        "actuator":[
+            {"name":"air valve[4]_HealthBox 3[Healthbox3]",
+            "type":"air valve",
+            "basic id":4,
+            "parameter":{"flow_rate":{"unit":"m\xc2\xb3/h","value":7.5}}}
+            ]},
+        {"id":3,
+        "name":"BathRoom",
+        "type":"BathRoom",
+        "parameter":{"icon":{"unit":"","value":""},
+        "subzone":{"unit":"","value":"[]\\n"},
+        "valve":{"unit":"","value":"5"},
+        "valve_warranty":{"unit":"","value":"I93204660000E81"},
+        "nominal":{"unit":"m\xc2\xb3/h","value":50.0}},
+        "actuator":[
+            {"name":"air valve[5]_HealthBox 3[Healthbox3]",
+            "type":"air valve",
+            "basic id":5,
+            "parameter":{"flow_rate":{"unit":"m\xc2\xb3/h","value":5.0}}}]}
+            ],
+    "sensor":[
+        {"name":"global air quality index",
+        "type":"global air quality index",
+        "basic id":0,
+        "parameter":{"index":{"unit":"","value":36.111111111111117},
+        "main_pollutant":{"unit":"","value":""},
+        "room":{"unit":"","value":""}}}
+        ]
+}
