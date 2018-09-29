@@ -31,9 +31,13 @@ class InfluxDB(OMPluginBase):
                           {'name': 'database',
                            'type': 'str',
                            'description': 'The InfluxDB database name to witch statistics need to be send.'},
+                          {'name': 'add_custom_tag',
+                           'type': 'str',
+                           'description': 'Add custom tag to statistics'},
                           {'name': 'batch_size',
                            'type': 'int',
                            'description': 'The maximum batch size of grouped metrics to be send to InfluxDB.'}]
+
 
     default_config = {'url': '', 'database': 'openmotics'}
 
@@ -64,6 +68,7 @@ class InfluxDB(OMPluginBase):
         username = self._config.get('username', '')
         password = self._config.get('password', '')
         self._auth = None if username == '' else (username, password)
+        self._add_custom_tag = self._config.get('add_custom_tag', '')
 
         self._endpoint = '{0}/write?db={1}'.format(self._url, self._database)
         self._query_endpoint = '{0}/query?db={1}&epoch=ns'.format(self._url, self._database)
@@ -101,6 +106,8 @@ class InfluxDB(OMPluginBase):
                 _values[key] = value
 
             tags = {'source': metric['source'].lower()}
+            if self._add_custom_tag:
+                tags['custom_tag'] = self._add_custom_tag
             for tag, tvalue in metric['tags'].iteritems():
                 if isinstance(tvalue, basestring):
                     tags[tag] = tvalue.replace(' ', '\ ').replace(',', '\,')
