@@ -18,7 +18,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '1.3.2'
+    version = '1.3.3'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'broker_ip',
@@ -43,7 +43,7 @@ class MQTTClient(OMPluginBase):
         self._config = self.read_config(MQTTClient.default_config)
         self._config_checker = PluginConfigChecker(MQTTClient.config_description)
 
-        paho_mqtt_egg = '/opt/openmotics/python/plugins/MQTTClient/paho_mqtt-1.2.3-py2.7.egg'
+        paho_mqtt_egg = '/opt/openmotics/python/plugins/MQTTClient/paho_mqtt-1.4.0-py2.7.egg'
         if paho_mqtt_egg not in sys.path:
             sys.path.insert(0, paho_mqtt_egg)
 

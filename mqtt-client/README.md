@@ -16,7 +16,13 @@ config_description = [{'name': 'broker_ip',
                        'description': 'IP or hostname of the MQTT broker.'},
                       {'name': 'broker_port',
                        'type': 'int',
-                       'description': 'Port of the MQTT broker. Default: 1883'}]
+                       'description': 'Port of the MQTT broker. Default: 1883'},
+                      {'name': 'username',
+                       'type': 'str',
+                       'description': 'Username'},
+                      {'name': 'password',
+                       'type': 'str',
+                       'description': 'Password'}]
 ```
 
 ## Topics
