@@ -24,9 +24,9 @@
         },
         {
             "name": "Astro",
-            "checksum": "cc564493767fbfff13b614392eceece9",
+            "checksum": "2afc01d87ad7125f49032c1ecfb47e66",
             "vendor": "openmotics",
-            "version": "0.6.3",
+            "version": "0.6.4",
             "url": "https://github.com/openmotics/plugins/releases/download/releases/astro_${version}.tgz"
         },
         {
