@@ -9,7 +9,7 @@ import simplejson as json
 from plugins.base import om_expose, OMPluginBase, PluginConfigChecker, background_task
 
 
-class modbusTCPSensor(OMPluginBase):
+class ModbusTCPSensor(OMPluginBase):
     """
     Get sensor values form modbus
     """
@@ -45,11 +45,11 @@ class modbusTCPSensor(OMPluginBase):
     default_config = {'modbus_port': 502, 'sample_rate': 60}
 
     def __init__(self, webinterface, logger):
-        super(modbusTCPSensor, self).__init__(webinterface, logger)
-        self.logger('Starting modbusTCPSensor plugin...')
+        super(ModbusTCPSensor, self).__init__(webinterface, logger)
+        self.logger('Starting ModbusTCPSensor plugin...')
 
-        self._config = self.read_config(modbusTCPSensor.default_config)
-        self._config_checker = PluginConfigChecker(modbusTCPSensor.config_description)
+        self._config = self.read_config(ModbusTCPSensor.default_config)
+        self._config_checker = PluginConfigChecker(ModbusTCPSensor.config_description)
 
         py_modbus_tcp_egg = '/opt/openmotics/python/plugins/modbusTCPSensor/pyModbusTCP-0.1.7-py2.7.egg'
         if py_modbus_tcp_egg not in sys.path:
@@ -60,13 +60,13 @@ class modbusTCPSensor(OMPluginBase):
         self._save_times = {}
         self._read_config()
 
-        self.logger("Started modbusTCPSensor plugin")
+        self.logger("Started ModbusTCPSensor plugin")
 
     def _read_config(self):
         self._ip = self._config.get('modbus_server_ip')
-        self._port = self._config.get('modbus_port', modbusTCPSensor.default_config['modbus_port'])
+        self._port = self._config.get('modbus_port', ModbusTCPSensor.default_config['modbus_port'])
         self._debug = self._config.get('debug', 0) == 1
-        self._sample_rate = self._config.get('sample_rate', modbusTCPSensor.default_config['sample_rate'])
+        self._sample_rate = self._config.get('sample_rate', ModbusTCPSensor.default_config['sample_rate'])
         self._sensors = []
         for sensor in self._config.get('sensors', []):
             if 0 <= sensor['sensor_id'] < 32:
@@ -81,7 +81,7 @@ class modbusTCPSensor(OMPluginBase):
         except Exception as ex:
             self.logger('Error connecting to Modbus server: {0}'.format(ex))
 
-        self.logger('modbusTCPSensor is {0}'.format('enabled' if self._enabled else 'disabled'))
+        self.logger('ModbusTCPSensor is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     def clamp_sensor(self, value, sensor_type):
         clamping = {'temperature': [-32, 95.5, 1],
@@ -111,7 +111,8 @@ class modbusTCPSensor(OMPluginBase):
                     sensor_value = self.clamp_sensor(sensor_value, sensor['sensor_type'])
 
                     om_sensors[sensor['sensor_id']][sensor['sensor_type']] = sensor_value
-                self.logger('The sensors dict is: {0}'.format(om_sensors))
+                if self._debug == 1:
+                    self.logger('The sensors values are: {0}'.format(om_sensors))
 
                 for sensor_id, values in om_sensors.iteritems():
                     result = json.loads(self.webinterface.set_virtual_sensor(sensor_id, **values))
@@ -125,7 +126,7 @@ class modbusTCPSensor(OMPluginBase):
 
     @om_expose
     def get_config_description(self):
-        return json.dumps(modbusTCPSensor.config_description)
+        return json.dumps(ModbusTCPSensor.config_description)
 
     @om_expose
     def get_config(self):
