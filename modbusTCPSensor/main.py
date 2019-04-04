@@ -36,11 +36,13 @@ class modbusTCPSensor(OMPluginBase):
                            'repeat': True,
                            'min': 0,
                            'content': [{'name': 'sensor_id', 'type': 'int'},
-                                       {'name': 'sensor_type', 'type': 'enum', 'choices': ['temperature', 'humidity', 'brightness']},
+                                       {'name': 'sensor_type', 'type': 'enum', 'choices': ['temperature',
+                                                                                           'humidity',
+                                                                                           'brightness']},
                                        {'name': 'modbus_address', 'type': 'int'},
                                        {'name': 'modbus_register_length', 'type': 'int'}]}]
 
-    default_config = {'modbus_port': 502}
+    default_config = {'modbus_port': 502, 'sample_rate': 60}
 
     def __init__(self, webinterface, logger):
         super(modbusTCPSensor, self).__init__(webinterface, logger)
@@ -63,9 +65,8 @@ class modbusTCPSensor(OMPluginBase):
     def _read_config(self):
         self._ip = self._config.get('modbus_server_ip')
         self._port = self._config.get('modbus_port', modbusTCPSensor.default_config['modbus_port'])
-        self._amount_samples = max(1, min(100, self._config.get('samples', 20)))
         self._debug = self._config.get('debug', 0) == 1
-        self._sample_rate = self._config.get('sample_rate', 60)
+        self._sample_rate = self._config.get('sample_rate', modbusTCPSensor.default_config['sample_rate'])
         self._sensors = []
         for sensor in self._config.get('sensors', []):
             if 0 <= sensor['sensor_id'] < 32:
