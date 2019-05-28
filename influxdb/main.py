@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '2.0.56'
+    version = '2.0.57'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
