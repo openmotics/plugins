@@ -29,11 +29,19 @@ issues you might encounter. As always, feel free to report issues and/or make pu
                            'repeat': True,
                            'min': 0,
                            'content': [{'name': 'sensor_id', 'type': 'int'},
-                                       {'name': 'sensor_type', 'type': 'enum', 'choices': ['Temperature', 
-                                                                                           'Humidity', 
-                                                                                           'Brightness']},
+                                       {'name': 'sensor_type', 'type': 'enum', 'choices': ['temperature',
+                                                                                           'humidity',
+                                                                                           'brightness',
+                                                                                           'validation_bit']},
                                        {'name': 'modbus_address', 'type': 'int'},
-                                       {'name': 'modbus_register_length', 'type': 'int'}]}]
+                                       {'name': 'modbus_register_length', 'type': 'int'}]},
+                          {'name': 'bits',
+                           'type': 'section',
+                           'description': 'OM validation bit ID (e.g. 4), and a Modbus Coil Address',
+                           'repeat': True,
+                           'min': 0,
+                           'content': [{'name': 'validation_bit_id', 'type': 'int'},
+                                       {'name': 'modbus_coil_address', 'type': 'int'}]}]
 ```
 
 ## Virtual Sensors
