@@ -17,9 +17,9 @@
         },
         {
             "name": "Ventilation",
-            "checksum": "998be0cb1d681531d2274412d534f235",
+            "checksum": "6d7ac073530988af21784249707460f3",
             "vendor": "openmotics",
-            "version": "2.0.10",
+            "version": "2.0.14",
             "url": "https://github.com/openmotics/plugins/releases/download/releases/ventilation_${version}.tgz"
         },
         {
