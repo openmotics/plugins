@@ -4,6 +4,7 @@ A ventilation plugin, using statistical humidity data or the dew point to contro
 
 import time
 import math
+import traceback
 import simplejson as json
 from math import sqrt
 from collections import deque
@@ -17,7 +18,7 @@ class Ventilation(OMPluginBase):
     """
 
     name = 'Ventilation'
-    version = '2.0.10'
+    version = '2.0.14'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
@@ -110,7 +111,6 @@ class Ventilation(OMPluginBase):
         self._metrics_queue = deque()
 
         self._read_config()
-        self._load_sensors()
 
         self.logger("Started Ventilation plugin")
 
@@ -125,15 +125,21 @@ class Ventilation(OMPluginBase):
 
     def _load_sensors(self):
         try:
-            configs = json.loads(self.webinterface.get_sensor_configurations(None))
+            configs = json.loads(self.webinterface.get_sensor_configurations())
             if configs['success'] is False:
-                self.logger('Failed to get sensor configurations')
+                self.logger('Failed to get sensor configurations: {0}'.format(configs.get('msg', 'Unknown error')))
             else:
+                sensor_ids = []
                 for sensor in configs['config']:
                     sensor_id = sensor['id']
                     if sensor_id in self._used_sensors or sensor_id == self._settings['outside_sensor_id']:
+                        sensor_ids.append(sensor_id)
                         self._samples[sensor_id] = []
                         self._sensors[sensor_id] = sensor['name'] if sensor['name'] != '' else sensor_id
+                for sensor_id in self._sensors.keys():
+                    if sensor_id not in sensor_ids:
+                        self._sensors.pop(sensor_id, None)
+                        self._samples.pop(sensor_id, None)
         except CommunicationTimedOutException:
             self.logger('Error getting sensor status: CommunicationTimedOutException')
         except Exception as ex:
@@ -145,6 +151,7 @@ class Ventilation(OMPluginBase):
         while True:
             if self._enabled:
                 start = time.time()
+                self._load_sensors()
                 if self._mode == 'statistical':
                     self._process_statistics()
                 elif self._mode == 'dew_point':
@@ -167,26 +174,31 @@ class Ventilation(OMPluginBase):
             outdoor_dew_point = None
             outdoor_sensor_id = self._settings['outside_sensor_id']
             # Fetch data
-            data_humidities = json.loads(self.webinterface.get_sensor_humidity_status(None))
-            data_temperatures = json.loads(self.webinterface.get_sensor_temperature_status(None))
-            if data_humidities['success'] is True and data_temperatures['success'] is True:
-                for sensor_id in range(len(data_humidities['status'])):
-                    if sensor_id not in self._used_sensors + [outdoor_sensor_id]:
-                        continue
-                    humidity = data_humidities['status'][sensor_id]
-                    if humidity == 255:
-                        continue
-                    temperature = data_temperatures['status'][sensor_id]
-                    if temperature == 95.5:
-                        continue
-                    humidities[sensor_id] = humidity
-                    if sensor_id == outdoor_sensor_id:
-                        outdoor_dew_point = Ventilation._dew_point(temperature, humidity)
-                        outdoor_abs_humidity = Ventilation._abs_humidity(temperature, humidity)
-                    else:
-                        sensor_temperatures[sensor_id] = temperature
-                        dew_points[sensor_id] = Ventilation._dew_point(temperature, humidity)
-                        abs_humidities[sensor_id] = Ventilation._abs_humidity(temperature, humidity)
+            data_humidities = json.loads(self.webinterface.get_sensor_humidity_status())
+            if data_humidities['success'] is False:
+                self.logger('Failed to read humidities: {0}'.format(data_humidities.get('msg', 'Unknown error')))
+                return
+            data_temperatures = json.loads(self.webinterface.get_sensor_temperature_status())
+            if data_temperatures['success'] is False:
+                self.logger('Failed to read temperatures: {0}'.format(data_temperatures.get('msg', 'Unknown error')))
+                return
+            for sensor_id in range(len(data_humidities['status'])):
+                if sensor_id not in self._used_sensors + [outdoor_sensor_id]:
+                    continue
+                humidity = data_humidities['status'][sensor_id]
+                if humidity is None:
+                    continue
+                temperature = data_temperatures['status'][sensor_id]
+                if temperature is None:
+                    continue
+                humidities[sensor_id] = humidity
+                if sensor_id == outdoor_sensor_id:
+                    outdoor_dew_point = Ventilation._dew_point(temperature, humidity)
+                    outdoor_abs_humidity = Ventilation._abs_humidity(temperature, humidity)
+                else:
+                    sensor_temperatures[sensor_id] = temperature
+                    dew_points[sensor_id] = Ventilation._dew_point(temperature, humidity)
+                    abs_humidities[sensor_id] = Ventilation._abs_humidity(temperature, humidity)
             if outdoor_abs_humidity is None or outdoor_dew_point is None:
                 self.logger('Could not load outdoor humidity or temperature')
                 return
@@ -199,6 +211,8 @@ class Ventilation(OMPluginBase):
                                2: [],
                                3: []}
             for sensor_id in dew_points:
+                if sensor_id not in self._sensors:
+                    continue
                 if sensor_id not in self._runtime_data:
                     self._runtime_data[sensor_id] = {'trigger': 0,
                                                      'ventilation': 1,
@@ -211,24 +225,24 @@ class Ventilation(OMPluginBase):
                 abs_humidity = abs_humidities[sensor_id]
                 temperature = sensor_temperatures[sensor_id]
                 self._runtime_data[sensor_id]['stats'] = [temperature, dew_point, abs_humidity, outdoor_abs_humidity]
-                reason = '{0:.2f} <= {1:.2f} <= {2:.2f}'.format(target_lower, humidity, target_upper)
+                reason = 'RH {0:.2f} <= {1:.2f} <= {2:.2f}'.format(target_lower, humidity, target_upper)
                 wanted_ventilation = 1
                 # First, try to get the dew point inside the target range - increasing comfort
                 if humidity < target_lower or humidity > target_upper:
                     if humidity < target_lower and outdoor_abs_humidity > abs_humidity:
                         wanted_ventilation = 2
-                        reason = '{0:.2f} < {1:.2f} and {2:.5f} > {3:.5f}'.format(humidity, target_lower, outdoor_abs_humidity, abs_humidity)
+                        reason = 'RH {0:.2f} < {1:.2f} and AH {2:.5f} > {3:.5f}'.format(humidity, target_lower, outdoor_abs_humidity, abs_humidity)
                     if humidity > target_upper and outdoor_abs_humidity < abs_humidity:
                         wanted_ventilation = 2
-                        reason = '{0:.2f} > {1:.2f} and {2:.5f} < {3:.5f}'.format(humidity, target_lower, outdoor_abs_humidity, abs_humidity)
+                        reason = 'RH {0:.2f} > {1:.2f} and AH {2:.5f} < {3:.5f}'.format(humidity, target_upper, outdoor_abs_humidity, abs_humidity)
                 # Second, prevent actual temperature from hitting the dew point - make sure we don't have condense
                 if outdoor_abs_humidity < abs_humidity:
                     if dew_point > temperature - offset:
                         wanted_ventilation = 3
-                        reason = '{0:.2f} > {1:.2f} - ({2:.2f})'.format(dew_point, temperature - offset, temperature)
+                        reason = 'DP {0:.2f} > {1:.2f} - ({2:.2f})'.format(dew_point, temperature - offset, temperature)
                     elif dew_point > temperature - 2 * offset:
                         wanted_ventilation = 2
-                        reason = '{0:.2f} > {1:.2f} - ({2:.2f})'.format(dew_point, temperature - 2 * offset, temperature)
+                        reason = 'DP {0:.2f} > {1:.2f} - ({2:.2f})'.format(dew_point, temperature - 2 * offset, temperature)
                 self._runtime_data[sensor_id]['candidate'] = wanted_ventilation
                 current_ventilation = self._runtime_data[sensor_id]['ventilation']
                 if current_ventilation != wanted_ventilation:
@@ -269,11 +283,12 @@ class Ventilation(OMPluginBase):
             self.logger('Error getting sensor status: CommunicationTimedOutException')
         except Exception as ex:
             self.logger('Error calculating ventilation: {0}'.format(ex))
+            self.logger('Stacktrace: {0}'.format(traceback.format_exc()))
 
     def _process_statistics(self):
         try:
             # Fetch data
-            humidities = json.loads(self.webinterface.get_sensor_humidity_status(None))
+            humidities = json.loads(self.webinterface.get_sensor_humidity_status())
             if humidities['success'] is True:
                 for sensor_id in range(len(humidities['status'])):
                     if sensor_id not in self._samples:
@@ -290,6 +305,8 @@ class Ventilation(OMPluginBase):
                                2: [],
                                3: []}
             for sensor_id in self._samples:
+                if sensor_id not in self._sensors:
+                    continue
                 if sensor_id not in self._runtime_data:
                     self._runtime_data[sensor_id] = {'trigger': 0,
                                                      'ventilation': 1,
@@ -359,9 +376,9 @@ class Ventilation(OMPluginBase):
             on = value > 0
             if on is False:
                 value = None
-            result = json.loads(self.webinterface.set_output(None, output_id, is_on=str(on), dimmer=value, timer=None))
+            result = json.loads(self.webinterface.set_output(id=output_id, is_on=str(on), dimmer=value, timer=None))
             if result['success'] is False:
-                self.logger('Error setting output {0} to {1}: {2}'.format(output_id, value, result['msg']))
+                self.logger('Error setting output {0} to {1}: {2}'.format(output_id, 'OFF' if value is None else value, result['msg']))
                 success = False
         if success is True:
             self.logger('Ventilation set to {0}'.format(level))
