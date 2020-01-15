@@ -10,9 +10,9 @@
         },
         {
             "name": "InfluxDB",
-            "checksum": "a4a4d9ec7027a5f515bd3211ff8a6617",
+            "checksum": "eed5883247855c346e1ebb58725ed40c",
             "vendor": "openmotics",
-            "version": "2.0.56",
+            "version": "2.0.61",
             "url": "https://github.com/openmotics/plugins/releases/download/releases/influxdb_${version}.tgz"
         },
         {
