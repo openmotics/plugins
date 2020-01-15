@@ -16,7 +16,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '2.0.57'
+    version = '2.0.61'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -38,7 +38,6 @@ class InfluxDB(OMPluginBase):
                            'type': 'int',
                            'description': 'The maximum batch size of grouped metrics to be send to InfluxDB.'}]
 
-
     default_config = {'url': '', 'database': 'openmotics'}
 
     def __init__(self, webinterface, logger):
@@ -49,9 +48,6 @@ class InfluxDB(OMPluginBase):
         self._config_checker = PluginConfigChecker(InfluxDB.config_description)
         self._pending_metrics = {}
         self._send_queue = deque()
-        self._batch_sizes = []
-        self._queue_sizes = []
-        self._stats_time = 0
 
         self._send_thread = Thread(target=self._sender)
         self._send_thread.setName('InfluxDB batch sender')
@@ -101,7 +97,7 @@ class InfluxDB(OMPluginBase):
                     value = '"{0}"'.format(value)
                 if isinstance(value, bool):
                     value = str(value)
-                if isinstance(value, int):
+                if isinstance(value, int) or isinstance(value, long):
                     value = '{0}i'.format(value)
                 _values[key] = value
 
@@ -134,6 +130,11 @@ class InfluxDB(OMPluginBase):
                                        '' if timestamp is None else ' {:.0f}'.format(timestamp))
 
     def _sender(self):
+        _stats_time = 0
+        _batch_sizes = []
+        _queue_sizes = []
+        _run_amount = 0
+        _batch_amount = 0
         while True:
             try:
                 data = []
@@ -145,8 +146,10 @@ class InfluxDB(OMPluginBase):
                 except IndexError:
                     pass
                 if len(data) > 0:
-                    self._batch_sizes.append(len(data))
-                    self._queue_sizes.append(len(self._send_queue))
+                    _batch_sizes.append(len(data))
+                    _run_amount += len(data)
+                    _batch_amount += 1
+                    _queue_sizes.append(len(self._send_queue))
                     response = requests.post(url=self._endpoint,
                                              data='\n'.join(data),
                                              headers=self._headers,
@@ -154,20 +157,23 @@ class InfluxDB(OMPluginBase):
                                              verify=False)
                     if response.status_code != 204:
                         self.logger('Send failed, received: {0} ({1})'.format(response.text, response.status_code))
-                    if self._stats_time < time.time() - 1800:
-                        self._stats_time = time.time()
+                    if _stats_time < time.time() - 1800:
+                        _stats_time = time.time()
                         self.logger('Queue size stats: {0:.2f} min, {1:.2f} avg, {2:.2f} max'.format(
-                            min(self._queue_sizes),
-                            sum(self._queue_sizes) / float(len(self._queue_sizes)),
-                            max(self._queue_sizes)
+                            min(_queue_sizes),
+                            sum(_queue_sizes) / float(len(_queue_sizes)),
+                            max(_queue_sizes)
                         ))
                         self.logger('Batch size stats: {0:.2f} min, {1:.2f} avg, {2:.2f} max'.format(
-                            min(self._batch_sizes),
-                            sum(self._batch_sizes) / float(len(self._batch_sizes)),
-                            max(self._batch_sizes)
+                            min(_batch_sizes),
+                            sum(_batch_sizes) / float(len(_batch_sizes)),
+                            max(_batch_sizes)
                         ))
-                        self._batch_sizes = []
-                        self._queue_sizes = []
+                        self.logger('Total {0} metric(s) over {1} batche(s)'.format(_run_amount, _batch_amount))
+                        _batch_sizes = []
+                        _queue_sizes = []
+                        _run_amount = 0
+                        _batch_amount = 0
             except Exception as ex:
                 self.logger('Error sending from queue: {0}'.format(ex))
             time.sleep(0.1)
