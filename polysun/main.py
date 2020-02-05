@@ -138,7 +138,7 @@ class Polysun(OMPluginBase):
                     self.logger('Shutter {0}: Connected outputs {1} (up) and {2} (down) are turned off'.format(shutter_id, output_id_up, output_id_down))
 
                 # If the new state is STOPPED, it (should) mean that an explicit stop action was executed. This is emulated by
-                # briefly pressing both "buttons".
+                # briefly pressing the "button" again.
                 if new_state == Polysun.State.STOPPED:
                     output_id = output_id_down
                     direction = 'down'
