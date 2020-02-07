@@ -49,6 +49,13 @@
             "vendor": "community",
             "version": "1.0.0",
             "url": "https://github.com/openmotics/plugins/releases/download/third-party/hue_${version}.tgz"
+        },
+        {
+            "name": "SMAWebConnect",
+            "checksum": "74853f40491ce488c62c9f796466e427",
+            "vendor": "openmotics",
+            "version": "0.0.20",
+            "url": "https://github.com/openmotics/plugins/releases/download/releases/smawebconnect_${version}.tgz"
         }
     ]
 }
