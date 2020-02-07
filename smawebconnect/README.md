@@ -26,6 +26,13 @@ together with the password mentioned above.
 
 After saving the configuration, the plugin wil start reading data.
 
+### Notice
+
+SMA is a brand of solar inverters by SMA Solar Technology AG (https://www.sma.de).
+This plugin is a standalone plugin for the OpenMotics platform and is not affiliated with, nor endorsed by SMA Solar Technology AG.
+
+SMA Solar Technology AG cannot be held responsible for any damage that might be caused by the installation/usage of this plugin.
+
 ### License
 
 This plugin is licensed under the AGPL v3 license.
