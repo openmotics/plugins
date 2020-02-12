@@ -56,6 +56,13 @@
             "vendor": "openmotics",
             "version": "0.0.20",
             "url": "https://github.com/openmotics/plugins/releases/download/releases/smawebconnect_${version}.tgz"
+        },
+        {
+            "name": "Polysun",
+            "checksum": "a72a37411597fddd7bb6e912de24ddf4",
+            "vendor": "openmotics",
+            "version": "0.0.11",
+            "url": "https://github.com/openmotics/plugins/releases/download/releases/polysun_${version}.tgz"
         }
     ]
 }
