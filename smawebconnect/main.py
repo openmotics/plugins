@@ -26,7 +26,7 @@ class SMAWebConnect(OMPluginBase):
     """
 
     name = 'SMAWebConnect'
-    version = '0.0.20'
+    version = '0.0.21'
     interfaces = [('config', '1.0'), ('metrics', '1.0')]
 
     config_description = [{'name': 'sample_rate',
