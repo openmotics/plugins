@@ -1,6 +1,7 @@
 # Astro
 
-An astronomical plugin, for providing the system with astronomical data (e.g. whether it's day or not, based on sunset/sunrise).
+An astronomical plugin for providing the system with astronomical data (e.g. whether it's day or not, based on sunset/sunrise).
+A configuration example is described ath the bottom of the page.
 
 ## Configuration
 
@@ -115,6 +116,8 @@ Configuration:
   * ```bright_offset```: ```20``` (the offset in minutes after 'horizon' is reached which will in turn set the bright_bit)
   * ```group_action```: ```6``` (change this to the ID of your Group Action)
   * Press the 'Save' button. If all went well the Log window on the right of the page will report 'Astro is enabled'
+  ![plugin](https://wiki.openmotics.com/images/1/1b/Astroconf.png)
 * Now it's time to configure the Group Action. Open the Group Action created in the Prerequisites section and change the configuration as follows and save it.
 ![plugin](https://wiki.openmotics.com/images/7/79/Astroshutterga.png)
 * In order to test run the configuration and set the bits/outputs/etc. in their correct state, open the Astra plugin again and press the Save button (without changing anything).
+* The Astro plugin will now continuously monitor the time of day and when one or more of the configuration bits changes trigger the Group Action.
