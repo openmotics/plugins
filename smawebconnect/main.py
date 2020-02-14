@@ -42,7 +42,7 @@ class SMAWebConnect(OMPluginBase):
                            'min': 1,
                            'content': [{'name': 'sma_inverter_ip',
                                         'type': 'str',
-                                        'description': 'IP or hostname of the SMA inverter.'},
+                                        'description': 'IP or hostname of the SMA inverter including the scheme (e.g. http:// or https://).'},
                                        {'name': 'password',
                                         'type': 'str',
                                         'description': 'The password of the `User` account'}]}]
@@ -183,7 +183,7 @@ class SMAWebConnect(OMPluginBase):
         ip = sma_device['sma_inverter_ip']
         while True:
             sid = self._sma_sid.get(ip, '')
-            endpoint = 'https://{0}/dyn/getValues.json?sid={1}'.format(ip, sid)
+            endpoint = '{0}/dyn/getValues.json?sid={1}'.format(ip, sid)
             response = requests.post(endpoint,
                                      json={'destDev': [], 'keys': SMAWebConnect.FIELD_MAPPING.keys()},
                                      verify=False).json()
@@ -256,7 +256,7 @@ class SMAWebConnect(OMPluginBase):
 
     def _login(self, sma_device):
         ip = sma_device['sma_inverter_ip']
-        endpoint = 'https://{0}/dyn/login.json'.format(ip)
+        endpoint = '{0}/dyn/login.json'.format(ip)
         response = requests.post(endpoint,
                                  json={'right': 'usr',
                                        'pass': sma_device['password']},
