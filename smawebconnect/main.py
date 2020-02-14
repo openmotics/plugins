@@ -26,7 +26,7 @@ class SMAWebConnect(OMPluginBase):
     """
 
     name = 'SMAWebConnect'
-    version = '0.0.21'
+    version = '0.0.25'
     interfaces = [('config', '1.0'), ('metrics', '1.0')]
 
     config_description = [{'name': 'sample_rate',
@@ -150,6 +150,11 @@ class SMAWebConnect(OMPluginBase):
         self._sma_devices = {}
         self._sma_sid = {}
         self._read_config()
+
+        # Disable HTTPS warnings becasue of self-signed HTTPS certificate on the SMA inverter
+        from requests.packages.urllib3.exceptions import InsecureRequestWarning
+        requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+
         self.logger("Started SMAWebConnect plugin")
 
     def _read_config(self):
