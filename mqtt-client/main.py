@@ -19,7 +19,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '1.3.31'
+    version = '1.4.0'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'broker_ip',
@@ -48,21 +48,19 @@ class MQTTClient(OMPluginBase):
         self._config = self.read_config(MQTTClient.default_config)
         self._config_checker = PluginConfigChecker(MQTTClient.config_description)
 
-        paho_mqtt_egg = '/opt/openmotics/python/plugins/MQTTClient/paho_mqtt-1.4.0-py2.7.egg'
-        if paho_mqtt_egg not in sys.path:
-            sys.path.insert(0, paho_mqtt_egg)
+        paho_mqtt_wheel = '/opt/openmotics/python/plugins/MQTTClient/paho_mqtt-1.5.0-py2-none-any.whl'
+        if paho_mqtt_wheel not in sys.path:
+            sys.path.insert(0, paho_mqtt_wheel)
 
         self.client = None
         self._inputs = {}
         self._outputs = {}
-        self._sensors = {}
 
         self._read_config()
         self._try_connect()
 
         self._load_input_configuration()
         self._load_output_configuration()
-        self._load_sensor_configuration()
 
         self.logger("Started MQTTClient plugin")
 
@@ -137,25 +135,6 @@ class MQTTClient(OMPluginBase):
         except Exception as ex:
             self.logger('Error getting output status: {0}'.format(ex))
 
-    def _load_sensor_configuration(self):
-        try:
-            result = json.loads(self.webinterface.get_sensor_configurations(None))
-            if result['success'] is False:
-                self.logger('Failed to load sensor configurations')
-            else:
-                ids = []
-                for config in result['config']:
-                    sensor_id = config['id']
-                    ids.append(sensor_id)
-                    self._sensors[sensor_id] = config
-                for sensor_id in self._sensors.keys():
-                    if sensor_id not in ids:
-                        del self._sensors[sensor_id]
-        except CommunicationTimedOutException:
-            self.logger('Error while loading sensor configurations: CommunicationTimedOutException')
-        except Exception as ex:
-            self.logger('Error while loading sensor configurations: {0}'.format(ex))
-
     def _try_connect(self):
         if self._enabled is True:
             try:
@@ -222,7 +201,7 @@ class MQTTClient(OMPluginBase):
                             changed = True
                             current_output_status[output_id]['status'] = 1
                             self._log('Output {0} ({1}) changed to ON'.format(output_id, name))
-                            self.logger('Output {0} changed to ON'.format(output_id))
+                            self.logger('Output {0} ({1}) changed to ON'.format(output_id, name))
                         if dimmer != new_output_status[output_id]:
                             changed = True
                             current_output_status[output_id]['dimmer'] = new_output_status[output_id]
@@ -328,6 +307,7 @@ class MQTTClient(OMPluginBase):
         config['broker_ip'] = config['broker_ip'].encode('ascii', 'ignore')
         config['username'] = config['username'].encode('ascii', 'ignore')
         config['password'] = config['password'].encode('ascii', 'ignore')
+        config['topic_prefix'] = config['topic_prefix'].encode('ascii', 'ignore')
         self._config_checker.check_config(config)
         self.write_config(config)
         self._config = config
