@@ -4,7 +4,8 @@ For more info: https://github.com/openmotics/plugins/blob/master/mqtt-client/REA
 """
 
 import sys
-import time
+import re
+from datetime import datetime
 import simplejson as json
 from threading import Thread
 from plugins.base import om_expose, input_status, output_status, OMPluginBase, PluginConfigChecker, receive_events
@@ -18,7 +19,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '1.3.3'
+    version = '1.3.31'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'broker_ip',
@@ -32,9 +33,13 @@ class MQTTClient(OMPluginBase):
                            'description': 'Username'},
                           {'name': 'password',
                            'type': 'str',
-                           'description': 'Password'}]
+                           'description': 'Password'},
+                           {'name': 'topic_prefix',
+                            'type': 'str',
+                            'description': 'Topic prefix'}]
 
-    default_config = {'broker_port': 1883}
+    default_config = {'broker_port': 1883,
+                      'topic_prefix': 'openmotics'}
 
     def __init__(self, webinterface, logger):
         super(MQTTClient, self).__init__(webinterface, logger)
@@ -48,27 +53,30 @@ class MQTTClient(OMPluginBase):
             sys.path.insert(0, paho_mqtt_egg)
 
         self.client = None
-        self._outputs = {}
         self._inputs = {}
+        self._outputs = {}
+        self._sensors = {}
 
         self._read_config()
         self._try_connect()
 
-        self._load_configuration()
+        self._load_input_configuration()
+        self._load_output_configuration()
+        self._load_sensor_configuration()
 
         self.logger("Started MQTTClient plugin")
 
     def _read_config(self):
         self._ip = self._config.get('broker_ip')
         self._port = self._config.get('broker_port', MQTTClient.default_config['broker_port'])
+        self._topic_prefix = self._config.get('topic_prefix', MQTTClient.default_config['topic_prefix'])
         self._username = self._config.get('username')
         self._password = self._config.get('password')
 
         self._enabled = self._ip is not None and self._port is not None
         self.logger('MQTTClient is {0}'.format('enabled' if self._enabled else 'disabled'))
 
-    def _load_configuration(self):
-        # Inputs
+    def _load_input_configuration(self):
         try:
             result = json.loads(self.webinterface.get_input_configurations(None))
             if result['success'] is False:
@@ -86,7 +94,8 @@ class MQTTClient(OMPluginBase):
             self.logger('Error while loading input configurations: CommunicationTimedOutException')
         except Exception as ex:
             self.logger('Error while loading input configurations: {0}'.format(ex))
-        # Outputs
+
+    def _load_output_configuration(self):
         try:
             result = json.loads(self.webinterface.get_output_configurations(None))
             if result['success'] is False:
@@ -128,6 +137,25 @@ class MQTTClient(OMPluginBase):
         except Exception as ex:
             self.logger('Error getting output status: {0}'.format(ex))
 
+    def _load_sensor_configuration(self):
+        try:
+            result = json.loads(self.webinterface.get_sensor_configurations(None))
+            if result['success'] is False:
+                self.logger('Failed to load sensor configurations')
+            else:
+                ids = []
+                for config in result['config']:
+                    sensor_id = config['id']
+                    ids.append(sensor_id)
+                    self._sensors[sensor_id] = config
+                for sensor_id in self._sensors.keys():
+                    if sensor_id not in ids:
+                        del self._sensors[sensor_id]
+        except CommunicationTimedOutException:
+            self.logger('Error while loading sensor configurations: CommunicationTimedOutException')
+        except Exception as ex:
+            self.logger('Error while loading sensor configurations: {0}'.format(ex))
+
     def _try_connect(self):
         if self._enabled is True:
             try:
@@ -144,7 +172,7 @@ class MQTTClient(OMPluginBase):
                 self.logger('Error connecting to MQTT broker: {0}'.format(ex))
 
     def _log(self, info):
-        thread = Thread(target=self._send, args=('openmotics/logging', info), kwargs={'retain': False})
+        thread = Thread(target=self._send, args=('{0}/logging'.format(self._topic_prefix), info), kwargs={'retain': False})
         thread.start()
 
     def _send(self, topic, data, retain=True):
@@ -153,19 +181,21 @@ class MQTTClient(OMPluginBase):
         except Exception as ex:
             self.logger('Error sending data to broker: {0}'.format(ex))
 
-    @input_status
-    def input_status(self, status):
+    @input_status(version=2)
+    def input_status(self, data):
         if self._enabled is True:
-            input_id = status[0]
+            input_id = data.get('input_id')
+            status = 'ON' if data.get('status') else 'OFF'
             try:
                 if input_id in self._inputs:
                     name = self._inputs[input_id].get('name')
-                    self._log('Input {0} ({1}) pressed'.format(input_id, name))
-                    self.logger('Input {0} ({1}) pressed'.format(input_id, name))
+                    self._log('Input {0} ({1}) switched {2}'.format(input_id, name, status))
+                    self.logger('Input {0} ({1}) switched {2}'.format(input_id, name,  status))
                     data = {'id': input_id,
                             'name': name,
-                            'timestamp': time.time()}
-                    thread = Thread(target=self._send, args=('openmotics/events/input/{0}'.format(input_id), data))
+                            'status': status,
+                            'timestamp': datetime.now().isoformat()}
+                    thread = Thread(target=self._send, args=('{0}/input/{1}/state'.format(self._topic_prefix, input_id), data))
                     thread.start()
                 else:
                     self.logger('Got event for unknown input {0}'.format(input_id))
@@ -176,57 +206,58 @@ class MQTTClient(OMPluginBase):
     def output_status(self, status):
         if self._enabled is True:
             try:
-                on_outputs = {}
+                new_output_status = {}
                 for entry in status:
-                    on_outputs[entry[0]] = entry[1]
-                outputs = self._outputs
-                for output_id in outputs:
-                    status = outputs[output_id].get('status')
-                    dimmer = outputs[output_id].get('dimmer')
-                    name = outputs[output_id].get('name')
+                    new_output_status[entry[0]] = entry[1]
+                current_output_status = self._outputs
+                for output_id in current_output_status:
+                    status = current_output_status[output_id].get('status')
+                    dimmer = current_output_status[output_id].get('dimmer')
+                    name = current_output_status[output_id].get('name')
                     if status is None or dimmer is None:
                         continue
                     changed = False
-                    if output_id in on_outputs:
+                    if output_id in new_output_status:
                         if status != 1:
                             changed = True
-                            outputs[output_id]['status'] = 1
+                            current_output_status[output_id]['status'] = 1
                             self._log('Output {0} ({1}) changed to ON'.format(output_id, name))
                             self.logger('Output {0} changed to ON'.format(output_id))
-                        if dimmer != on_outputs[output_id]:
+                        if dimmer != new_output_status[output_id]:
                             changed = True
-                            outputs[output_id]['dimmer'] = on_outputs[output_id]
-                            self._log('Output {0} ({1}) changed to level {2}'.format(output_id, name, on_outputs[output_id]))
-                            self.logger('Output {0} changed to level {1}'.format(output_id, on_outputs[output_id]))
+                            current_output_status[output_id]['dimmer'] = new_output_status[output_id]
+                            self._log('Output {0} ({1}) changed to level {2}'.format(output_id, name, new_output_status[output_id]))
+                            self.logger('Output {0} ({1}) changed to level {2}'.format(output_id, name, new_output_status[output_id]))
                     elif status != 0:
                         changed = True
-                        outputs[output_id]['status'] = 0
+                        current_output_status[output_id]['status'] = 0
                         self._log('Output {0} ({1}) changed to OFF'.format(output_id, name))
-                        self.logger('Output {0} changed to OFF'.format(output_id))
+                        self.logger('Output {0} ({1}) changed to OFF'.format(output_id, name))
                     if changed is True:
-                        if outputs[output_id]['module_type'] == 'output':
+                        if current_output_status[output_id]['module_type'] == 'output':
                             level = 100
                         else:
                             level = dimmer
-                        if outputs[output_id]['status'] == 0:
+                        if current_output_status[output_id]['status'] == 0:
                             level = 0
                         data = {'id': output_id,
                                 'name': name,
                                 'value': level,
-                                'timestamp': time.time()}
-                        thread = Thread(target=self._send, args=('openmotics/events/output/{0}'.format(output_id), data))
+                                'timestamp': datetime.now().isoformat()}
+                        thread = Thread(target=self._send, args=('{0}/output/{1}/state'.format(self._topic_prefix, output_id), data))
                         thread.start()
             except Exception as ex:
                 self.logger('Error processing outputs: {0}'.format(ex))
 
     @receive_events
-    def recv_events(self, id):
+    def receive_events(self, id):
         if self._enabled is True:
             try:
+                self._log('Got event {0}'.format(id))
                 self.logger('Got event {0}'.format(id))
                 data = {'id': id,
-                        'timestamp': time.time()}
-                thread = Thread(target=self._send, args=('openmotics/events/event/{0}'.format(id), data))
+                        'timestamp': datetime.now().isoformat()}
+                thread = Thread(target=self._send, args=('{0}/event/{1}/state'.format(id), data))
                 thread.start()
             except Exception as ex:
                 self.logger('Error processing event: {0}'.format(ex))
@@ -238,16 +269,19 @@ class MQTTClient(OMPluginBase):
 
         self.logger('Connected to MQTT broker {0}:{1}'.format(self._ip, self._port))
         try:
-            self.client.subscribe('openmotics/set/output/#')
-            self.logger('Subscribed to openmotics/set/output/#')
+            output_command_topic = '{0}/output/+/set'.format(self._topic_prefix)
+            self.client.subscribe(output_command_topic)
+            self.logger('Subscribed to {0}'.format(output_command_topic))
         except Exception as ex:
             self.logger('Could not subscribe: {0}'.format(ex))
 
     def on_message(self, client, userdata, msg):
-        base_topic = 'openmotics/set/output/'
-        if msg.topic.startswith(base_topic):
+        base_topic = '{0}/output/+/set'.format(self._topic_prefix)
+        regexp = base_topic.replace('+', '(\d+)')
+        if re.search(regexp, msg.topic) is not None:
             try:
-                output_id = int(msg.topic.replace(base_topic, ''))
+                # the output_id is the first math of the regular expression
+                output_id = int(re.findall(regexp, msg.topic)[0])
                 if output_id in self._outputs:
                     output = self._outputs[output_id]
                     value = int(msg.payload)
@@ -275,6 +309,9 @@ class MQTTClient(OMPluginBase):
                     self._log('Unknown output: {0}'.format(output_id))
             except Exception as ex:
                 self._log('Failed to process message: {0}'.format(ex))
+        else:
+            self._log('Message with topic {0} ignored'.format(msg.topic))
+            self.logger('Message with topic {0} ignored'.format(msg.topic))
 
     @om_expose
     def get_config_description(self):
