@@ -6,6 +6,7 @@ For more info: https://github.com/openmotics/plugins/blob/master/mqtt-client/REA
 import sys
 import re
 from datetime import datetime
+import pytz
 import simplejson as json
 from threading import Thread
 from plugins.base import om_expose, input_status, output_status, OMPluginBase, PluginConfigChecker, receive_events
@@ -19,7 +20,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '1.4.0'
+    version = '1.4.3'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'broker_ip',
@@ -34,9 +35,12 @@ class MQTTClient(OMPluginBase):
                           {'name': 'password',
                            'type': 'str',
                            'description': 'Password'},
-                           {'name': 'topic_prefix',
-                            'type': 'str',
-                            'description': 'Topic prefix'}]
+                          {'name': 'topic_prefix',
+                           'type': 'str',
+                           'description': 'Topic prefix. Default: openmotics'},
+                          {'name': 'timezone',
+                           'type': 'str',
+                           'description': 'Timezone. Default: same as Gateway. Example: UTC'}]
 
     default_config = {'broker_port': 1883,
                       'topic_prefix': 'openmotics'}
@@ -67,9 +71,10 @@ class MQTTClient(OMPluginBase):
     def _read_config(self):
         self._ip = self._config.get('broker_ip')
         self._port = self._config.get('broker_port', MQTTClient.default_config['broker_port'])
-        self._topic_prefix = self._config.get('topic_prefix', MQTTClient.default_config['topic_prefix'])
         self._username = self._config.get('username')
         self._password = self._config.get('password')
+        self._topic_prefix = self._config.get('topic_prefix', MQTTClient.default_config['topic_prefix'])
+        self._timezone = self._config.get('timezone')
 
         self._enabled = self._ip is not None and self._port is not None
         self.logger('MQTTClient is {0}'.format('enabled' if self._enabled else 'disabled'))
@@ -160,6 +165,12 @@ class MQTTClient(OMPluginBase):
         except Exception as ex:
             self.logger('Error sending data to broker: {0}'.format(ex))
 
+    def _get_now_isoformat(self):
+        now = datetime.now()
+        if self._timezone is not None:
+            now = datetime.now(pytz.timezone(self._timezone))
+        return now.isoformat()
+
     @input_status(version=2)
     def input_status(self, data):
         if self._enabled is True:
@@ -173,7 +184,7 @@ class MQTTClient(OMPluginBase):
                     data = {'id': input_id,
                             'name': name,
                             'status': status,
-                            'timestamp': datetime.now().isoformat()}
+                            'timestamp': self._get_now_isoformat()}
                     thread = Thread(target=self._send, args=('{0}/input/{1}/state'.format(self._topic_prefix, input_id), data))
                     thread.start()
                 else:
@@ -222,7 +233,7 @@ class MQTTClient(OMPluginBase):
                         data = {'id': output_id,
                                 'name': name,
                                 'value': level,
-                                'timestamp': datetime.now().isoformat()}
+                                'timestamp': self._get_now_isoformat()}
                         thread = Thread(target=self._send, args=('{0}/output/{1}/state'.format(self._topic_prefix, output_id), data))
                         thread.start()
             except Exception as ex:
@@ -235,8 +246,8 @@ class MQTTClient(OMPluginBase):
                 self._log('Got event {0}'.format(id))
                 self.logger('Got event {0}'.format(id))
                 data = {'id': id,
-                        'timestamp': datetime.now().isoformat()}
-                thread = Thread(target=self._send, args=('{0}/event/{1}/state'.format(id), data))
+                        'timestamp': self._get_now_isoformat()}
+                thread = Thread(target=self._send, args=('{0}/event/{1}/state'.format(self._topic_prefix, id), data))
                 thread.start()
             except Exception as ex:
                 self.logger('Error processing event: {0}'.format(ex))
@@ -259,17 +270,15 @@ class MQTTClient(OMPluginBase):
         regexp = base_topic.replace('+', '(\d+)')
         if re.search(regexp, msg.topic) is not None:
             try:
-                # the output_id is the first math of the regular expression
+                # the output_id is the first match of the regular expression
                 output_id = int(re.findall(regexp, msg.topic)[0])
                 if output_id in self._outputs:
                     output = self._outputs[output_id]
                     value = int(msg.payload)
                     if value > 0:
                         is_on = 'true'
-                        log_value = 'ON'
                     else:
                         is_on = 'false'
-                        log_value = 'OFF'
                     dimmer = None
                     if output['module_type'] == 'dimmer':
                         dimmer = None if value == 0 else max(0, min(100, value))
@@ -277,11 +286,11 @@ class MQTTClient(OMPluginBase):
                             log_value = 'ON ({0}%)'.format(value)
                     result = json.loads(self.webinterface.set_output(None, output_id, is_on, dimmer, None))
                     if result['success'] is False:
-                        log_message = 'Failed to set output {0} to {1}: {2}'.format(output_id, log_value, result.get('msg', 'Unknown error'))
+                        log_message = 'Failed to set output {0} to {1}: {2}'.format(output_id, value, result.get('msg', 'Unknown error'))
                         self._log(log_message)
                         self.logger(log_message)
                     else:
-                        log_message = 'Output {0} set to {1}'.format(output_id, log_value)
+                        log_message = 'Message for output {0} with payload {1}'.format(output_id, value)
                         self._log(log_message)
                         self.logger(log_message)
                 else:
@@ -308,6 +317,7 @@ class MQTTClient(OMPluginBase):
         config['username'] = config['username'].encode('ascii', 'ignore')
         config['password'] = config['password'].encode('ascii', 'ignore')
         config['topic_prefix'] = config['topic_prefix'].encode('ascii', 'ignore')
+        config['timezone'] = config['timezone'].encode('ascii', 'ignore')
         self._config_checker.check_config(config)
         self.write_config(config)
         self._config = config

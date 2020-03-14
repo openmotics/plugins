@@ -22,55 +22,67 @@ config_description = [{'name': 'broker_ip',
                        'description': 'Username'},
                       {'name': 'password',
                        'type': 'str',
-                       'description': 'Password'}]
+                       'description': 'Password'},
+                      {'name': 'topic_prefix',
+                       'type': 'str',
+                       'description': 'Topic prefix'},
+                      {'name': 'timezone',
+                       'type': 'str',
+                       'description': 'Timezone. Default: same as Gateway. Example: UTC'}]
 ```
 
 ## Topics
 
-### Events
+### State messages
 
-The system will publish events for Inputs pressed, Outputs that change and Events. It publishes to following topics:
+The system will publish the state for Inputs pressed, Outputs that change and Events. It publishes to following topics:
 
-* Input: openmotics/events/input/{id}
-* Output: openmotics/events/output/{id}
-* Events: openmotics/events/event/{id}
+#### Input state
 
-For Inputs, the data is a JSON object:
-
+* Topic:  {topic_prefix}/input/{id}/state
+* Payload:
 ```
 {
     "id": "<input id>",
     "name": "<name of the Input>",
-    "timestamp": <unix timestamp>
+    "timestamp": <ISO format timestamp in {timezone}>
 }
 ```
 
-For Outputs, the data is a JSON object:
+#### Output state
 
+* Topic: {topic_prefix}/output/{id}/state
+* Payload:
 ```
 {
     "id": "<output id>",
     "name": "<name of the Output>",
     "value": <level of the Output, value 0-100>,
-    "timestamp": <unix timestamp>
+    "timestamp": <ISO format timestamp in {timezone}>
 }
 ```
 
-For Events, the data is a JSON object:
+### Event state
+
+* Topic: {topic_prefix}/event/{id}/state
+* Payload:
 ```
 {
     "id": "<event id>",
-    "timestamp": <unix timestamp>
+    "timestamp": <ISO format timestamp in {timezone}>
 }
 ```
 
 More information on how to send these OpenMotics events can be found on the [OpenMotics wiki: Action Types](http://wiki.openmotics.com/index.php/Action_Types), number 60.
 
-### Control
+### Command messages
 
 The system can also be controlled by letting clients publish to a given topic.
 
-* Outputs: openmotics/set/output/{id}
+#### Set Output
+
+* Topic: {topic_prefix}/output/{id}/set
+* Payload: <value>
 
 For Outputs, the value should be an integer (0-100) representing the desired output state. In case
 the Output is a relay, only 0 and 100 are considered valid values.
