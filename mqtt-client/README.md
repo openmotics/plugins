@@ -4,7 +4,7 @@ An MQTT client plugin for sending/receiving data to/from an MQTT broker.
 
 ## Work in progress
 
-This is a work in progress and might or might not be suitable for real-life usage. This plugin is shared for community
+This is a work in progress, but has already been extensively tested in a real home. This plugin is shared for community
 feedback and/or contributions. Please only use this plugin if you know what you're doing and if you're willing to debug
 issues you might encounter. As always, feel free to report issues and/or make pull requests.
 
@@ -82,7 +82,14 @@ The system can also be controlled by letting clients publish to a given topic.
 #### Set Output
 
 * Topic: {topic_prefix}/output/{id}/set
-* Payload: <value>
+* Payload: value
 
 For Outputs, the value should be an integer (0-100) representing the desired output state. In case
 the Output is a relay, only 0 and 100 are considered valid values.
+
+### Logging messages
+
+This topic is mainly used for debugging purposes.
+
+* Topic: {topic_prefix}/logging
+* Payload: log message
