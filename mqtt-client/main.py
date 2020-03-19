@@ -20,7 +20,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '1.4.3'
+    version = '1.4.14'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'broker_ip',
@@ -35,6 +35,12 @@ class MQTTClient(OMPluginBase):
                           {'name': 'password',
                            'type': 'str',
                            'description': 'Password'},
+                          {'name': 'qos',
+                           'type': 'int',
+                           'description': 'Quality of Service. Default: 0'},
+                          {'name': 'retain',
+                           'type': 'bool',
+                           'description': 'Retain. Default: False'},
                           {'name': 'topic_prefix',
                            'type': 'str',
                            'description': 'Topic prefix. Default: openmotics'},
@@ -43,6 +49,8 @@ class MQTTClient(OMPluginBase):
                            'description': 'Timezone. Default: same as Gateway. Example: UTC'}]
 
     default_config = {'broker_port': 1883,
+                      'qos': 0,
+                      'retain': False,
                       'topic_prefix': 'openmotics'}
 
     def __init__(self, webinterface, logger):
@@ -60,7 +68,7 @@ class MQTTClient(OMPluginBase):
         self._inputs = {}
         self._outputs = {}
 
-        self._read_config()
+        self._read_config(MQTTClient.default_config)
         self._try_connect()
 
         self._load_input_configuration()
@@ -68,12 +76,18 @@ class MQTTClient(OMPluginBase):
 
         self.logger("Started MQTTClient plugin")
 
-    def _read_config(self):
+    def __del__(self):
+        self.logger('Destructor called')
+        self.client.disconnect()
+
+    def _read_config(self, defaults):
         self._ip = self._config.get('broker_ip')
-        self._port = self._config.get('broker_port', MQTTClient.default_config['broker_port'])
+        self._port = self._config.get('broker_port', defaults['broker_port'])
         self._username = self._config.get('username')
         self._password = self._config.get('password')
-        self._topic_prefix = self._config.get('topic_prefix', MQTTClient.default_config['topic_prefix'])
+        self._qos = self._config.get('qos', defaults['qos'])
+        self._retain = self._config.get('retain', defaults['retain'])
+        self._topic_prefix = self._config.get('topic_prefix', defaults['topic_prefix'])
         self._timezone = self._config.get('timezone')
 
         self._enabled = self._ip is not None and self._port is not None
@@ -150,18 +164,20 @@ class MQTTClient(OMPluginBase):
                     self.client.username_pw_set(self._username, self._password)
                 self.client.on_message = self.on_message
                 self.client.on_connect = self.on_connect
+                self.client.on_disconnect = self.on_disconnect
                 self.client.connect(self._ip, self._port, 5)
                 self.client.loop_start()
             except Exception as ex:
                 self.logger('Error connecting to MQTT broker: {0}'.format(ex))
 
     def _log(self, info):
-        thread = Thread(target=self._send, args=('{0}/logging'.format(self._topic_prefix), info), kwargs={'retain': False})
+        # for log messages QoS = 0 and retain = False
+        thread = Thread(target=self._send, args=('{0}/logging'.format(self._topic_prefix), info, 0, False))
         thread.start()
 
-    def _send(self, topic, data, retain=True):
+    def _send(self, topic, data, qos, retain):
         try:
-            self.client.publish(topic, json.dumps(data), retain=retain)
+            self.client.publish(topic, payload=json.dumps(data), qos=qos, retain=retain)
         except Exception as ex:
             self.logger('Error sending data to broker: {0}'.format(ex))
 
@@ -185,7 +201,10 @@ class MQTTClient(OMPluginBase):
                             'name': name,
                             'status': status,
                             'timestamp': self._get_now_isoformat()}
-                    thread = Thread(target=self._send, args=('{0}/input/{1}/state'.format(self._topic_prefix, input_id), data))
+                    thread = Thread(
+                        target=self._send,
+                        args=('{0}/input/{1}/state'.format(self._topic_prefix, input_id), data, self._qos, self._retain)
+                    )
                     thread.start()
                 else:
                     self.logger('Got event for unknown input {0}'.format(input_id))
@@ -234,7 +253,10 @@ class MQTTClient(OMPluginBase):
                                 'name': name,
                                 'value': level,
                                 'timestamp': self._get_now_isoformat()}
-                        thread = Thread(target=self._send, args=('{0}/output/{1}/state'.format(self._topic_prefix, output_id), data))
+                        thread = Thread(
+                            target=self._send,
+                            args=('{0}/output/{1}/state'.format(self._topic_prefix, output_id), data, self._qos, self._retain)
+                        )
                         thread.start()
             except Exception as ex:
                 self.logger('Error processing outputs: {0}'.format(ex))
@@ -247,7 +269,10 @@ class MQTTClient(OMPluginBase):
                 self.logger('Got event {0}'.format(id))
                 data = {'id': id,
                         'timestamp': self._get_now_isoformat()}
-                thread = Thread(target=self._send, args=('{0}/event/{1}/state'.format(self._topic_prefix, id), data))
+                thread = Thread(
+                    target=self._send,
+                    args=('{0}/event/{1}/state'.format(self._topic_prefix, id), data, self._qos, self._retain)
+                )
                 thread.start()
             except Exception as ex:
                 self.logger('Error processing event: {0}'.format(ex))
@@ -258,6 +283,21 @@ class MQTTClient(OMPluginBase):
             return
 
         self.logger('Connected to MQTT broker {0}:{1}'.format(self._ip, self._port))
+        status_topic = '{0}/status'.format(self._topic_prefix)
+        # publish birth message to the status topic with QoS = 2 and retain = True regardless of configuration
+        try:
+            thread = Thread(target=self._send, args=(status_topic, 'online', 2, True))
+            thread.start()
+            self.logger('Birth message sent to MQTT broker: topic = {0}, payload = {1}'.format(status_topic, 'online'))
+        except Exception as ex:
+            self.logger('Could not publish to status topic: {0}'.format(ex))
+        # send a last will and testament (LWT) to the broker
+        try:
+            self.client.will_set(status_topic, payload='offline', qos=1, retain=True)
+            self.logger('Last will and testament sent to MQTT broker: topic = {0}, payload = {1}'.format(status_topic, 'offline'))
+        except Exception as ex:
+            self.logger('Could not set last will and testament: {0}'.format(ex))
+        # subscribe to output command topic
         try:
             output_command_topic = '{0}/output/+/set'.format(self._topic_prefix)
             self.client.subscribe(output_command_topic)
@@ -300,6 +340,16 @@ class MQTTClient(OMPluginBase):
         else:
             self._log('Message with topic {0} ignored'.format(msg.topic))
             self.logger('Message with topic {0} ignored'.format(msg.topic))
+
+    def on_disconnect(self, client, userdata, rc):
+        if rc != 0:
+            self.logger('Unexpected disconnection: rc={0}', rc)
+            return
+
+        self.logger('Disconnecing from MQTT broker {0}:{1}'.format(self._ip, self._port))
+        status_topic = '{0}/status'.format(self._topic_prefix)
+        thread = Thread(target=self._send, args=(status_topic, 'offline', 2, True))
+        thread.start()
 
     @om_expose
     def get_config_description(self):
