@@ -20,7 +20,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '1.4.14'
+    version = '2.0.0'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'broker_ip',
@@ -164,7 +164,6 @@ class MQTTClient(OMPluginBase):
                     self.client.username_pw_set(self._username, self._password)
                 self.client.on_message = self.on_message
                 self.client.on_connect = self.on_connect
-                self.client.on_disconnect = self.on_disconnect
                 self.client.connect(self._ip, self._port, 5)
                 self.client.loop_start()
             except Exception as ex:
@@ -283,20 +282,6 @@ class MQTTClient(OMPluginBase):
             return
 
         self.logger('Connected to MQTT broker {0}:{1}'.format(self._ip, self._port))
-        status_topic = '{0}/status'.format(self._topic_prefix)
-        # publish birth message to the status topic with QoS = 2 and retain = True regardless of configuration
-        try:
-            thread = Thread(target=self._send, args=(status_topic, 'online', 2, True))
-            thread.start()
-            self.logger('Birth message sent to MQTT broker: topic = {0}, payload = {1}'.format(status_topic, 'online'))
-        except Exception as ex:
-            self.logger('Could not publish to status topic: {0}'.format(ex))
-        # send a last will and testament (LWT) to the broker
-        try:
-            self.client.will_set(status_topic, payload='offline', qos=1, retain=True)
-            self.logger('Last will and testament sent to MQTT broker: topic = {0}, payload = {1}'.format(status_topic, 'offline'))
-        except Exception as ex:
-            self.logger('Could not set last will and testament: {0}'.format(ex))
         # subscribe to output command topic
         try:
             output_command_topic = '{0}/output/+/set'.format(self._topic_prefix)
@@ -340,16 +325,6 @@ class MQTTClient(OMPluginBase):
         else:
             self._log('Message with topic {0} ignored'.format(msg.topic))
             self.logger('Message with topic {0} ignored'.format(msg.topic))
-
-    def on_disconnect(self, client, userdata, rc):
-        if rc != 0:
-            self.logger('Unexpected disconnection: rc={0}', rc)
-            return
-
-        self.logger('Disconnecing from MQTT broker {0}:{1}'.format(self._ip, self._port))
-        status_topic = '{0}/status'.format(self._topic_prefix)
-        thread = Thread(target=self._send, args=(status_topic, 'offline', 2, True))
-        thread.start()
 
     @om_expose
     def get_config_description(self):
