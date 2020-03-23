@@ -5,11 +5,12 @@ For more info: https://github.com/openmotics/plugins/blob/master/mqtt-client/REA
 
 import sys
 import re
+import time
 from datetime import datetime
 import pytz
 import simplejson as json
 from threading import Thread
-from plugins.base import om_expose, input_status, output_status, OMPluginBase, PluginConfigChecker, receive_events
+from plugins.base import om_expose, input_status, output_status, OMPluginBase, PluginConfigChecker, receive_events, om_metric_receive
 from serial_utils import CommunicationTimedOutException
 
 
@@ -20,7 +21,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '2.0.0'
+    version = '2.0.24'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'broker_ip',
@@ -35,23 +36,24 @@ class MQTTClient(OMPluginBase):
                           {'name': 'password',
                            'type': 'str',
                            'description': 'Password'},
+                          {'name': 'topic_prefix',
+                           'type': 'str',
+                           'description': 'Topic prefix. Default: openmotics'},
                           {'name': 'qos',
                            'type': 'int',
                            'description': 'Quality of Service. Default: 0'},
                           {'name': 'retain',
                            'type': 'bool',
                            'description': 'Retain. Default: False'},
-                          {'name': 'topic_prefix',
-                           'type': 'str',
-                           'description': 'Topic prefix. Default: openmotics'},
                           {'name': 'timezone',
                            'type': 'str',
-                           'description': 'Timezone. Default: same as Gateway. Example: UTC'}]
+                           'description': 'Timezone. Default: UTC. Example: Europe/Brussels'}]
 
     default_config = {'broker_port': 1883,
                       'qos': 0,
                       'retain': False,
                       'topic_prefix': 'openmotics'}
+
 
     def __init__(self, webinterface, logger):
         super(MQTTClient, self).__init__(webinterface, logger)
@@ -75,10 +77,6 @@ class MQTTClient(OMPluginBase):
         self._load_output_configuration()
 
         self.logger("Started MQTTClient plugin")
-
-    def __del__(self):
-        self.logger('Destructor called')
-        self.client.disconnect()
 
     def _read_config(self, defaults):
         self._ip = self._config.get('broker_ip')
@@ -107,10 +105,25 @@ class MQTTClient(OMPluginBase):
                 for input_id in self._inputs.keys():
                     if input_id not in ids:
                         del self._inputs[input_id]
+                self.logger('Configuring {0} inputs'.format(len(ids)))
         except CommunicationTimedOutException:
             self.logger('Error while loading input configurations: CommunicationTimedOutException')
         except Exception as ex:
             self.logger('Error while loading input configurations: {0}'.format(ex))
+        try:
+            result = json.loads(self.webinterface.get_input_status(None))
+            if result['success'] is False:
+                self.logger('Failed to get input status')
+            else:
+                for input_data in result['status']:
+                    input_id = input_data['id']
+                    if input_id not in self._inputs:
+                        continue
+                    self._inputs[input_id]['status'] = input_data['status']
+        except CommunicationTimedOutException:
+            self.logger('Error getting input status: CommunicationTimedOutException')
+        except Exception as ex:
+            self.logger('Error getting input status: {0}'.format(ex))
 
     def _load_output_configuration(self):
         try:
@@ -134,6 +147,7 @@ class MQTTClient(OMPluginBase):
                 for output_id in self._outputs.keys():
                     if output_id not in ids:
                         del self._outputs[output_id]
+                self.logger('Configuring {0} outputs'.format(len(ids)))
         except CommunicationTimedOutException:
             self.logger('Error while loading output configurations: CommunicationTimedOutException')
         except Exception as ex:
@@ -180,11 +194,17 @@ class MQTTClient(OMPluginBase):
         except Exception as ex:
             self.logger('Error sending data to broker: {0}'.format(ex))
 
-    def _get_now_isoformat(self):
-        now = datetime.now()
-        if self._timezone is not None:
-            now = datetime.now(pytz.timezone(self._timezone))
-        return now.isoformat()
+    def _timestamp2isoformat(self, timestamp=None):
+        # start with UTC
+        dt = datetime.utcnow()
+        if (timestamp is not None):
+            dt.utcfromtimestamp(float(timestamp))
+        # localize the UTC date/time, make it "aware" instead of naive
+        dt = pytz.timezone('UTC').localize(dt)
+        # convert to timezone from configuration
+        if self._timezone is not None and self._timezone is not 'UTC':
+            dt = dt.astimezone(pytz.timezone(self._timezone))
+        return dt.isoformat()
 
     @input_status(version=2)
     def input_status(self, data):
@@ -199,7 +219,7 @@ class MQTTClient(OMPluginBase):
                     data = {'id': input_id,
                             'name': name,
                             'status': status,
-                            'timestamp': self._get_now_isoformat()}
+                            'timestamp': self._timestamp2isoformat()}
                     thread = Thread(
                         target=self._send,
                         args=('{0}/input/{1}/state'.format(self._topic_prefix, input_id), data, self._qos, self._retain)
@@ -251,7 +271,7 @@ class MQTTClient(OMPluginBase):
                         data = {'id': output_id,
                                 'name': name,
                                 'value': level,
-                                'timestamp': self._get_now_isoformat()}
+                                'timestamp': self._timestamp2isoformat()}
                         thread = Thread(
                             target=self._send,
                             args=('{0}/output/{1}/state'.format(self._topic_prefix, output_id), data, self._qos, self._retain)
@@ -267,7 +287,7 @@ class MQTTClient(OMPluginBase):
                 self._log('Got event {0}'.format(id))
                 self.logger('Got event {0}'.format(id))
                 data = {'id': id,
-                        'timestamp': self._get_now_isoformat()}
+                        'timestamp': self._timestamp2isoformat()}
                 thread = Thread(
                     target=self._send,
                     args=('{0}/event/{1}/state'.format(self._topic_prefix, id), data, self._qos, self._retain)
@@ -275,6 +295,59 @@ class MQTTClient(OMPluginBase):
                 thread.start()
             except Exception as ex:
                 self.logger('Error processing event: {0}'.format(ex))
+
+    @om_metric_receive(interval=60)
+    def receive_metric_data(self, metric):
+        try:
+            if self._enabled is True:
+                metric_type = metric.get('type')
+                # sensors
+                if metric_type == 'sensor':
+                    sensor_data = metric.get('tags')
+                    sensor_values = metric.get('values')
+            
+                    for key, sensor_value in sensor_values.items():
+                        if key == 'hum':
+                            sensor_data['humidity'] = sensor_value
+                        elif key == 'temp':
+                            sensor_data['temperature'] = sensor_value
+                        elif key == 'bright':
+                            sensor_data['brightness'] = sensor_value
+                        else:
+                            sensor_data[key] = sensor_value
+
+                    sensor_data['timestamp'] = self._timestamp2isoformat(metric.get('timestamp'))
+                    thread = Thread(
+                        target=self._send,
+                        args=('{0}/sensor/{1}/state'.format(self._topic_prefix, sensor_data.get('id')), sensor_data, self._qos, self._retain)
+                    )
+                    thread.start()
+
+                # energy
+                if metric_type == 'energy':
+                    energy_data = metric.get('tags')
+                    energy_values = metric.get('values')
+
+                    for key, energy_value in energy_values.items():
+                        if key == 'id':
+                            regexp = 'E\w+\.(\d+)'
+                            if (re.search(regexp, energy_value)):
+                                energy_data['id'] = re.findall(regexp, energy_value)[0]
+                            else:
+                                continue
+                        else:
+                            energy_data[key] = energy_value
+
+                    energy_data['timestamp'] = self._timestamp2isoformat()
+                    thread = Thread(
+                        target=self._send,
+                        args=('{0}/energy/{1}/state'.format(self._topic_prefix, energy_data.get('id')), energy_data, self._qos, self._retain)
+                    )
+                    thread.start()
+                    
+        except Exception as ex:
+            self.logger('Error receiving metrics: {0}'.format(ex))
+
 
     def on_connect(self, client, userdata, flags, rc):
         if rc != 0:
