@@ -164,7 +164,7 @@ class SMAWebConnect(OMPluginBase):
         self._debug = bool(self._config.get('debug', False))
 
         self._enabled = len(self._sma_devices) > 0 and self._sample_rate > 5
-        self.logger('SMATCPModbus is {0}'.format('enabled' if self._enabled else 'disabled'))
+        self.logger('SMAWebConnect is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     def _log_debug(self, message):
         if self._debug:
