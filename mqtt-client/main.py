@@ -430,7 +430,7 @@ class MQTTClient(OMPluginBase):
             except Exception as ex:
                 self.logger('Error processing event: {0}'.format(ex))
 
-    @om_metric_receive(metric_type='sensor', interval=300)
+    @om_metric_receive(source='OpenMotics', metric_type='sensor', interval=300)
     def receive_sensor_metric_data(self, metric):
         #self.logger('Receiving sensor metrics with interval: {0}'.format(self.receive_sensor_metric_data.om_metric_receive.get('interval')))
         try:
@@ -456,7 +456,7 @@ class MQTTClient(OMPluginBase):
         except Exception as ex:
             self.logger('Error receiving sensor metrics: {0}'.format(ex))
 
-    @om_metric_receive(metric_type='energy', interval=60)
+    @om_metric_receive(source='OpenMotics', metric_type='energy', interval=60)
     def receive_energy_metric_data(self, metric):
         #self.logger('Receiving energy metrics with interval: {0}'.format(self.receive_energy_metric_data.om_metric_receive.get('interval')))
         try:

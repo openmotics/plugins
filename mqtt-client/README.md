@@ -80,10 +80,6 @@ config_description = [
         {'name': 'sensor_status_retain',
          'type': 'bool',
          'description': 'Sensor status message retain. Default: False'},
-        # this doesn't seem to work, removing config parameter for now
-        # {'name': 'sensor_metric_poll_frequency',
-        #  'type': 'int',
-        #  'description': 'Polling frequency for sensor metrics in seconds. Default: 300'},
         # energy status
         {'name': 'energy_status_enabled',
          'type': 'bool',
@@ -98,10 +94,6 @@ config_description = [
         {'name': 'energy_status_retain',
          'type': 'bool',
          'description': 'Energy status retain. Default: False'},
-        # this doesn't seem to work, removing config parameter for now
-        # {'name': 'energy_metric_poll_frequency',
-        # 'type': 'int',
-        # 'description': 'Polling frequency for energy metrics in seconds. Default: 60'},
         # output command
         {'name': 'output_command_topic',
          'type': 'str',
