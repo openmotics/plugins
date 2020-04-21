@@ -10,7 +10,7 @@ from datetime import datetime
 import pytz
 import simplejson as json
 from threading import Thread
-from plugins.base import om_expose, input_status, output_status, OMPluginBase, PluginConfigChecker, receive_events, om_metric_receive
+from plugins.base import om_expose, input_status, output_status, OMPluginBase, PluginConfigChecker, receive_events, om_metric_receive, background_task
 from serial_utils import CommunicationTimedOutException
 
 
@@ -43,78 +43,127 @@ class MQTTClient(OMPluginBase):
          'description': 'Enable input status publishing of messages.'},
         {'name': 'input_status_topic_format',
          'type': 'str',
-         'description': 'Input status topic format. Default: openmotics/input/{id}/status'},
+         'description': 'Input status topic format. Default: openmotics/input/{id}/state'},
         {'name': 'input_status_qos',
          'type': 'enum',
          'choices': ['0', '1', '2'],
          'description': 'Input status message quality of service. Default: 0'},
         {'name': 'input_status_retain',
          'type': 'bool',
-         'description': 'Input status message retain. Default: False'},
+         'description': 'Input status message retain.'},
         # output status
         {'name': 'output_status_enabled',
          'type': 'bool',
          'description': 'Enable output status publishing of messages.'},
         {'name': 'output_status_topic_format',
          'type': 'str',
-         'description': 'Output status topic format. Default: openmotics/output/{id}/status'},
+         'description': 'Output status topic format. Default: openmotics/output/{id}/state'},
         {'name': 'output_status_qos',
          'type': 'enum',
          'choices': ['0', '1', '2'],
          'description': 'Output status message quality of service. Default: 0'},
         {'name': 'output_status_retain',
          'type': 'bool',
-         'description': 'Output status message retain. Default: False'},
+         'description': 'Output status message retain.'},
         # event status
         {'name': 'event_status_enabled',
          'type': 'bool',
          'description': 'Enable event status publishing of messages.'},
         {'name': 'event_status_topic_format',
          'type': 'str',
-         'description': 'Event status topic format. Default: openmotics/event/{id}/status'},
+         'description': 'Event status topic format. Default: openmotics/event/{id}/state'},
         {'name': 'event_status_qos',
          'type': 'enum',
          'choices': ['0', '1', '2'],
          'description': 'Event status message quality of service. Default: 0'},
         {'name': 'event_status_retain',
          'type': 'bool',
-         'description': 'Event status message retain. Default: False'},
-        # sensor status
-        {'name': 'sensor_status_enabled',
+         'description': 'Event status message retain.'},
+        # temperature status
+        {'name': 'temperature_status_enabled',
          'type': 'bool',
-         'description': 'Enable sensor status publishing of messages.'},
-        {'name': 'sensor_status_topic_format',
+         'description': 'Enable temperature status publishing of messages.'},
+        {'name': 'temperature_status_topic_format',
          'type': 'str',
-         'description': 'Sensor status topic format. Default: openmotics/sensor/{id}/status'},
-        {'name': 'sensor_status_qos',
+         'description': 'Temperature status topic format. Default: openmotics/temperature/{id}/state'},
+        {'name': 'temperature_status_qos',
          'type': 'enum',
          'choices': ['0', '1', '2'],
-         'description': 'Sensor status message quality of service. Default: 0'},
-        {'name': 'sensor_status_retain',
+         'description': 'Temperature status message quality of service. Default: 0'},
+        {'name': 'temperature_status_retain',
          'type': 'bool',
-         'description': 'Sensor status message retain. Default: False'},
-        # this doesn't seem to work, removing config parameter for now
-        # {'name': 'sensor_metric_poll_frequency',
-        #  'type': 'int',
-        #  'description': 'Polling frequency for sensor metrics in seconds. Default: 300'},
+         'description': 'Temperature status message retain.'},
+        {'name': 'temperature_status_poll_frequency',
+         'type': 'int',
+         'description': 'Polling frequency for temperature status in seconds. Default: 300, minimum: 10'},
+        # humidity status
+        {'name': 'humidity_status_enabled',
+         'type': 'bool',
+         'description': 'Enable humidity status publishing of messages.'},
+        {'name': 'humidity_status_topic_format',
+         'type': 'str',
+         'description': 'Humidity status topic format. Default: openmotics/humidity/{id}/state'},
+        {'name': 'humidity_status_qos',
+         'type': 'enum',
+         'choices': ['0', '1', '2'],
+         'description': 'Humidity status message quality of service. Default: 0'},
+        {'name': 'humidity_status_retain',
+         'type': 'bool',
+         'description': 'Humidity status message retain.'},
+        {'name': 'humidity_status_poll_frequency',
+         'type': 'int',
+         'description': 'Polling frequency for humidity status in seconds. Default: 300, minimum: 10'},
+        # brightness status
+        {'name': 'brightness_status_enabled',
+         'type': 'bool',
+         'description': 'Enable brightness status publishing of messages.'},
+        {'name': 'brightness_status_topic_format',
+         'type': 'str',
+         'description': 'Brightness status topic format. Default: openmotics/brightness/{id}/state'},
+        {'name': 'brightness_status_qos',
+         'type': 'enum',
+         'choices': ['0', '1', '2'],
+         'description': 'Brightness status message quality of service. Default: 0'},
+        {'name': 'brightness_status_retain',
+         'type': 'bool',
+         'description': 'Brightness status message retain. Default: False'},
+        {'name': 'brightness_status_poll_frequency',
+         'type': 'int',
+         'description': 'Polling frequency for brightness status in seconds. Default: 300, minimum: 10'},
+        # power status
+        {'name': 'power_status_enabled',
+         'type': 'bool',
+         'description': 'Enable power status publishing of messages.'},
+        {'name': 'power_status_topic_format',
+         'type': 'str',
+         'description': 'Power status topic format. Default: openmotics/power/{module_id}/{sensor_id}/state'},
+        {'name': 'power_status_qos',
+         'type': 'enum',
+         'choices': ['0', '1', '2'],
+         'description': 'Power status quality of Service. Default: 0'},
+        {'name': 'power_status_retain',
+         'type': 'bool',
+         'description': 'Power status retain.'},
+        {'name': 'power_status_poll_frequency',
+        'type': 'int',
+        'description': 'Polling frequency for power status in seconds. Default: 60, minimum: 10'},
         # energy status
         {'name': 'energy_status_enabled',
          'type': 'bool',
          'description': 'Enable energy status publishing of messages.'},
         {'name': 'energy_status_topic_format',
          'type': 'str',
-         'description': 'Energy status topic format. Default: openmotics/energy/{id}/status'},
+         'description': 'Energy status topic format. Default: openmotics/energy/{module_id}/{sensor_id}/state'},
         {'name': 'energy_status_qos',
          'type': 'enum',
          'choices': ['0', '1', '2'],
          'description': 'Energy status quality of Service. Default: 0'},
         {'name': 'energy_status_retain',
          'type': 'bool',
-         'description': 'Energy status retain. Default: False'},
-        # this doesn't seem to work, removing config parameter for now
-        # {'name': 'energy_metric_poll_frequency',
-        # 'type': 'int',
-        # 'description': 'Polling frequency for energy metrics in seconds. Default: 60'},
+         'description': 'Energy status retain.'},
+        {'name': 'energy_status_poll_frequency',
+        'type': 'int',
+        'description': 'Polling frequency for energy status in seconds. Default: 3600 (1 hour), minimum: 10'},
         # output command
         {'name': 'output_command_topic',
          'type': 'str',
@@ -138,14 +187,21 @@ class MQTTClient(OMPluginBase):
         'output_status_qos': 0,
         'event_status_topic_format': 'openmotics/event/{id}/state',
         'event_status_qos': 0,
-        'sensor_status_topic_format': 'openmotics/sensor/{id}/state',
-        'sensor_status_qos': 0,
-        # this doesn't seem to work, removing config parameter for now
-        # 'sensor_metric_poll_frequency': 300,
-        'energy_status_topic_format': 'openmotics/energy/{id}/state',
+        'temperature_status_topic_format': 'openmotics/temperature/{id}/state',
+        'temperature_status_qos': 0,
+        'temperature_status_poll_frequency': 300,
+        'humidity_status_topic_format': 'openmotics/humidity/{id}/state',
+        'humidity_status_qos': 0,
+        'humidity_status_poll_frequency': 300,
+        'brightness_status_topic_format': 'openmotics/brightness/{id}/state',
+        'brightness_status_qos': 0,
+        'brightness_status_poll_frequency': 300,
+        'power_status_topic_format': 'openmotics/power/{module_id}/{sensor_id}/state',
+        'power_status_qos': 0,
+        'power_status_poll_frequency': 60,
+        'energy_status_topic_format': 'openmotics/energy/{module_id}/{sensor_id}/state',
         'energy_status_qos': 0,
-        # this doesn't seem to work, removing config parameter for now
-        #'energy_metric_poll_frequency': 60,
+        'energy_status_poll_frequency': 3600,
         'output_command_topic': 'openmotics/output/+/set',
         'logging_topic': 'openmotics/logging',
         'timezone': 'UTC'
@@ -164,8 +220,11 @@ class MQTTClient(OMPluginBase):
             sys.path.insert(0, paho_mqtt_wheel)
 
         self.client = None
+        self._sensor_config = {}
         self._inputs = {}
         self._outputs = {}
+        self._sensors = {}
+        self._power_modules = {}
 
         self._read_config()
         self._try_connect()
@@ -196,26 +255,49 @@ class MQTTClient(OMPluginBase):
         self._event_qos     = int(self._config.get('event_status_qos'))
         self._event_retain  = self._config.get('event_status_retain')
         # sensors
-        self._sensor_enabled = self._config.get('sensor_status_enabled')
-        self._sensor_topic   = self._config.get('sensor_status_topic_format')
-        self._sensor_qos     = int(self._config.get('sensor_status_qos'))
-        self._sensor_retain  = self._config.get('sensor_status_retain')
-        # this doesn't seem to work, removing config parameter for now
-        #self.receive_sensor_metric_data.om_metric_receive['interval'] = int(self._config.get('sensor_metric_poll_frequency'))
-        # energy
-        self._energy_enabled = self._config.get('energy_status_enabled')
-        self._energy_topic   = self._config.get('energy_status_topic_format')
-        self._energy_qos     = int(self._config.get('energy_status_qos'))
-        self._energy_retain  = self._config.get('energy_status_retain')
-        # this doesn't seem to work, removing config parameter for now
-        #self.receive_energy_metric_data.om_metric_receive['interval'] =  int(self._config.get('energy_metric_poll_frequency'))
+        self._sensor_config = {
+            'temperature': {
+                'enabled':        self._config.get('temperature_status_enabled'),
+                'topic':          self._config.get('temperature_status_topic_format'),
+                'qos':            int(self._config.get('temperature_status_qos')),
+                'retain':         self._config.get('temperature_status_retain'),
+                'poll_frequency': int(self._config.get('temperature_status_poll_frequency'))
+            },
+            'humidity': {
+                'enabled':        self._config.get('humidity_status_enabled'),
+                'topic':          self._config.get('humidity_status_topic_format'),
+                'qos':            int(self._config.get('humidity_status_qos')),
+                'retain':         self._config.get('humidity_status_retain'),
+                'poll_frequency': int(self._config.get('humidity_status_poll_frequency'))
+            },
+            'brightness': {
+                'enabled':        self._config.get('brightness_status_enabled'),
+                'topic':          self._config.get('brightness_status_topic_format'),
+                'qos':            int(self._config.get('brightness_status_qos')),
+                'retain':         self._config.get('brightness_status_retain'),
+                'poll_frequency': int(self._config.get('brightness_status_poll_frequency'))
+            },
+            'power': {
+                'enabled':        self._config.get('power_status_enabled'),
+                'topic':          self._config.get('power_status_topic_format'),
+                'qos':            int(self._config.get('power_status_qos')),
+                'retain':         self._config.get('power_status_retain'),
+                'poll_frequency': int(self._config.get('power_status_poll_frequency'))
+            },
+            'energy': {
+                'enabled':        self._config.get('energy_status_enabled'),
+                'topic':          self._config.get('energy_status_topic_format'),
+                'qos':            int(self._config.get('energy_status_qos')),
+                'retain':         self._config.get('energy_status_retain'),
+                'poll_frequency': int(self._config.get('energy_status_poll_frequency'))
+            }
+        }
         # output command
         self._output_command_topic = self._config.get('output_command_topic')
         # logging topic
         self._logging_topic = self._config.get('logging_topic')
         # timezone
         self._timezone = self._config.get('timezone')
-
         self._enabled = self._hostname is not None and self._port is not None
         self.logger('MQTTClient is {0}'.format('enabled' if self._enabled else 'disabled'))
 
@@ -224,6 +306,10 @@ class MQTTClient(OMPluginBase):
             self._load_input_configuration()
         if self._output_enabled:
             self._load_output_configuration()
+        if self._sensor_config.get('temperature').get('enabled') or self._sensor_config.get('humidity').get('enabled') or self._sensor_config.get('brightness').get('enabled'):
+            self._load_sensor_configuration()
+        if self._sensor_config.get('power').get('enabled') or self._sensor_config.get('energy').get('enabled'):
+            self._load_power_configuration()
 
     def _load_input_configuration(self):
         try:
@@ -301,6 +387,52 @@ class MQTTClient(OMPluginBase):
             self.logger('Error getting output status: CommunicationTimedOutException')
         except Exception as ex:
             self.logger('Error getting output status: {0}'.format(ex))
+
+    def _load_sensor_configuration(self):
+        try:
+            result = json.loads(self.webinterface.get_sensor_configurations())
+            if result['success'] is False:
+                self.logger('Failed to load sensor configurations: {0}'.format(result.get('msg')))
+            else:
+                ids = []
+                for config in result['config']:
+                    sensor_id = config['id']
+                    ids.append(sensor_id)
+                    self._sensors[sensor_id] = {'name': config['name'], 'offset': float(config['offset'])}
+                for sensor_id in self._sensors.keys():
+                    if sensor_id not in ids:
+                        del self._sensors[sensor_id]
+                self.logger('Configuring {0} sensors'.format(len(ids)))
+        except CommunicationTimedOutException:
+            self.logger('Error while loading sensor configurations: CommunicationTimedOutException')
+        except Exception as ex:
+            self.logger('Error while loading sensor configurations: {0}'.format(ex))
+
+    def _load_power_configuration(self):
+        try:
+            result = json.loads(self.webinterface.get_power_modules())
+            if result['success'] is False:
+                self.logger('Failed to load power configurations: {0}'.format(result.get('msg')))
+            else:
+                ids = []
+                for module in result['modules']:
+                    module_id = int(module['id'])
+                    ids.append(module_id)
+                    module_config = {}
+                    for input_id in range(0, 12):
+                        module_config[input_id] = {'name':     module['input{0}'.format(input_id)],
+                                                   'sensor':   module['sensor{0}'.format(input_id)],
+                                                   'times':    module['times{0}'.format(input_id)],
+                                                   'inverted': module['inverted{0}'.format(input_id)]}
+                    self._power_modules[module_id] = module_config
+                for module_id in self._power_modules.keys():
+                    if module_id not in ids:
+                        del self._power_modules[module_id]
+                self.logger('Configuring {0} energy module(s) with {1} inputs'.format(len(ids), len(ids)*12))
+        except CommunicationTimedOutException:
+            self.logger('Error while loading power configurations: CommunicationTimedOutException')
+        except Exception as ex:
+            self.logger('Error while loading power configurations: {0}'.format(ex))
 
     def _try_connect(self):
         if self._enabled is True:
@@ -430,57 +562,121 @@ class MQTTClient(OMPluginBase):
             except Exception as ex:
                 self.logger('Error processing event: {0}'.format(ex))
 
-    @om_metric_receive(source='OpenMotics', metric_type='sensor', interval=300)
-    def receive_sensor_metric_data(self, metric):
-        #self.logger('Receiving sensor metrics with interval: {0}'.format(self.receive_sensor_metric_data.om_metric_receive.get('interval')))
-        try:
-            if self._enabled and self._sensor_enabled:
-                sensor_data = metric.get('tags')
-                sensor_values = metric.get('values')
-                for key, sensor_value in sensor_values.items():
-                    if key == 'hum':
-                        sensor_data['humidity'] = sensor_value
-                    elif key == 'temp':
-                        sensor_data['temperature'] = sensor_value
-                    elif key == 'bright':
-                        sensor_data['brightness'] = sensor_value
-                    else:
-                        sensor_data[key] = sensor_value
+    @background_task
+    def background_task_temperature_status(self):
+        self._create_background_task(
+            'temperature',
+            self.webinterface.get_sensor_temperature_status,
+            self._process_sensor_status
+        )()
 
-                sensor_data['timestamp'] = self._timestamp2isoformat(metric.get('timestamp'))
-                thread = Thread(
-                    target=self._send,
-                    args=(self._sensor_topic.format(id=sensor_data.get('id')), sensor_data, self._sensor_qos, self._sensor_retain)
-                )
-                thread.start()
-        except Exception as ex:
-            self.logger('Error receiving sensor metrics: {0}'.format(ex))
+    @background_task
+    def background_task_humidity_status(self):
+        self._create_background_task(
+            'humidity',
+            self.webinterface.get_sensor_humidity_status,
+            self._process_sensor_status
+        )()
 
-    @om_metric_receive(source='OpenMotics', metric_type='energy', interval=60)
-    def receive_energy_metric_data(self, metric):
-        #self.logger('Receiving energy metrics with interval: {0}'.format(self.receive_energy_metric_data.om_metric_receive.get('interval')))
-        try:
-            if self._enabled and self._energy_enabled:
-                energy_data = metric.get('tags')
-                energy_values = metric.get('values')
+    @background_task
+    def background_task_brightness_status(self):
+        self._create_background_task(
+            'brightness',
+            self.webinterface.get_sensor_brightness_status,
+            self._process_sensor_status
+        )()
 
-                energy_id = energy_data.get('id')
-                if energy_id is not None:
-                    regexp = 'E\w+\.(\d+)'
-                    if re.search(regexp, energy_id) is not None:
-                        energy_data['id'] = re.findall(regexp, energy_id)[0]
+    @background_task
+    def background_task_realtime_power(self):
+        self._create_background_task(
+            'power',
+            self.webinterface.get_realtime_power,
+            self._process_realtime_power
+        )()
 
-                        for key, energy_value in energy_values.items():
-                            energy_data[key] = energy_value
+    @background_task
+    def background_task_total_energy(self):
+        self._create_background_task(
+            'energy',
+            self.webinterface.get_total_energy,
+            self._process_total_energy
+        )()
 
-                        energy_data['timestamp'] = self._timestamp2isoformat()
-                        thread = Thread(
-                            target=self._send,
-                            args=(self._energy_topic.format(id=energy_data.get('id')), energy_data, self._energy_qos, self._energy_retain)
-                        )
-                        thread.start()
-        except Exception as ex:
-            self.logger('Error receiving energy metrics: {0}'.format(ex))
+    def _process_sensor_status(self, sensor_config, json_data):
+        mqtt_messages = []
+        data_list = list(filter(None, json_data.get('status', [])))
+        for sensor_id, sensor_value in enumerate(data_list):
+            sensor_data = {'id': sensor_id,
+                           'name': self._sensors.get(sensor_id).get('name'),
+                           'value': float(sensor_value) + float(self._sensors.get(sensor_id).get('offset')),
+                           'timestamp': self._timestamp2isoformat()}
+            mqtt_messages.append({'topic': sensor_config.get('topic').format(id=sensor_id),
+                                  'message': sensor_data})
+        return mqtt_messages
+
+    def _process_realtime_power(self, sensor_config, json_data):
+        mqtt_messages = []
+        json_data.pop('success')
+        for module_id, values in json_data.items():
+            for input_id, sensor_values in enumerate(values):
+                sensor_data = {'sensor_id': input_id,
+                               'module_id': module_id,
+                               'name': self._power_modules.get(int(module_id)).get(int(input_id)).get('name'),
+                               'voltage': sensor_values[0],
+                               'frequency': sensor_values[1],
+                               'current': sensor_values[2],
+                               'power': sensor_values[3],
+                               'timestamp': self._timestamp2isoformat()}
+                mqtt_messages.append({'topic': sensor_config.get('topic').format(module_id=module_id, sensor_id=input_id),
+                                      'message': sensor_data })
+        return mqtt_messages
+
+    def _process_total_energy(self, sensor_config, json_data):
+        mqtt_messages = []
+        json_data.pop('success')
+        for module_id, values in json_data.items():
+            for input_id, sensor_values in enumerate(values):
+                sensor_data = {'sensor_id': input_id,
+                               'module_id': module_id,
+                               'name': self._power_modules[module_id][input_id].get('name'),
+                               'day': sensor_values[0],
+                               'night': sensor_values[1],
+                               'timestamp': self._timestamp2isoformat()}
+            mqtt_messages.append({'topic': sensor_config.get('topic').format(module_id=module_id, sensor_id=input_id),
+                                  'message': sensor_data})
+        return mqtt_messages
+
+    def _create_background_task(self, sensor_type, data_retriever, data_processor):
+        def background_function():
+            if self._enabled:
+                sensor_config = self._sensor_config.get(sensor_type)
+                frequency = sensor_config.get('poll_frequency')
+                self.logger('Background task to retrieve {0} sensor data started, will run every {1} seconds.'.format(sensor_type, frequency))
+                # highest frequency is every 10s
+                while frequency >= 10:
+                    start = time.time()
+                    try:
+                        if sensor_config.get('enabled'):
+                            result = json.loads(data_retriever())
+                            if result['success'] is False:
+                                self.logger('Failed to load {0} sensor data: {1}'.format(sensor_type, result.get('msg')))
+                            else:
+                                mqtt_messages = data_processor(sensor_config, result)
+                                for mqtt_message in mqtt_messages:
+                                    thread = Thread(target=self._send,
+                                                    args=(mqtt_message.get('topic'),
+                                                          mqtt_message.get('message'),
+                                                          sensor_config.get('qos'),
+                                                          sensor_config.get('retain')))
+                                    thread.start()
+                    except Exception as ex:
+                        self.logger('Error processing {0} sensor status: {1}'.format(sensor_type, ex))
+                    # This loop will run approx. every 'frequency' seconds
+                    sleep = frequency - (time.time() - start)
+                    if sleep < 0:
+                        sleep = 1
+                    time.sleep(sleep)
+        return background_function
 
     def on_connect(self, client, userdata, flags, rc):
         if rc != 0:
@@ -547,10 +743,10 @@ class MQTTClient(OMPluginBase):
             for key in config:
                 if isinstance(config[key], basestring):
                     config[key] = str(config[key])
-                self._config_checker.check_config(config)
-            self.write_config(config)
+            self._config_checker.check_config(config)
             self._config = config
             self._read_config()
+            self.write_config(config)
             if self._enabled:
                 thread = Thread(target=self._load_configuration)
                 thread.start()

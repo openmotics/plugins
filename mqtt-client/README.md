@@ -4,124 +4,41 @@ An MQTT client plugin for sending/receiving data to/from an MQTT broker.
 
 ## Work in progress
 
-This is a work in progress, but has already been extensively tested in a real home. This plugin is shared for community
-feedback and/or contributions. Please only use this plugin if you know what you're doing and if you're willing to debug
-issues you might encounter. As always, feel free to report issues and/or make pull requests.
+This is a work in progress, but has already been extensively tested in a real home. This plugin is shared for community feedback and/or contributions. Please only use this plugin if you know what you're doing and if you're willing to debug issues you might encounter. As always, feel free to report issues and/or make pull requests.
+
 
 ## Configuration
 
-```
-config_description = [
-        {'name': 'hostname',
-         'type': 'str',
-         'description': 'MQTT broker hostname or IP address.'},
-        {'name': 'port',
-         'type': 'int',
-         'description': 'MQTT broker port. Default: 1883'},
-        {'name': 'username',
-         'type': 'str',
-         'description': 'MQTT broker username. Default: openmotics'},
-        {'name': 'password',
-         'type': 'password',
-         'description': 'MQTT broker password'},
-        # input status
-        {'name': 'input_status_enabled',
-         'type': 'bool',
-         'description': 'Enable input status publishing of messages.'},
-        {'name': 'input_status_topic_format',
-         'type': 'str',
-         'description': 'Input status topic format. Default: openmotics/input/{id}/status'},
-        {'name': 'input_status_qos',
-         'type': 'enum',
-         'choices': ['0', '1', '2'],
-         'description': 'Input status message quality of service. Default: 0'},
-        {'name': 'input_status_retain',
-         'type': 'bool',
-         'description': 'Input status message retain. Default: False'},
-        # output status
-        {'name': 'output_status_enabled',
-         'type': 'bool',
-         'description': 'Enable output status publishing of messages.'},
-        {'name': 'output_status_topic_format',
-         'type': 'str',
-         'description': 'Output status topic format. Default: openmotics/output/{id}/status'},
-        {'name': 'output_status_qos',
-         'type': 'enum',
-         'choices': ['0', '1', '2'],
-         'description': 'Output status message quality of service. Default: 0'},
-        {'name': 'output_status_retain',
-         'type': 'bool',
-         'description': 'Output status message retain. Default: False'},
-        # event status
-        {'name': 'event_status_enabled',
-         'type': 'bool',
-         'description': 'Enable event status publishing of messages.'},
-        {'name': 'event_status_topic_format',
-         'type': 'str',
-         'description': 'Event status topic format. Default: openmotics/event/{id}/status'},
-        {'name': 'event_status_qos',
-         'type': 'enum',
-         'choices': ['0', '1', '2'],
-         'description': 'Event status message quality of service. Default: 0'},
-        {'name': 'event_status_retain',
-         'type': 'bool',
-         'description': 'Event status message retain. Default: False'},
-        # sensor status
-        {'name': 'sensor_status_enabled',
-         'type': 'bool',
-         'description': 'Enable sensor status publishing of messages.'},
-        {'name': 'sensor_status_topic_format',
-         'type': 'str',
-         'description': 'Sensor status topic format. Default: openmotics/sensor/{id}/status'},
-        {'name': 'sensor_status_qos',
-         'type': 'enum',
-         'choices': ['0', '1', '2'],
-         'description': 'Sensor status message quality of service. Default: 0'},
-        {'name': 'sensor_status_retain',
-         'type': 'bool',
-         'description': 'Sensor status message retain. Default: False'},
-        # energy status
-        {'name': 'energy_status_enabled',
-         'type': 'bool',
-         'description': 'Enable energy status publishing of messages.'},
-        {'name': 'energy_status_topic_format',
-         'type': 'str',
-         'description': 'Energy status topic format. Default: openmotics/energy/{id}/status'},
-        {'name': 'energy_status_qos',
-         'type': 'enum',
-         'choices': ['0', '1', '2'],
-         'description': 'Energy status quality of Service. Default: 0'},
-        {'name': 'energy_status_retain',
-         'type': 'bool',
-         'description': 'Energy status retain. Default: False'},
-        # output command
-        {'name': 'output_command_topic',
-         'type': 'str',
-         'description': 'Topic to subscribe to for output command messages. Leave empty to turn off.'},
-        # logging
-        {'name': 'logging_topic',
-         'type': 'str',
-         'description': 'Topic for logging messages. Leave empty to turn off.'},
-        # timestamp timezone
-        {'name': 'timezone',
-         'type': 'str',
-         'description': 'Timezone. Default: UTC. Example: Europe/Brussels'}
-    ]
-```
 
-## Topics
+### Broker
+
+![Broker Configuration Screenshot][config_broker]
+
+* hostname: MQTT broker hostname or IP address.
+* port: MQTT broker port. Default: 1883.
+* username: MQTT broker username. Default: openmotics.
+* password: MQTT broker password.
+
 
 ### State messages
 
-The system will publish the state for Inputs pressed, Outputs that change and Events. Sensor and Enrgy modules will also be able to periodically publish their status.
+The system will publish the state for Inputs and Outputs that change, Events, Temperature, Humidity and Brightness sensors, Realtime Power and Total Energy.
 The format will be explained in the following subsections.
-In general all topics contain an ID parameter indicated by the placeholder `{id}`. All payloads will have a JSON format with multiple attributes as described below.
+In general all topics contain one or more parameters indicated by a placeholder like `{id}`. All payloads will have a JSON format with multiple attributes as described below.
+
 
 #### Input state
 
 ##### Configuration:
-* Topic:  topic_prefix/{id}/topic_suffix
-* Payload:
+
+![Input Configuration Screenshot][config_input]
+
+* input_status_enabled: Enable OpenMotics to publish input status messages on the MQTT broker.
+* input_status_topic_format: Input status topic format. Structure: `topic_prefix/{id}/topic_suffix`. Default: `openmotics/input/{id}/status`.
+* input_status_qos: Input status message quality of service. Default: 0. Possible values: 0, 1 or 2.
+* input_status_retain: Input status message retain. Default unchecked.
+
+#### Payload:
 ```
 {
     "id": "<input id>",
@@ -144,11 +61,19 @@ In general all topics contain an ID parameter indicated by the placeholder `{id}
 }
 ```
 
+
 #### Output state
 
 ##### Configuration:
-* Topic: topic_prefix/{id}/topic_suffix
-* Payload:
+
+![Output Configuration Screenshot][config_output]
+
+* output_status_enabled: Enable OpenMotics to publish output status messages on the MQTT broker.
+* output_status_topic_format: Output status topic format. Structure: `topic_prefix/{id}/topic_suffix`. Default: `openmotics/output/{id}/status`.
+* output_status_qos: Output status message quality of service. Default: 0. Possible values: 0, 1 or 2.
+* output_status_retain: Output status message retain. Default unchecked.
+
+##### Payload:
 ```
 {
     "id": "<output id>",
@@ -171,11 +96,19 @@ In general all topics contain an ID parameter indicated by the placeholder `{id}
 }
 ```
 
+
 #### Event state
 
 ##### Configuration:
-* Topic: topic_prefix/{id}/topic_suffix
-* Payload:
+
+![Event Configuration Screenshot][config_event]
+
+* event_status_enabled': Enable OpenMotics to publish event status messages on the MQTT broker.
+* event_status_topic_format: Event status topic format. Structure: `topic_prefix/{id}/topic_suffix`. Default: `openmotics/event/{id}/status`.
+* event_status_qos: Event status message quality of service. Default: 0. Possible values: 0, 1 or 2.
+* event_status_retain: Event status message retain. Default unchecked.
+
+##### Payload:
 ```
 {
     "id": "<event id>",
@@ -194,74 +127,196 @@ In general all topics contain an ID parameter indicated by the placeholder `{id}
 }
 ```
 
-#### Sensor state
+More information on how to send these OpenMotics events can be found on the [OpenMotics wiki: Action Types](http://wiki.openmotics.com/index.php/Action_Types), number 60.
+
+
+#### Temperature sensor state
 
 ##### Configuration:
-* Topic: topic_prefix/{id}/topic_suffix
-* Payload:
+
+![Temperature Configuration Screenshot][config_temperature]
+
+* temperature_status_enabled: Enable OpenMotics to publish temperature sensor status messages on the MQTT broker.
+* temperature_status_topic_format: Temperature sensor status topic format. Structure: `topic_prefix/{id}/topic_suffix`. Default: `openmotics/temperature/{id}/status`.
+* temperature_status_qos: Temperature status message quality of service. Default: 0. Possible values: 0, 1 or 2.
+* temperature_status_retain: Temperature status message retain. Default unchecked.
+
+##### Payload:
 ```
 {
-    "id": "<output id>",
-    "name": "<name of the Output>",
-    "humidity": <relative humidity in %>,
-    "temperature": <temperature>,
-    "brightness": <brightness in lux>,
+    "id": "<sensor id>",
+    "name": "<sensor name>",
+    "value": <temperature in degrees Celsius>,
     "timestamp": <ISO format timestamp in {timezone}>
 }
 ```
 
 ##### Example:
-* Topic configuration: sensor_status_topic_format = openmotics/sensor/{id}/state
-* Actual topic: openmotics/sensor/3/state
+* Topic configuration: temperature_status_topic_format = openmotics/temperature/{id}/state
+* Actual topic: openmotics/temperature/3/state
 * Actual payload:
 ```
 {
     "id": 3,
     "name": "Garage",
-    "humidity": 56.5,
-    "temperature": 14.5,
-    "brightness": 596.62,
+    "value": 14.5,
     "timestamp": "2020-04-08T15:51:25.707819+00:00"
 }
 ```
 
-#### Energy state
+
+#### Humidity sensor state
 
 ##### Configuration:
-* Topic: topic_prefix/{id}/topic_suffix
-* Payload:
+
+![Humidity Configuration Screenshot][config_humidity]
+
+* humidity_status_enabled: Enable OpenMotics to publish humidity sensor status messages on the MQTT broker.
+* humidity_status_topic_format: Humidity sensor status topic format. Structure: `topic_prefix/{id}/topic_suffix`. Default: `openmotics/humidity/{id}/status`.
+* humidity_status_qos: Humidity status message quality of service. Default: 0. Possible values: 0, 1 or 2.
+* humidity_status_retain: Humidity status message retain. Default unchecked.
+
+##### Payload:
 ```
 {
-    "id": "<output id>",
-    "name": "<name of the Output>",
-    "humidity": <relative humidity in %>,
-    "temperature": <temperature>,
-    "brightness": <brightness in lux>,
+    "id": "<sensor id>",
+    "name": "<sensor name>",
+    "value": <relative humidity in %>,
     "timestamp": <ISO format timestamp in {timezone}>
 }
 ```
 
 ##### Example:
-* Topic configuration: energy_status_topic_format = openmotics/energy/{id}/state
-* Actual topic: openmotics/energy/11/state
+* Topic configuration: humidity_status_topic_format = openmotics/humidity/{id}/state
+* Actual topic: openmotics/humidity/3/state
 * Actual payload:
 ```
 {
-    "id": "11",
+    "id": 3,
+    "name": "Garage",
+    "value": 56.5,
+    "timestamp": "2020-04-08T15:51:25.707819+00:00"
+}
+```
+
+
+#### Brightness sensor state
+
+##### Configuration:
+
+![Brightness Configuration Screenshot][config_brightness]
+
+* brightness_status_enabled: Enable OpenMotics to publish brightness sensor status messages on the MQTT broker.
+* brightness_status_topic_format: Brightness sensor status topic format. Structure: `topic_prefix/{id}/topic_suffix`. Default: `openmotics/brightness/{id}/status`.
+* brightness_status_qos: Brightness status message quality of service. Default: 0. Possible values: 0, 1 or 2.
+* brightness_status_retain: Brightness status message retain. Default unchecked.
+
+##### Payload:
+```
+{
+    "id": "<sensor id>",
+    "name": "<sensor name>",
+    "value": <brightness in lux>,
+    "timestamp": <ISO format timestamp in {timezone}>
+}
+```
+
+##### Example:
+* Topic configuration: brightness_status_topic_format = openmotics/brightness/{id}/state
+* Actual topic: openmotics/brightness/3/state
+* Actual payload:
+```
+{
+    "id": 3,
+    "name": "Garage",
+    "value": 596.62,
+    "timestamp": "2020-04-08T15:51:25.707819+00:00"
+}
+```
+
+
+#### Realtime Power state
+
+##### Configuration:
+
+![Power Configuration Screenshot][config_power]
+
+* power_status_enabled: Enable OpenMotics to publish realtime power messages on the MQTT broker.
+* power_status_topic_format: Realtime power topic format. Structure: `topic_prefix/{module_id}/topic_middle/{sensor_id}/topic_suffix`. Default: `openmotics/power/{module_id}/{sensor_id}/status`.
+* power_status_qos: Realtime power message quality of service. Default: 0. Possible values: 0, 1 or 2.
+* power_status_retain: Realtime power message retain. Default unchecked.
+* power_status_poll_frequency: Polling frequency for power status in seconds. Default: 60, minimum: 10.
+
+##### Payload:
+```
+{
+    "module_id": "<energy module id>",
+    "sensor_id": "<sensor id>",
+    "name": "<sensor name>",
+    "current": <current in Amps>,
+    "frequency": <frequency in Hertz>,
+    "power": <power in Watts>,
+    "voltage": <voltage in Volt>,
+    "timestamp": <ISO format timestamp in {timezone}>
+}
+```
+
+##### Example:
+* Topic configuration: power_status_topic_format = openmotics/power/{module_id}/{sensor_id}/state
+* Actual topic: openmotics/power/1/11/state
+* Actual payload:
+```
+{
+    "module_id": 1,
+    "sensor_id": 11,
     "name": "Kitchen",
-    "counter": 245470,
-    "counter_day": 108161,
-    "counter_night": 137309,
     "current": 0.23376594483852386,
     "frequency": 49.99971389770508,
     "power": 43.19911575317383,
-    "type": "openmotics",
     "voltage": 240.39581298828125,
+    "timestamp": "2020-04-08T15:51:25.707819+00:00"
+}
+```
+
+#### Total Energy state
+
+##### Configuration:
+
+![Energy Configuration Screenshot][config_energy]
+
+* energy_status_enabled: Enable OpenMotics to publish total energy messages on the MQTT broker.
+* energy_status_topic_format: Total energy topic format. Structure: `topic_prefix/{module_id}/topic_middle/{sensor_id}/topic_suffix`. Default: `openmotics/energy/{module_id}/{sensor_id}/status`.
+* energy_status_qos: Total energy message quality of service. Default: 0. Possible values: 0, 1 or 2.
+* energy_status_retain: Total energy message retain. Default unchecked.
+* energy_status_poll_frequency: Polling frequency for energy status in seconds. Default: 3600 (1 hour), minimum: 10.
+
+##### Payload:
+```
+{
+    "module_id": "<energy module id>",
+    "sensor_id": "<sensor id>",
+    "name": "<sensor name>",
+    "counter_day": "<energy used in peak tariff time in KWh>",
+    "counter_night": "<energy used in off peak tariff time in KWh>",
+    "timestamp": <ISO format timestamp in {timezone}>
+}
+```
+
+##### Example:
+* Topic configuration: energy_status_topic_format = openmotics/energy/{module_id}/{sensor_id}/state
+* Actual topic: openmotics/energy/1/11/state
+* Actual payload:
+```
+{
+    "module_id": 1,
+    "sensor_id": 11,
+    "name": "Kitchen",
+    "counter_day": 108161,
+    "counter_night": 137309,
     "timestamp": "2020-04-08T15:58:10.320326+00:00"
 }
 ```
 
-More information on how to send these OpenMotics events can be found on the [OpenMotics wiki: Action Types](http://wiki.openmotics.com/index.php/Action_Types), number 60.
 
 ### Command messages
 
@@ -274,11 +329,10 @@ A topic to which this plugin will subscribe to can be defined. Publishing to thi
 ##### Configuration:
 * Topic: topic_prefix/+/topic_suffix
 * Payload: value
-For Outputs, the value should be an integer (0-100) representing the desired output state. In case
-the Output is a relay, only 0 and 100 are considered valid values.
+For Outputs, the value should be an integer (0-100) representing the desired output state. In case the Output is a relay, only 0 and 100 are considered valid values.
 Note the difference in syntax when compared to the topics this plugin publishes to: a plus sign is used as the wildcard where the output id would go.
 
-###### Example:
+##### Example:
 * Topic configuration: output_command_topic = openmotics/output/+/set
 * Actual topic: openmotics/output/8/set
 * Actual payload: 100
@@ -289,3 +343,15 @@ This topic is mainly used for debugging purposes.
 
 * Topic: can_be/any/topic
 * Payload: log message
+
+
+
+[config_broker]: images/config_broker.png "Configuration broker"
+[config_input]: images/config_input.png "Configuration inputs"
+[config_output]: images/config_output.png "Configuration outputs"
+[config_event]: images/config_event.png "Configuration events"
+[config_temperature]: images/config_temperature.png "Configuration temperature sensors"
+[config_humidity]: images/config_humidity.png "Configuration humidity sensors"
+[config_brightness]: images/config_brightness.png "Configuration brightness sensors"
+[config_power]: images/config_power.png "Configuration realtime power"
+[config_energy]: images/config_energy.png "Configuration total energy"
