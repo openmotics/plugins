@@ -38,7 +38,7 @@ In general all topics contain one or more parameters indicated by a placeholder 
 * input_status_qos: Input status message quality of service. Default: 0. Possible values: 0, 1 or 2.
 * input_status_retain: Input status message retain. Default unchecked.
 
-#### Payload:
+##### Payload:
 ```
 {
     "id": "<input id>",

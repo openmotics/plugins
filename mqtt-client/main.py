@@ -638,7 +638,7 @@ class MQTTClient(OMPluginBase):
             for input_id, sensor_values in enumerate(values):
                 sensor_data = {'sensor_id': input_id,
                                'module_id': module_id,
-                               'name': self._power_modules[module_id][input_id].get('name'),
+                               'name': self._power_modules.get(int(module_id)).get(int(input_id)).get('name'),
                                'day': sensor_values[0],
                                'night': sensor_values[1],
                                'timestamp': self._timestamp2isoformat()}
