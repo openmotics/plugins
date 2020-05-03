@@ -327,6 +327,9 @@ The system can also be controlled by letting clients publish to a given topic.
 A topic to which this plugin will subscribe to can be defined. Publishing to this topic will control OpenMotics outputs (relays, lights).
 
 ##### Configuration:
+
+![Set Output Configuration Screenshot][config_output_command]
+
 * Topic: topic_prefix/+/topic_suffix
 * Payload: value
 For Outputs, the value should be an integer (0-100) representing the desired output state. In case the Output is a relay, only 0 and 100 are considered valid values.
@@ -339,12 +342,22 @@ Note the difference in syntax when compared to the topics this plugin publishes 
 
 ### Logging messages
 
+#### Configuration:
+
+![Logging topic Configuration Screenshot][config_logging]
+
 This topic is mainly used for debugging purposes.
 
 * Topic: can_be/any/topic
 * Payload: log message
 
+### Timezone
 
+#### Configuration:
+
+![Logging topic Configuration Screenshot][config_timezone]
+
+Timezone used in payloads
 
 [config_broker]: images/config_broker.png "Configuration broker"
 [config_input]: images/config_input.png "Configuration inputs"
@@ -355,3 +368,6 @@ This topic is mainly used for debugging purposes.
 [config_brightness]: images/config_brightness.png "Configuration brightness sensors"
 [config_power]: images/config_power.png "Configuration realtime power"
 [config_energy]: images/config_energy.png "Configuration total energy"
+[config_output_command]: images/config_output_command.png "Configuration output command"
+[config_logging]: images/config_logging_topic.png "Configuration logging topic"
+[config_timezone]: images/config_timezone.png "Configuration timezone"

@@ -24,6 +24,12 @@ class MQTTClient(OMPluginBase):
     version = '2.0.0'
     interfaces = [('config', '1.0')]
 
+    energy_module_config = {
+        1: 8,
+        8: 8,
+        12: 12
+    }
+
     config_description = [
         {'name': 'hostname',
          'type': 'str',
@@ -418,8 +424,18 @@ class MQTTClient(OMPluginBase):
                 for module in result['modules']:
                     module_id = int(module['id'])
                     ids.append(module_id)
+                    version = int(module['version'])
+                    input_count = MQTTClient.energy_module_config.get(version, 0)
                     module_config = {}
-                    for input_id in range(0, 12):
+                    if input_count == 0:
+                        self.logger('Warning: Skipping energy module {0}, version {1} is currently not supported by this plugin. Only versions: {2}'.format(
+                            module_id,
+                            version,
+                            ', '.join(MQTTClient.energy_module_config.keys())))
+                        continue
+                    else:
+	                    self.logger('Configuring energy module {0} (version {1}) with {2} inputs'.format(module_id, version, input_count))
+                    for input_id in range(0, input_count):
                         module_config[input_id] = {'name':     module['input{0}'.format(input_id)],
                                                    'sensor':   module['sensor{0}'.format(input_id)],
                                                    'times':    module['times{0}'.format(input_id)],
@@ -428,7 +444,6 @@ class MQTTClient(OMPluginBase):
                 for module_id in self._power_modules.keys():
                     if module_id not in ids:
                         del self._power_modules[module_id]
-                self.logger('Configuring {0} energy module(s) with {1} inputs'.format(len(ids), len(ids)*12))
         except CommunicationTimedOutException:
             self.logger('Error while loading power configurations: CommunicationTimedOutException')
         except Exception as ex:
