@@ -298,6 +298,8 @@ class MQTTClient(OMPluginBase):
                 'poll_frequency': int(self._config.get('energy_status_poll_frequency'))
             }
         }
+        self._sensor_enabled = (self._sensor_config.get('temperature').get('enabled') or self._sensor_config.get('humidity').get('enabled') or self._sensor_config.get('brightness').get('enabled'))
+        self._power_enabled = (self._sensor_config.get('power').get('enabled') or self._sensor_config.get('energy').get('enabled'))
         # output command
         self._output_command_topic = self._config.get('output_command_topic')
         # logging topic
@@ -308,146 +310,169 @@ class MQTTClient(OMPluginBase):
         self.logger('MQTTClient is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     def _load_configuration(self):
-        if self._input_enabled:
-            self._load_input_configuration()
-        if self._output_enabled:
-            self._load_output_configuration()
-        if self._sensor_config.get('temperature').get('enabled') or self._sensor_config.get('humidity').get('enabled') or self._sensor_config.get('brightness').get('enabled'):
-            self._load_sensor_configuration()
-        if self._sensor_config.get('power').get('enabled') or self._sensor_config.get('energy').get('enabled'):
-            self._load_power_configuration()
+        inputs_loaded  = False
+        outputs_loaded = False
+        sensors_loaded = False
+        power_loaded   = False
+        should_load = True
+        
+        while should_load:
+            if not inputs_loaded:
+                inputs_loaded = self._load_input_configuration()
+            if not outputs_loaded:
+                outputs_loaded = self._load_output_configuration()
+            if not sensors_loaded:
+                sensors_loaded = self._load_sensor_configuration()
+            if not power_loaded:
+                power_loaded = self._load_power_configuration()
+            should_load = not all([inputs_loaded, outputs_loaded, sensors_loaded, power_loaded])
+            if should_load:
+                time.sleep(15)
 
     def _load_input_configuration(self):
-        try:
-            result = json.loads(self.webinterface.get_input_configurations())
-            if result['success'] is False:
-                self.logger('Failed to load input configurations')
-            else:
-                ids = []
-                for config in result['config']:
-                    input_id = config['id']
-                    ids.append(input_id)
-                    self._inputs[input_id] = config
-                for input_id in self._inputs.keys():
-                    if input_id not in ids:
-                        del self._inputs[input_id]
-                self.logger('Configuring {0} inputs'.format(len(ids)))
-        except CommunicationTimedOutException:
-            self.logger('Error while loading input configurations: CommunicationTimedOutException')
-        except Exception as ex:
-            self.logger('Error while loading input configurations: {0}'.format(ex))
-        try:
-            result = json.loads(self.webinterface.get_input_status())
-            if result['success'] is False:
-                self.logger('Failed to get input status')
-            else:
-                for input_data in result['status']:
-                    input_id = input_data['id']
-                    if input_id not in self._inputs:
-                        continue
-                    self._inputs[input_id]['status'] = input_data['status']
-        except CommunicationTimedOutException:
-            self.logger('Error getting input status: CommunicationTimedOutException')
-        except Exception as ex:
-            self.logger('Error getting input status: {0}'.format(ex))
+        input_config_loaded = True
+        if self._input_enabled:
+            try:
+                result = json.loads(self.webinterface.get_input_configurations())
+                if result['success'] is False:
+                    self.logger('Failed to load input configurations')
+                    input_config_loaded = False
+                else:
+                    ids = []
+                    for config in result['config']:
+                        input_id = config['id']
+                        ids.append(input_id)
+                        self._inputs[input_id] = config
+                    for input_id in self._inputs.keys():
+                        if input_id not in ids:
+                            del self._inputs[input_id]
+                    self.logger('Configuring {0} inputs'.format(len(ids)))
+            except Exception as ex:
+                self.logger('Error while loading input configurations: {0}'.format(ex))
+                input_config_loaded = False
+            try:
+                result = json.loads(self.webinterface.get_input_status())
+                if result['success'] is False:
+                    self.logger('Failed to get input status')
+                    input_config_loaded = False
+                else:
+                    for input_data in result['status']:
+                        input_id = input_data['id']
+                        if input_id not in self._inputs:
+                            continue
+                        self._inputs[input_id]['status'] = input_data['status']
+            except Exception as ex:
+                self.logger('Error getting input status: {0}'.format(ex))
+                input_config_loaded = False
+        return input_config_loaded
+
 
     def _load_output_configuration(self):
-        try:
-            result = json.loads(self.webinterface.get_output_configurations())
-            if result['success'] is False:
-                self.logger('Failed to load output configurations')
-            else:
-                ids = []
-                for config in result['config']:
-                    if config['module_type'] not in ['o', 'O', 'd', 'D']:
-                        continue
-                    output_id = config['id']
-                    ids.append(output_id)
-                    self._outputs[output_id] = {'name': config['name'],
-                                                'module_type': {'o': 'output',
-                                                                'O': 'output',
-                                                                'd': 'dimmer',
-                                                                'D': 'dimmer'}[config['module_type']],
-                                                'floor': config['floor'],
-                                                'type': 'relay' if config['type'] == 0 else 'light'}
-                for output_id in self._outputs.keys():
-                    if output_id not in ids:
-                        del self._outputs[output_id]
-                self.logger('Configuring {0} outputs'.format(len(ids)))
-        except CommunicationTimedOutException:
-            self.logger('Error while loading output configurations: CommunicationTimedOutException')
-        except Exception as ex:
-            self.logger('Error while loading output configurations: {0}'.format(ex))
-        try:
-            result = json.loads(self.webinterface.get_output_status())
-            if result['success'] is False:
-                self.logger('Failed to get output status')
-            else:
-                for output in result['status']:
-                    output_id = output['id']
-                    if output_id not in self._outputs:
-                        continue
-                    self._outputs[output_id]['status'] = output['status']
-                    self._outputs[output_id]['dimmer'] = output['dimmer']
-        except CommunicationTimedOutException:
-            self.logger('Error getting output status: CommunicationTimedOutException')
-        except Exception as ex:
-            self.logger('Error getting output status: {0}'.format(ex))
+        output_config_loaded = True
+        if self._output_enabled:
+            try:
+                result = json.loads(self.webinterface.get_output_configurations())
+                if result['success'] is False:
+                    output_config_loaded = False
+                    self.logger('Failed to load output configurations')
+                else:
+                    ids = []
+                    for config in result['config']:
+                        if config['module_type'] not in ['o', 'O', 'd', 'D']:
+                            continue
+                        output_id = config['id']
+                        ids.append(output_id)
+                        self._outputs[output_id] = {'name': config['name'],
+                                                    'module_type': {'o': 'output',
+                                                                    'O': 'output',
+                                                                    'd': 'dimmer',
+                                                                    'D': 'dimmer'}[config['module_type']],
+                                                    'floor': config['floor'],
+                                                    'type': 'relay' if config['type'] == 0 else 'light'}
+                    for output_id in self._outputs.keys():
+                        if output_id not in ids:
+                            del self._outputs[output_id]
+                    self.logger('Configuring {0} outputs'.format(len(ids)))
+            except Exception as ex:
+                output_config_loaded = False
+                self.logger('Error while loading output configurations: {0}'.format(ex))
+            try:
+                result = json.loads(self.webinterface.get_output_status())
+                if result['success'] is False:
+                    output_config_loaded = False
+                    self.logger('Failed to get output status')
+                else:
+                    for output in result['status']:
+                        output_id = output['id']
+                        if output_id not in self._outputs:
+                            continue
+                        self._outputs[output_id]['status'] = output['status']
+                        self._outputs[output_id]['dimmer'] = output['dimmer']
+            except Exception as ex:
+                output_config_loaded = False
+                self.logger('Error getting output status: {0}'.format(ex))
+        return output_config_loaded
 
     def _load_sensor_configuration(self):
-        try:
-            result = json.loads(self.webinterface.get_sensor_configurations())
-            if result['success'] is False:
-                self.logger('Failed to load sensor configurations: {0}'.format(result.get('msg')))
-            else:
-                ids = []
-                for config in result['config']:
-                    sensor_id = config['id']
-                    ids.append(sensor_id)
-                    self._sensors[sensor_id] = {'name': config['name'], 'offset': float(config['offset'])}
-                for sensor_id in self._sensors.keys():
-                    if sensor_id not in ids:
-                        del self._sensors[sensor_id]
-                self.logger('Configuring {0} sensors'.format(len(ids)))
-        except CommunicationTimedOutException:
-            self.logger('Error while loading sensor configurations: CommunicationTimedOutException')
-        except Exception as ex:
-            self.logger('Error while loading sensor configurations: {0}'.format(ex))
+        sensor_config_loaded = True
+        if self._sensor_enabled:
+            try:
+                result = json.loads(self.webinterface.get_sensor_configurations())
+                if result['success'] is False:
+                    sensor_config_loaded = False
+                    self.logger('Failed to load sensor configurations: {0}'.format(result.get('msg')))
+                else:
+                    ids = []
+                    for config in result['config']:
+                        sensor_id = config['id']
+                        ids.append(sensor_id)
+                        self._sensors[sensor_id] = {'name': config['name'], 'offset': float(config['offset'])}
+                    for sensor_id in self._sensors.keys():
+                        if sensor_id not in ids:
+                            del self._sensors[sensor_id]
+                    self.logger('Configuring {0} sensors'.format(len(ids)))
+            except Exception as ex:
+                sensor_config_loaded = False
+                self.logger('Error while loading sensor configurations: {0}'.format(ex))
+        return sensor_config_loaded
 
     def _load_power_configuration(self):
-        try:
-            result = json.loads(self.webinterface.get_power_modules())
-            if result['success'] is False:
-                self.logger('Failed to load power configurations: {0}'.format(result.get('msg')))
-            else:
-                ids = []
-                for module in result['modules']:
-                    module_id = int(module['id'])
-                    ids.append(module_id)
-                    version = int(module['version'])
-                    input_count = MQTTClient.energy_module_config.get(version, 0)
-                    module_config = {}
-                    if input_count == 0:
-                        self.logger('Warning: Skipping energy module {0}, version {1} is currently not supported by this plugin. Only versions: {2}'.format(
-                            module_id,
-                            version,
-                            ', '.join(MQTTClient.energy_module_config.keys())))
-                        continue
-                    else:
-	                    self.logger('Configuring energy module {0} (version {1}) with {2} inputs'.format(module_id, version, input_count))
-                    for input_id in range(0, input_count):
-                        module_config[input_id] = {'name':     module['input{0}'.format(input_id)],
-                                                   'sensor':   module['sensor{0}'.format(input_id)],
-                                                   'times':    module['times{0}'.format(input_id)],
-                                                   'inverted': module['inverted{0}'.format(input_id)]}
-                    self._power_modules[module_id] = module_config
-                for module_id in self._power_modules.keys():
-                    if module_id not in ids:
-                        del self._power_modules[module_id]
-        except CommunicationTimedOutException:
-            self.logger('Error while loading power configurations: CommunicationTimedOutException')
-        except Exception as ex:
-            self.logger('Error while loading power configurations: {0}'.format(ex))
+        power_config_loaded = True
+        if self._power_enabled:
+            try:
+                result = json.loads(self.webinterface.get_power_modules())
+                if result['success'] is False:
+                    power_config_loaded = False
+                    self.logger('Failed to load power configurations: {0}'.format(result.get('msg')))
+                else:
+                    ids = []
+                    for module in result['modules']:
+                        module_id = int(module['id'])
+                        ids.append(module_id)
+                        version = int(module['version'])
+                        input_count = MQTTClient.energy_module_config.get(version, 0)
+                        module_config = {}
+                        if input_count == 0:
+                            self.logger('Warning: Skipping energy module {0}, version {1} is currently not supported by this plugin. Only versions: {2}'.format(
+                                module_id,
+                                version,
+                                ', '.join(MQTTClient.energy_module_config.keys())))
+                            continue
+                        else:
+    	                    self.logger('Configuring energy module {0} (version {1}) with {2} inputs'.format(module_id, version, input_count))
+                        for input_id in range(0, input_count):
+                            module_config[input_id] = {'name':     module['input{0}'.format(input_id)],
+                                                       'sensor':   module['sensor{0}'.format(input_id)],
+                                                       'times':    module['times{0}'.format(input_id)],
+                                                       'inverted': module['inverted{0}'.format(input_id)]}
+                        self._power_modules[module_id] = module_config
+                    for module_id in self._power_modules.keys():
+                        if module_id not in ids:
+                            del self._power_modules[module_id]
+            except Exception as ex:
+                power_config_loaded = False
+                self.logger('Error while loading power configurations: {0}'.format(ex))
+        return power_config_loaded
 
     def _try_connect(self):
         if self._enabled is True:
