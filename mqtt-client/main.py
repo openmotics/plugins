@@ -315,7 +315,7 @@ class MQTTClient(OMPluginBase):
         sensors_loaded = False
         power_loaded   = False
         should_load = True
-        
+
         while should_load:
             if not inputs_loaded:
                 inputs_loaded = self._load_input_configuration()
@@ -688,34 +688,37 @@ class MQTTClient(OMPluginBase):
 
     def _create_background_task(self, sensor_type, data_retriever, data_processor):
         def background_function():
-            if self._enabled:
-                sensor_config = self._sensor_config.get(sensor_type)
-                frequency = sensor_config.get('poll_frequency')
-                self.logger('Background task to retrieve {0} sensor data started, will run every {1} seconds.'.format(sensor_type, frequency))
-                # highest frequency is every 10s
-                while frequency >= 10:
-                    start = time.time()
-                    try:
-                        if sensor_config.get('enabled'):
-                            result = json.loads(data_retriever())
-                            if result['success'] is False:
-                                self.logger('Failed to load {0} sensor data: {1}'.format(sensor_type, result.get('msg')))
-                            else:
-                                mqtt_messages = data_processor(sensor_config, result)
-                                for mqtt_message in mqtt_messages:
-                                    thread = Thread(target=self._send,
-                                                    args=(mqtt_message.get('topic'),
-                                                          mqtt_message.get('message'),
-                                                          sensor_config.get('qos'),
-                                                          sensor_config.get('retain')))
-                                    thread.start()
-                    except Exception as ex:
-                        self.logger('Error processing {0} sensor status: {1}'.format(sensor_type, ex))
-                    # This loop will run approx. every 'frequency' seconds
-                    sleep = frequency - (time.time() - start)
-                    if sleep < 0:
-                        sleep = 1
-                    time.sleep(sleep)
+            while True:
+                if self._enabled:
+                    sensor_config = self._sensor_config.get(sensor_type)
+                    frequency = sensor_config.get('poll_frequency')
+                    self.logger('Background task to retrieve {0} sensor data started, will run every {1} seconds.'.format(sensor_type, frequency))
+                    # highest frequency is every 10s
+                    while frequency >= 10:
+                        start = time.time()
+                        try:
+                            if sensor_config.get('enabled'):
+                                result = json.loads(data_retriever())
+                                if result['success'] is False:
+                                    self.logger('Failed to load {0} sensor data: {1}'.format(sensor_type, result.get('msg')))
+                                else:
+                                    mqtt_messages = data_processor(sensor_config, result)
+                                    for mqtt_message in mqtt_messages:
+                                        thread = Thread(target=self._send,
+                                                        args=(mqtt_message.get('topic'),
+                                                              mqtt_message.get('message'),
+                                                              sensor_config.get('qos'),
+                                                              sensor_config.get('retain')))
+                                        thread.start()
+                        except Exception as ex:
+                            self.logger('Error processing {0} sensor status: {1}'.format(sensor_type, ex))
+                        # This loop will run approx. every 'frequency' seconds
+                        sleep = frequency - (time.time() - start)
+                        if sleep < 0:
+                            sleep = 1
+                        time.sleep(sleep)
+                else:
+                    time.sleep(15)
         return background_function
 
     def on_connect(self, client, userdata, flags, rc):
