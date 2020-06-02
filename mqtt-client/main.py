@@ -646,44 +646,54 @@ class MQTTClient(OMPluginBase):
         mqtt_messages = []
         data_list = list(filter(None, json_data.get('status', [])))
         for sensor_id, sensor_value in enumerate(data_list):
-            sensor_data = {'id': sensor_id,
-                           'name': self._sensors.get(sensor_id).get('name'),
-                           'value': float(sensor_value) + float(self._sensors.get(sensor_id).get('offset')),
-                           'timestamp': self._timestamp2isoformat()}
-            mqtt_messages.append({'topic': sensor_config.get('topic').format(id=sensor_id),
-                                  'message': sensor_data})
+            sensor = self._sensors.get(sensor_id)
+            if sensor:
+                sensor_data = {'id': sensor_id,
+                               'name': sensor.get('name'),
+                               'value': float(sensor_value) + float(sensor.get('offset')),
+                               'timestamp': self._timestamp2isoformat()}
+                mqtt_messages.append({'topic': sensor_config.get('topic').format(id=sensor_id),
+                                      'message': sensor_data})
         return mqtt_messages
 
     def _process_realtime_power(self, sensor_config, json_data):
         mqtt_messages = []
         json_data.pop('success')
         for module_id, values in json_data.items():
-            for input_id, sensor_values in enumerate(values):
-                sensor_data = {'sensor_id': input_id,
-                               'module_id': module_id,
-                               'name': self._power_modules.get(int(module_id)).get(int(input_id)).get('name'),
-                               'voltage': sensor_values[0],
-                               'frequency': sensor_values[1],
-                               'current': sensor_values[2],
-                               'power': sensor_values[3],
-                               'timestamp': self._timestamp2isoformat()}
-                mqtt_messages.append({'topic': sensor_config.get('topic').format(module_id=module_id, sensor_id=input_id),
-                                      'message': sensor_data })
+            module = self._power_modules.get(int(module_id))
+            if module:
+                for input_id, sensor_values in enumerate(values):
+                    power_input = module.get(int(input_id))
+                    if power_input:
+                        sensor_data = {'sensor_id': input_id,
+                                       'module_id': module_id,
+                                       'name': power_input.get('name'),
+                                       'voltage': sensor_values[0],
+                                       'frequency': sensor_values[1],
+                                       'current': sensor_values[2],
+                                       'power': sensor_values[3],
+                                       'timestamp': self._timestamp2isoformat()}
+                        mqtt_messages.append({'topic': sensor_config.get('topic').format(module_id=module_id, sensor_id=input_id),
+                                              'message': sensor_data })
         return mqtt_messages
 
     def _process_total_energy(self, sensor_config, json_data):
         mqtt_messages = []
         json_data.pop('success')
         for module_id, values in json_data.items():
-            for input_id, sensor_values in enumerate(values):
-                sensor_data = {'sensor_id': input_id,
-                               'module_id': module_id,
-                               'name': self._power_modules.get(int(module_id)).get(int(input_id)).get('name'),
-                               'day': sensor_values[0],
-                               'night': sensor_values[1],
-                               'timestamp': self._timestamp2isoformat()}
-            mqtt_messages.append({'topic': sensor_config.get('topic').format(module_id=module_id, sensor_id=input_id),
-                                  'message': sensor_data})
+            module = self._power_modules.get(int(module_id))
+            if module:
+                for input_id, sensor_values in enumerate(values):
+                    power_input = module.get(int(input_id))
+                    if power_input:
+                        sensor_data = {'sensor_id': input_id,
+                                       'module_id': module_id,
+                                       'name': power_input.get('name'),
+                                       'day': sensor_values[0],
+                                       'night': sensor_values[1],
+                                       'timestamp': self._timestamp2isoformat()}
+                    mqtt_messages.append({'topic': sensor_config.get('topic').format(module_id=module_id, sensor_id=input_id),
+                                          'message': sensor_data})
         return mqtt_messages
 
     def _create_background_task(self, sensor_type, data_retriever, data_processor):
