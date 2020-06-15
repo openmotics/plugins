@@ -18,7 +18,7 @@ class Ventilation(OMPluginBase):
     """
 
     name = 'Ventilation'
-    version = '2.0.14'
+    version = '2.0.15'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
@@ -132,7 +132,7 @@ class Ventilation(OMPluginBase):
                 sensor_ids = []
                 for sensor in configs['config']:
                     sensor_id = sensor['id']
-                    if sensor_id in self._used_sensors or sensor_id == self._settings['outside_sensor_id']:
+                    if sensor_id in self._used_sensors or sensor_id == self._settings.get('outside_sensor_id'):
                         sensor_ids.append(sensor_id)
                         self._samples[sensor_id] = []
                         self._sensors[sensor_id] = sensor['name'] if sensor['name'] != '' else sensor_id
