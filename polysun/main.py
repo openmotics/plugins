@@ -37,7 +37,7 @@ class Polysun(OMPluginBase):
         DOWN = 'down'
 
     name = 'Polysun'
-    version = '0.1.4'
+    version = '0.1.5'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'mapping',
@@ -67,6 +67,7 @@ class Polysun(OMPluginBase):
         self._input_shutter_mapping = {}
         self._lost_shutters = {}
         self._action_queue = deque()
+        self._input_enabled = None
 
         self._read_config()
         self.logger("Started Polysun plugin")
@@ -93,11 +94,6 @@ class Polysun(OMPluginBase):
         self._input_shutter_mapping = new_input_mapping
         self._enabled = len(self._mapping) > 0
         self.logger('Polysun is {0}'.format('enabled' if self._enabled else 'disabled'))
-        self._input_enabled = False
-        if len(self._input_shutter_mapping) > 0:
-            self._input_enabled = hasattr(self.webinterface, 'shutter_report_lost_position')
-            if not self._input_enabled:
-                self.logger('Input detection enbaled, but Gateway does not support reporting lost position')
 
     @shutter_status
     def shutter_status(self, status, detail):
@@ -126,6 +122,17 @@ class Polysun(OMPluginBase):
     @background_task
     def runner(self):
         while True:
+            try:
+                if len(self._input_shutter_mapping) > 0 and self._input_enabled is None:
+                    result = json.loads(self.webinterface.get_features())
+                    if not result.get('success', False):
+                        self.logger('Could not load features: {0}'.format(result.get('msg', 'Unknown')))
+                    else:
+                        features = result.get('features', [])
+                        self._input_enabled = 'shutter_positions' in features
+                        self.logger('Gateway {0} support reporting lost positions'.format('does' if self._input_enabled else 'does not'))
+            except Exception as ex:
+                self.logger('Unexpected exception loading Gateway features: {0}'.format(ex))
             try:
                 shutter_id, new_state, old_state = self._action_queue.pop()
                 mapping = self._mapping.get(shutter_id)
