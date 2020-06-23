@@ -20,7 +20,7 @@ A Polysun plugin
 import time
 import simplejson as json
 from collections import deque
-from plugins.base import om_expose, OMPluginBase, PluginConfigChecker, shutter_status, background_task
+from plugins.base import om_expose, OMPluginBase, PluginConfigChecker, shutter_status, background_task, input_status
 
 
 class Polysun(OMPluginBase):
@@ -37,7 +37,7 @@ class Polysun(OMPluginBase):
         DOWN = 'down'
 
     name = 'Polysun'
-    version = '0.0.11'
+    version = '0.1.5'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'mapping',
@@ -47,7 +47,11 @@ class Polysun(OMPluginBase):
                            'min': 1,
                            'content': [{'name': 'shutter_id', 'type': 'int'},
                                        {'name': 'output_id_up', 'type': 'int'},
-                                       {'name': 'output_id_down', 'type': 'int'}]}]
+                                       {'name': 'output_id_down', 'type': 'int'},
+                                       {'name': 'inputs', 'type': 'section',
+                                        'description': 'Inputs that directly manipulate both Outputs',
+                                        'repeat': True, 'min': 0,
+                                        'content': [{'name': 'input_id', 'type': 'int'}]}]}]
 
     default_config = {}
 
@@ -60,12 +64,17 @@ class Polysun(OMPluginBase):
 
         self._states = {}
         self._mapping = {}
+        self._input_shutter_mapping = {}
+        self._lost_shutters = {}
         self._action_queue = deque()
+        self._input_enabled = None
 
         self._read_config()
         self.logger("Started Polysun plugin")
 
     def _read_config(self):
+        new_mapping = {}
+        new_input_mapping = {}
         for entry in self._config.get('mapping', []):
             shutter_id = entry['shutter_id']
             try:
@@ -74,11 +83,16 @@ class Polysun(OMPluginBase):
                 output_id_down = entry['output_id_down']
                 if not 0 <= shutter_id <= 240 or not 0 <= output_id_up <= 240 or not 0 <= output_id_down <= 240:
                     continue
-                self._mapping[shutter_id] = {'up': output_id_up,
-                                             'down': output_id_down}
+                new_mapping[shutter_id] = {'up': output_id_up,
+                                           'down': output_id_down}
+                for input_entry in entry.get('inputs', []):
+                    input_id = int(input_entry['input_id'])
+                    new_input_mapping.setdefault(input_id, set()).add(shutter_id)
             except ValueError:
                 self.logger('Skipped entry with shutter_id {0}'.format(shutter_id))
-        self._enabled = len(self._mapping)
+        self._mapping = new_mapping
+        self._input_shutter_mapping = new_input_mapping
+        self._enabled = len(self._mapping) > 0
         self.logger('Polysun is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     @shutter_status
@@ -93,16 +107,43 @@ class Polysun(OMPluginBase):
             if new_state != old_state:
                 self._states[shutter_id] = new_state
                 self._action_queue.appendleft([shutter_id, new_state, old_state])
-                self.logger('Received state transition for shutter {0} from {1} to {2}'.format(shutter_id, old_state, new_state))
+                self.logger('Shutter {0}: Received state transition from {1} to {2}'.format(shutter_id, old_state, new_state))
+
+    @input_status(version=2)
+    def input_status(self, data):
+        if self._enabled and self._input_enabled:
+            input_id = data.get('input_id')
+            shutter_ids = self._input_shutter_mapping.get(input_id, set())
+            for shutter_id in shutter_ids:
+                self.logger('Shutter {0}: Lost position due to Input {1}'.format(shutter_id, input_id))
+                self._lost_shutters[shutter_id] = time.time()
+                self.webinterface.shutter_report_lost_position(id=shutter_id)
 
     @background_task
     def runner(self):
         while True:
             try:
+                if len(self._input_shutter_mapping) > 0 and self._input_enabled is None:
+                    result = json.loads(self.webinterface.get_features())
+                    if not result.get('success', False):
+                        self.logger('Could not load features: {0}'.format(result.get('msg', 'Unknown')))
+                    else:
+                        features = result.get('features', [])
+                        self._input_enabled = 'shutter_positions' in features
+                        self.logger('Gateway {0} support reporting lost positions'.format('does' if self._input_enabled else 'does not'))
+            except Exception as ex:
+                self.logger('Unexpected exception loading Gateway features: {0}'.format(ex))
+            try:
                 shutter_id, new_state, old_state = self._action_queue.pop()
                 mapping = self._mapping.get(shutter_id)
                 if mapping is None:
                     continue
+
+                if new_state == Polysun.State.STOPPED:
+                    lost_time = self._lost_shutters.get(shutter_id, 0)
+                    if lost_time > (time.time() - 5):  # Ignore STOPPED state within `x` seconds of lost position
+                        self.logger('Shutter {0}: Ignore stopped state due to lost position'.format(shutter_id))
+                        continue
 
                 output_id_up = mapping['up']
                 output_id_down = mapping['down']
