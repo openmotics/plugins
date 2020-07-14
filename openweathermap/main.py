@@ -20,9 +20,12 @@ class OpenWeatherMap(OMPluginBase):
     config_description = [{'name': 'api_key',
                            'type': 'str',
                            'description': 'The API key from OpenWeatherMap.'},
-                          {'name': 'location',
+                          {'name': 'lat',
                            'type': 'str',
-                           'description': 'A location which will be passed to Google to fetch location.'},
+                           'description': 'A location latitude which will be passed to OpenWeatherMap.'},
+                          {'name': 'lng',
+                           'type': 'str',
+                           'description': 'A location longitude which will be passed to OpenWeatherMap.'},
                           {'name': 'main_mapping',
                            'type': 'section',
                            'description': 'Mapping betweet OpenMotics Virtual Sensors and OpenWeatherMap forecasts. See README.',
@@ -64,22 +67,11 @@ class OpenWeatherMap(OMPluginBase):
         self._headers = {'X-Requested-With': 'OpenMotics plugin: OpenWeatherMap'}
 
         self._enabled = False
-        if self._config.get('location', '') != '':
-            address = self._config['location']
-            api = 'https://maps.googleapis.com/maps/api/geocode/json?address={0}'.format(address)
-            try:
-                location = requests.get(api).json()
-            except:
-                self.logger('Error calling Google Maps API, waiting 2 minutes to try again')
-                time.sleep(120)
-                location = requests.get(api).json()
-            if location['status'] == 'OK':
-                self._latitude = location['results'][0]['geometry']['location']['lat']
-                self._longitude = location['results'][0]['geometry']['location']['lng']
-                self.logger('Latitude: {0} - Longitude: {1}'.format(self._latitude, self._longitude))
-                self._enabled = True
-            else:
-                self.logger('Could not translate {0} to coordinates: {1}'.format(address, location['status']))
+        if (self._config.get('lat', '') != '') and (self._config.get('lng', '') != ''):
+            self._latitude = self._config.get('lat')
+            self._longitude = self._config.get('lng')
+            self.logger('Latitude: {0} - Longitude: {1}'.format(self._latitude, self._longitude))
+            self._enabled = True
 
         self._enabled = self._enabled and self._api_key != ''
         self.logger('OpenWeatherMap is {0}'.format('enabled' if self._enabled else 'disabled'))
