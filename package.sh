@@ -23,8 +23,9 @@ else
   md5cmd='md5sum'
 fi
 
-
 cd ${plugin}
+find . -type f -name "*.py[co]" -delete
+find . -type d -name "__pycache__" -delete
 sed -i '' -E "s/version = '([0-9]+\.[0-9]+\.[0-9]+)'/version = '$version'/" main.py
 tar -cLzf ${tar_file} *
 mv ${tar_file} ..
