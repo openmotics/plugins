@@ -232,7 +232,7 @@ class SMAWebConnect(OMPluginBase):
                 self._log_debug('* Unknown key {0}: {1}'.format(key, data[key]))
         offline = 'frequency' not in metrics_values or metrics_values['frequency'] is None
         metrics_values['online'] = not offline
-        self._enqueue_metrics(serial, metrics_values)
+        self._enqueue_metrics(ip, serial, metrics_values)
 
     def _extract_values(self, key, values, factor):
         if len(values) != 1 or '1' not in values:
@@ -274,12 +274,12 @@ class SMAWebConnect(OMPluginBase):
                 raise RuntimeError('Maximum amount of sessions')
             raise RuntimeError('Could not login: {0}'.format(error_code))
 
-    def _enqueue_metrics(self, device_id, values):
+    def _enqueue_metrics(self, ip, device_id, values):
         try:
             now = time.time()
             self._metrics_queue.appendleft({'type': 'sma',
                                             'timestamp': now,
-                                            'tags': {'device': device_id},
+                                            'tags': {'device': device_id, 'ip': ip},
                                             'values': values})
         except Exception as ex:
             self.logger('Got unexpected error while enqueueing metrics: {0}'.format(ex))
