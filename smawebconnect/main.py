@@ -202,7 +202,7 @@ class SMAWebConnect(OMPluginBase):
         data = response['result'][serial]
         if data is None:
             raise RuntimeError('Unexpected response: {0}'.format(response))
-        self._log_debug('Read values:')
+        self._log_debug('Read values (ip: {0}, serial number: {1}):'.format(ip, serial))
         for key, info in SMAWebConnect.FIELD_MAPPING.iteritems():
             name = info['name']
             unit = info['unit']
