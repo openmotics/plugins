@@ -27,7 +27,7 @@ class SMAWebConnect(OMPluginBase):
     """
 
     name = 'SMAWebConnect'
-    version = '0.0.31'
+    version = '0.0.34'
     interfaces = [('config', '1.0'), ('metrics', '1.0')]
 
     counter_device_types = ['gas', 'heat', 'water', 'electricity']
@@ -354,13 +354,13 @@ class SMAWebConnect(OMPluginBase):
             # If the measured value is a power measurement, it needs to be converted to energy.
             # Assume the value you are getting is in kW and needs to be converted to a kWh counter
             if mapping.get('unit_type') == 'power' or mapping.get('unit_type') == 'flow':
-                self._log('* Converting {0} to {1}...'.format(mapping.get('unit_type'), unit_type))
-                current_value_amount = current_value * self.config['polling_period'] / 3600  # convert kW or m3/h to kWh or m3
+                self._log_debug('* Converting {0} to {1}...'.format(mapping.get('unit_type'), unit_type))
+                current_value_amount = current_value * self._sample_rate / 3600  # convert kW or m3/h to kWh or m3
                 # You need an internal counter, because a pulse counter only works with integers, while a kWh-value
                 # over 1 minute is often lower than 1
                 self._counter_rate_to_total[pc_name] += current_value_amount
                 if self._counter_rate_to_total[pc_name] < 1.0:
-                    self._log('* {0} for counter {1} has not reached cumulative value of 1 yet (currently {2}) - '
+                    self._log_debug('* {0} for counter {1} has not reached cumulative value of 1 yet (currently {2}) - '
                               'adding 0 to pulse counter'.format(mapping.get('unit_type'), pc_name,
                                                                  self._counter_rate_to_total[pc_name]))
                     current_value = 0
@@ -376,11 +376,11 @@ class SMAWebConnect(OMPluginBase):
             else:
                 value = int(current_value)
 
-            self._log(
+            self._log_debug(
                 '* Processing ... Setting counter {0} with name {1} to {2}'.format(pc_id, pc_name, value))
             result = json.loads(self.webinterface.set_pulse_counter_status(pulse_counter_id=pc_id, value=value))
             if result['success'] is False:
-                self._log('* Could not update counter value for {0} (ID {1}): {2}'.format(pc_name, pc_id,
+                self._log_debug('* Could not update counter value for {0} (ID {1}): {2}'.format(pc_name, pc_id,
                                                                                           result.get('msg')))
 
     @om_expose
