@@ -18,6 +18,7 @@ import requests
 import simplejson as json
 from plugins.base import om_expose, OMPluginBase, PluginConfigChecker, background_task, om_metric_data
 from collections import deque
+from threading import Thread
 
 
 class SMAWebConnect(OMPluginBase):
@@ -26,26 +27,12 @@ class SMAWebConnect(OMPluginBase):
     """
 
     name = 'SMAWebConnect'
-    version = '0.0.27'
+    version = '0.0.34'
     interfaces = [('config', '1.0'), ('metrics', '1.0')]
 
-    config_description = [{'name': 'sample_rate',
-                           'type': 'int',
-                           'description': 'How frequent (every x seconds) to fetch the sensor data, Default: 30'},
-                          {'name': 'debug',
-                           'type': 'bool',
-                           'description': 'Indicate whether debug logging should be enabled'},
-                          {'name': 'devices',
-                           'type': 'section',
-                           'description': 'List of all SMA devices.',
-                           'repeat': True,
-                           'min': 1,
-                           'content': [{'name': 'sma_inverter_ip',
-                                        'type': 'str',
-                                        'description': 'IP or hostname of the SMA inverter including the scheme (e.g. http:// or https://).'},
-                                       {'name': 'password',
-                                        'type': 'str',
-                                        'description': 'The password of the `User` account'}]}]
+    counter_device_types = ['gas', 'heat', 'water', 'electricity']
+    counter_unit_types = ['energy', 'volume', 'power', 'flow']
+    types_mapping = {'energy': 'energy', 'power': 'energy', 'volume': 'volume', 'flow': 'volume'}
 
     default_config = {}
 
@@ -142,13 +129,15 @@ class SMAWebConnect(OMPluginBase):
     def __init__(self, webinterface, logger):
         super(SMAWebConnect, self).__init__(webinterface, logger)
         self.logger('Starting SMAWebConnect plugin...')
+        self.config_description = self._create_config_description()
         self._config = self.read_config(SMAWebConnect.default_config)
-        self._config_checker = PluginConfigChecker(SMAWebConnect.config_description)
+        self._config_checker = PluginConfigChecker(self.config_description)
         self._metrics_queue = deque()
         self._enabled = False
         self._sample_rate = 30
         self._sma_devices = {}
         self._sma_sid = {}
+        self._counter_rate_to_total = {}
         self._read_config()
 
         # Disable HTTPS warnings becasue of self-signed HTTPS certificate on the SMA inverter
@@ -156,6 +145,57 @@ class SMAWebConnect(OMPluginBase):
         requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
         self.logger("Started SMAWebConnect plugin")
+
+    def _create_config_description(self):
+        self.pc_config = json.loads(self.webinterface.get_pulse_counter_configurations())
+        pc_names = [pc_config['name'] for pc_config in self.pc_config['config'] if pc_config['name']]
+        config_description = [{'name': 'sample_rate',
+                               'type': 'int',
+                               'description': 'How frequent (every x seconds) to fetch the sensor data, Default: 30'},
+                              {'name': 'debug',
+                               'type': 'bool',
+                               'description': 'Indicate whether debug logging should be enabled'},
+                              {'name': 'devices',
+                               'type': 'section',
+                               'description': 'List of all SMA devices.',
+                               'repeat': True,
+                               'min': 1,
+                               'content': [{'name': 'sma_inverter_ip',
+                                            'type': 'str',
+                                            'description': 'IP or hostname of the SMA inverter including the scheme (e.g. http:// or https://).'},
+                                           {'name': 'password',
+                                            'type': 'str',
+                                            'description': 'The password of the `User` account'},
+                                           {'name': 'counter_mapping',
+                                            'type': 'section',
+                                            'description': 'Counter mapping',
+                                            'repeat': True,
+                                            'min': 0,
+                                            'content': [{'name': 'name',
+                                                         'type': 'enum',
+                                                         'description': 'Name of the pulse counter',
+                                                         'choices': [v['name'] for v in SMAWebConnect.FIELD_MAPPING.values()]},
+                                                        {'name': 'pulsecounter_name',
+                                                         'type': 'enum',
+                                                         'description': 'Name of the counter to which the selected value needs to be mapped',
+                                                         'choices': pc_names},
+                                                        {'name': 'unit_type',
+                                                         'type': 'enum',
+                                                         'description': 'Unit type of measurement',
+                                                         'choices': SMAWebConnect.counter_unit_types},
+                                                        {'name': 'convert_to_counter',
+                                                         'type': 'enum',
+                                                         'description': 'The read value needs to be made into a counter (i.e. cumulative)',
+                                                         'choices': ['NO', 'YES']},
+                                                        {'name': 'multiplier',
+                                                         'type': 'str',
+                                                         'description': 'Multiplier for readout of values (default=1; required to ensure units of'
+                                                                        'kW(h) or m3(/h) for values given to pulse counters)'},
+                                                        ]}
+                                           ]}
+                              ]
+
+        return config_description
 
     def _read_config(self):
         self._enabled = False
@@ -232,7 +272,8 @@ class SMAWebConnect(OMPluginBase):
                 self._log_debug('* Unknown key {0}: {1}'.format(key, data[key]))
         offline = 'frequency' not in metrics_values or metrics_values['frequency'] is None
         metrics_values['online'] = not offline
-        self._enqueue_metrics(ip, serial, metrics_values)
+        self._enqueue_metrics(serial, metrics_values)
+        self._update_pulsecounter(sma_device, metrics_values)
 
     def _extract_values(self, key, values, factor):
         if len(values) != 1 or '1' not in values:
@@ -274,12 +315,12 @@ class SMAWebConnect(OMPluginBase):
                 raise RuntimeError('Maximum amount of sessions')
             raise RuntimeError('Could not login: {0}'.format(error_code))
 
-    def _enqueue_metrics(self, ip, device_id, values):
+    def _enqueue_metrics(self, device_id, values):
         try:
             now = time.time()
             self._metrics_queue.appendleft({'type': 'sma',
                                             'timestamp': now,
-                                            'tags': {'device': device_id, 'ip': ip},
+                                            'tags': {'device': device_id},
                                             'values': values})
         except Exception as ex:
             self.logger('Got unexpected error while enqueueing metrics: {0}'.format(ex))
@@ -292,9 +333,59 @@ class SMAWebConnect(OMPluginBase):
         except IndexError:
             pass
 
+    def _update_pulsecounter(self, device_config, values):
+        """Add the values defined in counter_mapping not only to influxdb as metrics, but also create and update
+        pulse counters for them. If configured, convert the measurement into a counter, i.e. make it cumulative."""
+        for mapping in device_config.get('counter_mapping', []):
+            value_name = str(mapping['name'])
+            unit_type = SMAWebConnect.types_mapping.get(mapping.get('unit_type'))
+            current_value = values[value_name] * float(mapping.get('multiplier', 1))
+            pc_name = str(mapping['pulsecounter_name'])
+            self.pc_config = json.loads(self.webinterface.get_pulse_counter_configurations())
+            pc_id = [pc_config['id'] for pc_config in self.pc_config['config'] if pc_config['name'] == pc_name]
+            if len(pc_id) == 0 or len(pc_id) > 1:
+                self.logger("No or multiple pulsecounters found for name {0}. Skipping this pulsecounter".format(pc_name))
+                continue
+            pc_id = pc_id[0]
+
+            if not self._counter_rate_to_total.get(pc_name):
+                self._counter_rate_to_total[pc_name] = 0.0
+
+            # If the measured value is a power measurement, it needs to be converted to energy.
+            # Assume the value you are getting is in kW and needs to be converted to a kWh counter
+            if mapping.get('unit_type') == 'power' or mapping.get('unit_type') == 'flow':
+                self._log_debug('* Converting {0} to {1}...'.format(mapping.get('unit_type'), unit_type))
+                current_value_amount = current_value * self._sample_rate / 3600  # convert kW or m3/h to kWh or m3
+                # You need an internal counter, because a pulse counter only works with integers, while a kWh-value
+                # over 1 minute is often lower than 1
+                self._counter_rate_to_total[pc_name] += current_value_amount
+                if self._counter_rate_to_total[pc_name] < 1.0:
+                    self._log_debug('* {0} for counter {1} has not reached cumulative value of 1 yet (currently {2}) - '
+                              'adding 0 to pulse counter'.format(mapping.get('unit_type'), pc_name,
+                                                                 self._counter_rate_to_total[pc_name]))
+                    current_value = 0
+                else:
+                    current_value = self._counter_rate_to_total[pc_name]
+                    self._counter_rate_to_total[pc_name] = self._counter_rate_to_total[pc_name] - 1.0
+
+            # If the measured values still need to be made cumulative
+            if mapping.get('convert_to_counter', 'NO') == 'YES':
+                result = json.loads(self.webinterface.get_pulse_counter_status())
+                previous_value = result['counters'][pc_id] if result['counters'][pc_id] else 0
+                value = int(current_value + previous_value)
+            else:
+                value = int(current_value)
+
+            self._log_debug(
+                '* Processing ... Setting counter {0} with name {1} to {2}'.format(pc_id, pc_name, value))
+            result = json.loads(self.webinterface.set_pulse_counter_status(pulse_counter_id=pc_id, value=value))
+            if result['success'] is False:
+                self._log_debug('* Could not update counter value for {0} (ID {1}): {2}'.format(pc_name, pc_id,
+                                                                                          result.get('msg')))
+
     @om_expose
     def get_config_description(self):
-        return json.dumps(SMAWebConnect.config_description)
+        return json.dumps(self.config_description)
 
     @om_expose
     def get_config(self):
