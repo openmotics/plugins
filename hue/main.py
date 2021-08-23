@@ -1,18 +1,21 @@
 """
 A Hue plugin, for controlling lights connected to your Hue Bridge
 """
-
+import logging
 import time
 import requests
 import simplejson as json
 from threading import Thread
 from plugins.base import om_expose, output_status, OMPluginBase, PluginConfigChecker, background_task
+from .plugin_logs import PluginLogHandler
 
+
+logger = logging.getLogger('openmotics')
 
 class Hue(OMPluginBase):
 
     name = 'Hue'
-    version = '1.0.0'
+    version = '1.0.1'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_url',
@@ -33,9 +36,10 @@ class Hue(OMPluginBase):
 
     default_config = {'api_url': 'http://hue/api', 'username': '', 'poll_frequency': 60}
 
-    def __init__(self, webinterface, logger):
+    def __init__(self, webinterface, gateway_logger):
+        self.setup_logging(log_function=gateway_logger)
         super(Hue, self).__init__(webinterface, logger)
-        self.logger('Starting Hue plugin...')
+        logger.info('Starting Hue plugin...')
 
         self._config = self.read_config(Hue.default_config)
         self._config_checker = PluginConfigChecker(Hue.config_description)
@@ -44,7 +48,17 @@ class Hue(OMPluginBase):
 
         self._previous_output_state = {}
 
-        self.logger("Hue plugin started")
+        logger.info("Hue plugin started")
+
+    @staticmethod
+    def setup_logging(log_function):  # type: (Callable) -> None
+        logger.setLevel(logging.INFO)
+        log_handler = PluginLogHandler(log_function=log_function)
+        # some elements like time and name are added by the plugin runtime already
+        # formatter = logging.Formatter('%(asctime)s - %(name)s - %(threadName)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter('%(threadName)s - %(levelname)s - %(message)s')
+        log_handler.setFormatter(formatter)
+        logger.addHandler(log_handler)
 
     def _read_config(self):
         self._api_url = self._config['api_url']
@@ -57,7 +71,7 @@ class Hue(OMPluginBase):
         self._endpoint = '{0}/{1}/{{0}}'.format(self._api_url, self._username)
 
         self._enabled = self._api_url != '' and self._username != ''
-        self.logger('Hue is {0}'.format('enabled' if self._enabled else 'disabled'))
+        logger.info('Hue is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     def _create_output_object(self):
         # create an object with the OM output IDs as the keys and hue light IDs as the values
@@ -85,24 +99,24 @@ class Hue(OMPluginBase):
                         current_output_state[key] = dimmer_level
                         previous_dimmer_level = self._previous_output_state.get(key, 0)
                         if dimmer_level != previous_dimmer_level:
-                            self.logger('Dimming light {0} from {1} to {2}%'.format(key, previous_dimmer_level, dimmer_level))
+                            logger.info('Dimming light {0} from {1} to {2}%'.format(key, previous_dimmer_level, dimmer_level))
                             thread = Thread(target=self._send, args=(hue_light_id, True, dimmer_level))
                             thread.start()
                         else:
-                            self.logger('Light {0} unchanged at {1}%'.format(key, dimmer_level))
+                            logger.info('Light {0} unchanged at {1}%'.format(key, dimmer_level))
                     else:
-                        self.logger('Ignoring light {0}, because it is not a Hue light'.format(output_id))
+                        logger.info('Ignoring light {0}, because it is not a Hue light'.format(output_id))
                 for previous_key in self._previous_output_state.keys():
                     (output_id, hue_light_id) = previous_key.split('_')
                     if current_output_state.get(previous_key) is None:
-                        self.logger('Switching light {0} OFF'.format(previous_key))
+                        logger.info('Switching light {0} OFF'.format(previous_key))
                         thread = Thread(target=self._send, args=(hue_light_id, False, self._previous_output_state.get(previous_key, 0)))
                         thread.start()
                     else:
-                        self.logger('Light {0} was already on'.format(previous_key))
+                        logger.info('Light {0} was already on'.format(previous_key))
                 self._previous_output_state = current_output_state
             except Exception as ex:
-                self.logger('Error processing output_status event: {0}'.format(ex))
+                logger.exception('Error processing output_status event: {0}'.format(ex))
 
     def _send(self, hue_light_id, state, dimmer_level):
         try:
@@ -127,11 +141,11 @@ class Hue(OMPluginBase):
                             brightness = self._dimmerLevelToBrightness(dimmer_level)
                             self._setLightState(hue_light_id, {'on': True, 'bri': brightness})
             else:
-                self.logger('Unable to read current state for Hue light {0}'.format(hue_light_id))
+                logger.warning('Unable to read current state for Hue light {0}'.format(hue_light_id))
             # sleep to avoid queueing the commands on the Hue bridge
             # time.sleep(1)
         except Exception as ex:
-            self.logger('Error sending command to Hue light {0}: {1}'.format(hue_light_id, ex))
+            logger.exception('Error sending command to Hue light {0}: {1}'.format(hue_light_id, ex))
 
     def _getLightState(self, hue_light_id):
         try:
@@ -139,13 +153,13 @@ class Hue(OMPluginBase):
             response = requests.get(url=self._endpoint.format('lights/{0}').format(hue_light_id))
             if response.status_code is 200:
                 hue_light = response.json()
-                self.logger('Getting light state for Hue light {0} took {1}s'.format(hue_light_id, round(time.time() - start, 2)))
+                logger.info('Getting light state for Hue light {0} took {1}s'.format(hue_light_id, round(time.time() - start, 2)))
                 return hue_light
             else:
-                self.logger('Failed to pull state for light {0}'.format(hue_light_id))
+                logger.warning('Failed to pull state for light {0}'.format(hue_light_id))
                 return False
         except Exception as ex:
-            self.logger('Error while getting light state for Hue light {0}: {1}'.format(hue_light_id, ex))
+            logger.exception('Error while getting light state for Hue light {0}: {1}'.format(hue_light_id, ex))
 
     def _setLightState(self, hue_light_id, state):
         try:
@@ -154,18 +168,18 @@ class Hue(OMPluginBase):
             if response.status_code is 200:
                 result = response.json()
                 if result[0].get('success')is None:
-                    self.logger('Setting light state for Hue light {0} returned unexpected result. Response: {1} ({2})'.format(hue_light_id, response.text, response.status_code))
+                    logger.info('Setting light state for Hue light {0} returned unexpected result. Response: {1} ({2})'.format(hue_light_id, response.text, response.status_code))
                     return False
-                self.logger('Setting light state for Hue light {0} took {1}s'.format(hue_light_id, round(time.time() - start, 2)))
+                logger.info('Setting light state for Hue light {0} took {1}s'.format(hue_light_id, round(time.time() - start, 2)))
                 return True
             else:
-                self.logger('Setting light state for Hue light {0} failed. Response: {1} ({2})'.format(response.text, response.status_code))
+                logger.error('Setting light state for Hue light {0} failed. Response: {1} ({2})'.format(response.text, response.status_code))
                 return False
         except Exception as ex:
-            self.logger('Error while setting light state for Hue light {0} to {1}: {2}'.format(hue_light_id, json.dumps(state), ex))
+            logger.exception('Error while setting light state for Hue light {0} to {1}: {2}'.format(hue_light_id, json.dumps(state), ex))
 
     def _getAllLightsState(self):
-        self.logger('Pulling state for all lights from the Hue bridge')
+        logger.info('Pulling state for all lights from the Hue bridge')
         try:
             response = requests.get(url=self._endpoint.format('lights'))
             if response.status_code is 200:
@@ -180,21 +194,21 @@ class Hue(OMPluginBase):
                     else:
                         result = json.loads(self.webinterface.set_output(None, str(output_id), 'false'))
                     if result['success'] is False:
-                        self.logger('--> Error when updating output {0}: {1}'.format(output_id, result['msg']))
+                        logger.error('--> Error when updating output {0}: {1}'.format(output_id, result['msg']))
             else:
-                self.logger('--> Failed to pull state for all lights')
+                logger.error('--> Failed to pull state for all lights')
         except Exception as ex:
-            self.logger('--> Error while getting state for all Hue lights: {0}'.format(ex))
+            logger.exception('--> Error while getting state for all Hue lights: {0}'.format(ex))
 
     def _parseLightObject(self, hue_light_id, hue_light_object):
+        light = {'id': hue_light_id}
         try:
-            light = {'id': hue_light_id,
-                     'name': hue_light_object['name'],
-                     'on': hue_light_object['state'].get('on', False),
-                     'brightness': hue_light_object['state'].get('bri', 254)}
+            light.update({'name': hue_light_object['name'],
+                          'on': hue_light_object['state'].get('on', False),
+                          'brightness': hue_light_object['state'].get('bri', 254)})
             light['dimmer_level'] = self._brightnessToDimmerLevel(light['brightness'])
         except Exception as ex:
-                self.logger('--> Error while parsing Hue light {0}: {1}'.format(hue_light_object, ex))
+            logger.exception('--> Error while parsing Hue light {0}: {1}'.format(hue_light_object, ex))
         return light
 
     def _brightnessToDimmerLevel(self, brightness):

@@ -20,11 +20,9 @@ fi
 
 if [ $(uname -s) == 'Darwin' ]
 then
-  sedcmd="sed -i ''"
   tarcmd="tar -L"
-  md5cmd='md5'
+  md5cmd="md5"
 else
-  sedcmd='sed -i'
   tarcmd="tar -h"
   md5cmd='md5sum'
 fi
@@ -39,10 +37,14 @@ then
     version=`cat main.py | grep version | cut -d "\"" -f 2 | cut -d "'" -f 2 | head -n 1`
 fi
 
+if ! [[ $version =~ ^([0-9]+\.)([0-9]+\.)(\*|[0-9]+)$ ]]
+then
+  echo "Not a valid plugin version $version"
+  exit 2
+fi
+
 tar_file=${plugin}_${version}.tgz
 md5_file=${plugin}_${version}.md5
-
-${sedcmd} -E "s/version *= *('|\")[0-9]+\.[0-9]+\.[0-9]+('|\")/version = '$version'/" main.py
 
 ${tarcmd} -czf ${tar_file} *
 mv ${tar_file} ..
