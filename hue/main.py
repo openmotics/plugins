@@ -19,7 +19,7 @@ logger = logging.getLogger('openmotics')
 class Hue(OMPluginBase):
 
     name = 'Hue'
-    version = '1.0.11'
+    version = '1.0.12'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_url',
@@ -44,6 +44,8 @@ class Hue(OMPluginBase):
         self.setup_logging(log_function=gateway_logger)
         super(Hue, self).__init__(webinterface, logger)
         logger.info('Starting Hue plugin %s ...', self.version)
+
+        self.discover_hue_bridges()
 
         self._config = self.read_config(Hue.default_config)
         self._config_checker = PluginConfigChecker(Hue.config_description)
@@ -269,3 +271,33 @@ class Hue(OMPluginBase):
         while self._enabled and not expired:
             time.sleep(min(timer, 0.5))
             expired = time.time() - now > timer
+
+            def _getLightState(self, hue_light_id):
+                try:
+                    start = time.time()
+                    response = requests.get(url=self._endpoint.format('lights/{0}').format(hue_light_id))
+                    if response.status_code is 200:
+                        hue_light = response.json()
+                        logger.info('Getting output state for hue id: %s took %ss', hue_light_id,
+                                    round(time.time() - start, 2))
+                        return hue_light
+                    else:
+                        logger.warning('Failed to pull state for hue id: %s', hue_light_id)
+                        return False
+                except Exception as ex:
+                    logger.exception('Error while getting output state for hue id: %s', hue_light_id)
+
+    def discover_hue_bridges(self):
+        try:
+            response = requests.get(url='https://discovery.meethue.com/')
+            if response.status_code is 200:
+                hue_bridge_data = response.json()
+                for hue_bridge in hue_bridge_data:
+                    logger.info('Discovered hue bridge %s @ %s',
+                                hue_bridge.get('id'),
+                                hue_bridge.get('internalipaddress'))
+            else:
+                logger.warning('Failed to discover bridges on this network')
+                return False
+        except Exception as ex:
+            logger.exception('Error while discovering hue bridges on this network')
