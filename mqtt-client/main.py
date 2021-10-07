@@ -21,7 +21,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '2.0.1'
+    version = '2.0.2'
     interfaces = [('config', '1.0')]
 
     energy_module_config = {
@@ -423,7 +423,7 @@ class MQTTClient(OMPluginBase):
                 else:
                     ids = []
                     for config in result['config']:
-                        sensor_id = config['id']
+                        sensor_id = int(config['external_id'])
                         ids.append(sensor_id)
                         self._sensors[sensor_id] = {'name': config['name'], 'offset': float(config['offset'])}
                     for sensor_id in self._sensors.keys():
