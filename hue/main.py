@@ -19,7 +19,7 @@ logger = logging.getLogger('openmotics')
 class Hue(OMPluginBase):
 
     name = 'Hue'
-    version = '1.0.12'
+    version = '1.0.13'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_url',
@@ -152,27 +152,67 @@ class Hue(OMPluginBase):
             logger.exception('Error while setting output state for hue id: %s to %s', hue_light_id, json.dumps(state))
 
     def import_remote_state(self):
-        try:
-            if not self._output_event_queue.empty():
-                logger.info('Ignoring syncing remote state because we still need to process %s output events', self._output_event_queue.qsize())
+        if not self._output_event_queue.empty():
+            logger.info('Ignoring syncing remote state because we still need to process %s output events', self._output_event_queue.qsize())
+        else:
+            try:
+                self._import_lights_state()
+            except Exception as ex:
+                logger.exception('Error while getting state for all Hue outputs')
+            try:
+                self._import_sensors_state()
+            except Exception as ex:
+                logger.exception('Error while getting state for all Hue sensors')
+
+    def _import_lights_state(self):
+        logger.debug('Syncing remote state for all outputs from the Hue bridge')
+        hue_lights = self._getAllLightsState()
+        for output in self._output_mapping:
+            output_id = output['output_id']
+            hue_light_id = str(output['hue_output_id'])
+            hue_light_state = hue_lights.get(hue_light_id)
+            if hue_light_state is not None:
+                if hue_light_state.get('on', False):
+                    result = json.loads(self.webinterface.set_output(None, str(output_id), 'true', str(hue_light_state['dimmer_level'])))
+                else:
+                    result = json.loads(self.webinterface.set_output(None, str(output_id), 'false'))
+                if result['success'] is False:
+                    logger.error('Error when updating output %s (hue id: %s): %s', output_id, hue_light_id, result['msg'])
             else:
-                logger.debug('Syncing remote state for all outputs from the Hue bridge')
-                hue_lights = self._getAllLightsState()
-                for output in self._output_mapping:
-                    output_id = output['output_id']
-                    hue_light_id = str(output['hue_output_id'])
-                    hue_light_state = hue_lights.get(hue_light_id)
-                    if hue_light_state is not None:
-                        if hue_light_state.get('on', False):
-                            result = json.loads(self.webinterface.set_output(None, str(output_id), 'true', str(hue_light_state['dimmer_level'])))
-                        else:
-                            result = json.loads(self.webinterface.set_output(None, str(output_id), 'false'))
-                        if result['success'] is False:
-                            logger.error('Error when updating output %s (hue id: %s): %s', output_id, hue_light_id, result['msg'])
-                    else:
-                        logger.warning('Output %s (hue id:  %s) not found on Hue bridge', output_id, hue_light_id)
-        except Exception as ex:
-            logger.exception('Error while getting state for all Hue outputs')
+                logger.warning('Output %s (hue id:  %s) not found on Hue bridge', output_id, hue_light_id)
+
+    def _import_sensors_state(self):
+        logger.debug('Syncing remote state for all sensors from the Hue bridge')
+        known_sensors = self._get_known_sensors()
+        hue_sensors = self._getAllSensorsState()
+
+        for sensor in hue_sensors:
+            sensor_external_id = sensor['external_id']
+            if sensor_external_id not in known_sensors.keys():
+                om_sensor_id = self._register_sensor(sensor_external_id)
+            else:
+                om_sensor_id = known_sensors[sensor_external_id]
+            value = float(sensor.get('value'))
+            if om_sensor_id is not None:
+                self._update_sensor(om_sensor_id, value)
+            else:
+                logger.error('Sensor %s not found', sensor_external_id)
+
+    def _get_known_sensors(self):
+        response = self.webinterface.get_sensor_configurations()
+        data = json.loads(response)
+        return {x['external_id']: x['id'] for x in data['config'] if x.get('source', {}).get('name') == Hue.name and x['external_id'] is not in [None, '']}
+
+    def _getAllSensorsState(self):
+        hue_sensors = {}
+        response = requests.get(url=self._endpoint.format('sensors'))
+        if response.status_code is 200:
+            for hue_sensor_id, data in response.json().iteritems():
+                if data.get('type') == 'ZLLTemperature':
+                    hue_sensors[hue_sensor_id] = self._parseSensorObject(hue_sensor_id, data, sensor_type='temperature')
+        else:
+            logger.error('Failed to pull state for all sensors (HTTP %s)', response.status_code)
+        return hue_sensors
 
     def _getAllLightsState(self):
         hue_lights = {}
@@ -194,6 +234,21 @@ class Hue(OMPluginBase):
         except Exception as ex:
             logger.exception('Error while parsing Hue light %s', hue_light_object)
         return light
+
+    def _parseSensorObject(self, hue_sensor_id, hue_sensor_object, sensor_type='temperature'):
+        sensor = {'id': hue_sensor_id}
+        try:
+            value = hue_sensor_object['state'][sensor_type]
+            if sensor_type == 'temperature':
+                value /= 100.0
+            sensor.update({'external_id': hue_sensor_object['uniqueid'],
+                           'name': hue_sensor_object['name'],
+                           'type': hue_sensor_object['type'],
+                           'value': value})
+
+        except Exception as ex:
+            logger.exception('Error while parsing Hue sensor %s', hue_sensor_object)
+        return sensor
 
     def _brightnessToDimmerLevel(self, brightness):
         return int(round(brightness / 2.54))
@@ -301,3 +356,29 @@ class Hue(OMPluginBase):
                 return False
         except Exception as ex:
             logger.exception('Error while discovering hue bridges on this network')
+
+    def _register_sensor(self, external_id):
+        data = {
+            'external_id': external_id,
+            'source': {'type': 'plugin', 'name': Hue.name},
+            'name': 'Hue Sensor ({})'.format(external_id),
+            'physical_quantity': 'temperature',
+            'unit': 'celcius',
+        }
+        response = self.webinterface.set_sensor_configuration(config=json.dumps(data))
+        data = json.loads(response)
+        if data is None or not data.get('success', False):
+            logger.error('Could not register new sensor, registration failed trough API')
+            logger.error(data)
+            return None
+        response = self.webinterface.get_sensor_configurations()
+        data = json.loads(response)
+        return next((x['id'] for x in data['config'] if x.get('external_id') == external_id and x.get('source', {}).get('name') == Hue.name), None)
+
+    def _update_sensor(self, sensor_id, value):
+        self.logger('Updating sensor status')
+        data = {'id': sensor_id, 'value': value}
+        response = self.webinterface.set_sensor_status(status=json.dumps(data))
+        data = json.loads(response)
+        if data is None or not data.get('success', False):
+            logger.warning('Could not set the updated sensor value')
