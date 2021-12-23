@@ -19,7 +19,7 @@ logger = logging.getLogger('openmotics')
 class Hue(OMPluginBase):
 
     name = 'Hue'
-    version = '1.0.13'
+    version = '1.1.0'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_url',
@@ -186,22 +186,23 @@ class Hue(OMPluginBase):
         known_sensors = self._get_known_sensors()
         hue_sensors = self._getAllSensorsState()
 
-        for sensor in hue_sensors:
+        for hue_sensor_id, sensor in hue_sensors.items():
             sensor_external_id = sensor['external_id']
             if sensor_external_id not in known_sensors.keys():
-                om_sensor_id = self._register_sensor(sensor_external_id)
+                name = 'Hue Sensor {}'.format(hue_sensor_id)
+                om_sensor_id = self._register_sensor(name, sensor_external_id)
             else:
                 om_sensor_id = known_sensors[sensor_external_id]
             value = float(sensor.get('value'))
             if om_sensor_id is not None:
                 self._update_sensor(om_sensor_id, value)
             else:
-                logger.error('Sensor %s not found', sensor_external_id)
+                logger.error('Hue sensor %s (%s) not found', hue_sensor_id, sensor_external_id)
 
     def _get_known_sensors(self):
         response = self.webinterface.get_sensor_configurations()
         data = json.loads(response)
-        return {x['external_id']: x['id'] for x in data['config'] if x.get('source', {}).get('name') == Hue.name and x['external_id'] is not in [None, '']}
+        return {x['external_id']: x['id'] for x in data['config'] if x.get('source', {}).get('name') == Hue.name and x['external_id'] not in [None, '']}
 
     def _getAllSensorsState(self):
         hue_sensors = {}
@@ -261,13 +262,16 @@ class Hue(OMPluginBase):
         if self._enabled:
             event_processor = Thread(target=self.output_event_processor, name='output_event_processor')
             event_processor.start()
-            self.log_remote_output_list()
+            self.log_remote_asset_list()
             self.start_state_poller()
 
-    def log_remote_output_list(self):
+    def log_remote_asset_list(self):
         hue_lights = self._getAllLightsState()
         for hue_id, hue_light in hue_lights.iteritems():
             logger.info('Discovered hue output %s (hue id: %s)', hue_light.get('name'), hue_id)
+        hue_sensors = self._getAllSensorsState()
+        for hue_id, hue_sensor in hue_sensors.iteritems():
+            logger.info('Discovered hue sensor %s (hue id: %s)', hue_sensor.get('name'), hue_id)
 
     def start_state_poller(self):
         while self._poll_frequency > 0:
@@ -357,11 +361,11 @@ class Hue(OMPluginBase):
         except Exception as ex:
             logger.exception('Error while discovering hue bridges on this network')
 
-    def _register_sensor(self, external_id):
+    def _register_sensor(self, name, external_id):
         data = {
             'external_id': external_id,
             'source': {'type': 'plugin', 'name': Hue.name},
-            'name': 'Hue Sensor ({})'.format(external_id),
+            'name': name,
             'physical_quantity': 'temperature',
             'unit': 'celcius',
         }
@@ -376,7 +380,7 @@ class Hue(OMPluginBase):
         return next((x['id'] for x in data['config'] if x.get('external_id') == external_id and x.get('source', {}).get('name') == Hue.name), None)
 
     def _update_sensor(self, sensor_id, value):
-        self.logger('Updating sensor status')
+        logger.info('Updating sensor %s with status %s', sensor_id, value)
         data = {'id': sensor_id, 'value': value}
         response = self.webinterface.set_sensor_status(status=json.dumps(data))
         data = json.loads(response)
