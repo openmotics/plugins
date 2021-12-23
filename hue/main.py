@@ -362,6 +362,7 @@ class Hue(OMPluginBase):
             logger.exception('Error while discovering hue bridges on this network')
 
     def _register_sensor(self, name, external_id):
+        logger.debug('Registering sensor with name %s and external_id %s', name, external_id)
         data = {
             'external_id': external_id,
             'source': {'type': 'plugin', 'name': Hue.name},
@@ -377,10 +378,12 @@ class Hue(OMPluginBase):
             return None
         response = self.webinterface.get_sensor_configurations()
         data = json.loads(response)
-        return next((x['id'] for x in data['config'] if x.get('external_id') == external_id and x.get('source', {}).get('name') == Hue.name), None)
+        sensor_id = next((x['id'] for x in data['config'] if x.get('external_id') == external_id and x.get('source', {}).get('name') == Hue.name), None)
+        logger.info('Registered new sensor with name %s and external_id %s', name, external_id)
+        return sensor_id
 
     def _update_sensor(self, sensor_id, value):
-        logger.info('Updating sensor %s with status %s', sensor_id, value)
+        logger.debug('Updating sensor %s with status %s', sensor_id, value)
         data = {'id': sensor_id, 'value': value}
         response = self.webinterface.set_sensor_status(status=json.dumps(data))
         data = json.loads(response)
