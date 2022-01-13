@@ -8,18 +8,23 @@ It supports:
 ## Configuration
 
 ```
-config_description = [{'name': 'ip',
-                       'type': 'str',
-                       'description': 'The IP of the Fibaro Home Center (lite) device. E.g. 1.2.3.4'},
-                     {'name': 'sensor_mapping',
-                       'type': 'section',
-                       'description': 'Mapping betweet OpenMotics Virtual Sensors and Healthbox3 Sensors',
-                       'repeat': True,
-                       'min': 0,
-                       'content': [{'name': 'sensor_id', 'type': 'int'},
-                                   {'name': 'renson_temperature_id', 'type': 'int'},
-                                   {'name': 'renson_co2_id', 'type': 'int'},
-                                   {'name': 'renson_humidity', 'type': 'int'}]}]
+    name = 'Healthbox'
+    version = '1.0.0'
+    interfaces = [('config', '1.0'),
+                  ('metrics', '1.0')]
+
+    config_description = [{'name': 'serial',
+                           'type': 'str',
+                           'description': 'The serial of the Healthbox 3. E.g. 250424P0031'}]
+
+    metric_definitions = [{'type': 'aqi',
+                           'tags': ['type', 'description', 'serial'],
+                           'metrics': [{'name': 'aqi',
+                                        'description': 'Global air quality index',
+                                        'type': 'gauge',
+                                        'unit': 'aqi'}]}]
+
+    default_config = {'serial': ''}
 ```
 
 ## Sensor mapping

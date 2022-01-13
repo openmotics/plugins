@@ -366,7 +366,6 @@ class MQTTClient(OMPluginBase):
                 input_config_loaded = False
         return input_config_loaded
 
-
     def _load_output_configuration(self):
         output_config_loaded = True
         if self._output_enabled:

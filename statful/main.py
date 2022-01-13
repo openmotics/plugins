@@ -1,5 +1,6 @@
+# coding=utf-8
 """
-An InfluxDB plugin, for sending statistics to InfluxDB
+An Statful plugin, for sending metrics to Statful (adapted from InfluxDB plugin)
 """
 
 import time
@@ -10,70 +11,56 @@ from collections import deque
 from plugins.base import om_expose, OMPluginBase, PluginConfigChecker, om_metric_receive
 
 
-class InfluxDB(OMPluginBase):
+class Statful(OMPluginBase):
     """
-    An InfluxDB plugin, for sending statistics to InfluxDB
+    An Statful plugin, for sending metrics to Statful (adapted from InfluxDB plugin)
     """
 
-    name = 'InfluxDB'
-    version = '2.0.61'
+    name = 'Statful'
+    version = '1.0.0'
+    url = 'https://api.statful.com/tel/v2.0/metrics'
     interfaces = [('config', '1.0')]
 
-    config_description = [{'name': 'url',
+    config_description = [{'name': 'token',
                            'type': 'str',
-                           'description': 'The enpoint for the InfluxDB using HTTP. E.g. http://1.2.3.4:8086'},
-                          {'name': 'username',
-                           'type': 'str',
-                           'description': 'Optional username for InfluxDB authentication.'},
-                          {'name': 'password',
-                           'type': 'str',
-                           'description': 'Optional password for InfluxDB authentication.'},
-                          {'name': 'database',
-                           'type': 'str',
-                           'description': 'The InfluxDB database name to witch statistics need to be send.'},
+                           'description': 'Statful API token for authentication.'},
                           {'name': 'add_custom_tag',
                            'type': 'str',
                            'description': 'Add custom tag to statistics'},
                           {'name': 'batch_size',
                            'type': 'int',
-                           'description': 'The maximum batch size of grouped metrics to be send to InfluxDB.'}]
+                           'description': 'The maximum batch size of grouped metrics to be send to Statful.'}]
 
-    default_config = {'url': '', 'database': 'openmotics'}
+    default_config = {}
 
     def __init__(self, webinterface, logger):
-        super(InfluxDB, self).__init__(webinterface, logger)
-        self.logger('Starting InfluxDB plugin...')
+        super(Statful, self).__init__(webinterface, logger)
+        self.logger('Starting Statful plugin...')
 
-        self._config = self.read_config(InfluxDB.default_config)
-        self._config_checker = PluginConfigChecker(InfluxDB.config_description)
+        self._config = self.read_config(Statful.default_config)
+        self._config_checker = PluginConfigChecker(Statful.config_description)
         self._pending_metrics = {}
         self._send_queue = deque()
 
         self._send_thread = Thread(target=self._sender)
-        self._send_thread.setName('InfluxDB batch sender')
+        self._send_thread.setName('Statful batch sender')
         self._send_thread.daemon = True
         self._send_thread.start()
 
         self._read_config()
-        self.logger("Started InfluxDB plugin")
+        self.logger("Started Statful plugin")
 
     def _read_config(self):
-        self._url = self._config['url']
-        self._database = self._config['database']
         self._batch_size = self._config.get('batch_size', 10)
-        username = self._config.get('username', '')
-        password = self._config.get('password', '')
-        self._auth = None if username == '' else (username, password)
         self._add_custom_tag = self._config.get('add_custom_tag', '')
 
-        self._endpoint = '{0}/write?db={1}'.format(self._url, self._database)
-        self._query_endpoint = '{0}/query?db={1}&epoch=ns'.format(self._url, self._database)
-        self._headers = {'X-Requested-With': 'OpenMotics plugin: InfluxDB'}
+        token = self._config.get('token', '')
+        self._headers = {'M-Api-Token': token, 'X-Requested-With': 'OpenMotics plugin: Statful'}
 
-        self._enabled = self._url != '' and self._database != ''
-        self.logger('InfluxDB is {0}'.format('enabled' if self._enabled else 'disabled'))
+        self._enabled = token != ''
+        self.logger('Statful is {0}'.format('enabled' if self._enabled else 'disabled'))
 
-    @om_metric_receive(interval=10)
+    @om_metric_receive(interval=30)
     def _receive_metric_data(self, metric):
         """
         All metrics are collected, as filtering is done more finegraded when mapping to tables
@@ -96,9 +83,9 @@ class InfluxDB(OMPluginBase):
                 if isinstance(value, basestring):
                     value = '"{0}"'.format(value)
                 if isinstance(value, bool):
-                    value = str(value)
+                    value = int(value == True)
                 if isinstance(value, int) or isinstance(value, long):
-                    value = '{0}i'.format(value)
+                    value = '{0}'.format(value)
                 _values[key] = value
 
             tags = {'source': metric['source'].lower()}
@@ -106,27 +93,34 @@ class InfluxDB(OMPluginBase):
                 tags['custom_tag'] = self._add_custom_tag
             for tag, tvalue in metric['tags'].iteritems():
                 if isinstance(tvalue, basestring):
-                    tags[tag] = tvalue.replace(' ', '\ ').replace(',', '\,')
+                    # send tag values as ascii. specification details at https://www.statful.com/docs/metrics-ingestion-protocol.html#Metrics-Ingestion-Protocol
+                    tags[tag] = tvalue.decode("utf-8").encode('ascii', 'ignore').replace(' ', '_').replace(',', '.')
                 else:
                     tags[tag] = tvalue
 
-            entry = self._build_entry(metric['type'], tags, _values, metric['timestamp'] * 1000000000)
-            self._send_queue.appendleft(entry)
+            entries = self._build_entries(metric['type'], tags, _values, metric['timestamp'])
+            for entry in entries:
+                self._send_queue.appendleft(entry)
 
         except Exception as ex:
             self.logger('Error receiving metrics: {0}'.format(ex))
 
     @staticmethod
-    def _build_entry(key, tags, value, timestamp):
+    def _build_entries(key, tags, value, timestamp):
         if isinstance(value, dict):
-                values = ','.join('{0}={1}'.format(vname, vvalue)
-                                  for vname, vvalue in value.iteritems())
-        else:
-            values = 'value={0}'.format(value)
-        return '{0},{1} {2}{3}'.format(key,
+            _entries = []
+            for vname, vvalue in value.iteritems():
+                _entries.append(Statful._build_entry(key, tags, vname, vvalue, timestamp))
+            return _entries
+
+        return [Statful._build_entry(key, tags, None, value, timestamp)]
+
+    @staticmethod
+    def _build_entry(metric, tags, key, value, timestamp):
+        return 'openmotics.{0},{1} {2}{3}'.format(metric if key is None else '{0}.{1}'.format(metric, key),
                                        ','.join('{0}={1}'.format(tname, tvalue)
                                                 for tname, tvalue in tags.iteritems()),
-                                       values,
+                                       value,
                                        '' if timestamp is None else ' {:.0f}'.format(timestamp))
 
     def _sender(self):
@@ -150,12 +144,11 @@ class InfluxDB(OMPluginBase):
                     _run_amount += len(data)
                     _batch_amount += 1
                     _queue_sizes.append(len(self._send_queue))
-                    response = requests.post(url=self._endpoint,
-                                             data='\n'.join(data),
-                                             headers=self._headers,
-                                             auth=self._auth,
-                                             verify=False)
-                    if response.status_code != 204:
+                    response = requests.put(url=Statful.url,
+                                            data='\n'.join(data),
+                                            headers=self._headers,
+                                            verify=False)
+                    if response.status_code != 201:
                         self.logger('Send failed, received: {0} ({1})'.format(response.text, response.status_code))
                     if _stats_time < time.time() - 1800:
                         _stats_time = time.time()
@@ -180,7 +173,7 @@ class InfluxDB(OMPluginBase):
 
     @om_expose
     def get_config_description(self):
-        return json.dumps(InfluxDB.config_description)
+        return json.dumps(Statful.config_description)
 
     @om_expose
     def get_config(self):

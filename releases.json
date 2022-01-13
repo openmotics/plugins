@@ -10,23 +10,23 @@
         },
         {
             "name": "InfluxDB",
-            "checksum": "a4a4d9ec7027a5f515bd3211ff8a6617",
+            "checksum": "eed5883247855c346e1ebb58725ed40c",
             "vendor": "openmotics",
-            "version": "2.0.56",
+            "version": "2.0.61",
             "url": "https://github.com/openmotics/plugins/releases/download/releases/influxdb_${version}.tgz"
         },
         {
             "name": "Ventilation",
-            "checksum": "998be0cb1d681531d2274412d534f235",
+            "checksum": "c050496e5be081d6439e5f08bf1eb2fb",
             "vendor": "openmotics",
-            "version": "2.0.10",
+            "version": "2.0.15",
             "url": "https://github.com/openmotics/plugins/releases/download/releases/ventilation_${version}.tgz"
         },
         {
             "name": "Astro",
-            "checksum": "cc564493767fbfff13b614392eceece9",
+            "checksum": "2afc01d87ad7125f49032c1ecfb47e66",
             "vendor": "openmotics",
-            "version": "0.6.3",
+            "version": "0.6.4",
             "url": "https://github.com/openmotics/plugins/releases/download/releases/astro_${version}.tgz"
         },
         {
@@ -49,6 +49,20 @@
             "vendor": "community",
             "version": "1.0.0",
             "url": "https://github.com/openmotics/plugins/releases/download/third-party/hue_${version}.tgz"
+        },
+        {
+            "name": "SMAWebConnect",
+            "checksum": "604f266afdb7fc8a4ffd3125a97e464b",
+            "vendor": "openmotics",
+            "version": "0.0.25",
+            "url": "https://github.com/openmotics/plugins/releases/download/releases/smawebconnect_${version}.tgz"
+        },
+        {
+            "name": "Polysun",
+            "checksum": "a72a37411597fddd7bb6e912de24ddf4",
+            "vendor": "openmotics",
+            "version": "0.0.11",
+            "url": "https://github.com/openmotics/plugins/releases/download/releases/polysun_${version}.tgz"
         }
     ]
 }
