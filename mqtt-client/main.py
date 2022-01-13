@@ -21,7 +21,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '2.0.0'
+    version = '2.0.1'
     interfaces = [('config', '1.0')]
 
     energy_module_config = {
@@ -366,7 +366,6 @@ class MQTTClient(OMPluginBase):
                 input_config_loaded = False
         return input_config_loaded
 
-
     def _load_output_configuration(self):
         output_config_loaded = True
         if self._output_enabled:
@@ -387,7 +386,6 @@ class MQTTClient(OMPluginBase):
                                                                     'O': 'output',
                                                                     'd': 'dimmer',
                                                                     'D': 'dimmer'}[config['module_type']],
-                                                    'floor': config['floor'],
                                                     'type': 'relay' if config['type'] == 0 else 'light'}
                     for output_id in self._outputs.keys():
                         if output_id not in ids:
