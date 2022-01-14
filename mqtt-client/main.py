@@ -426,7 +426,6 @@ class MQTTClient(OMPluginBase):
                         ids.append(sensor_id)
                         self._sensors[sensor_id] = {'name': config['name'],
                                                     'external_id': str(config['external_id']),
-                                                    'offset': float(config['offset']),
                                                     'physical_quantity': str(config['physical_quantity']),
                                                     'source': config.get('source'),
                                                     'unit': config.get('unit')}
@@ -641,7 +640,7 @@ class MQTTClient(OMPluginBase):
                                'physical_quantity': sensor.get('physical_quantity'),
                                'unit': sensor.get('unit'),
                                'name': sensor.get('name'),
-                               'value': float(sensor_value) + float(sensor.get('offset', 0)),
+                               'value': float(sensor_value),
                                'timestamp': self._timestamp2isoformat()}
                 mqtt_messages.append({'topic': sensor_config.get('topic').format(id=sensor_id),
                                       'message': sensor_data})
