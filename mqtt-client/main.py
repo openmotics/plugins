@@ -21,7 +21,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '2.0.2'
+    version = '2.0.3'
     interfaces = [('config', '1.0')]
 
     energy_module_config = {
@@ -85,57 +85,23 @@ class MQTTClient(OMPluginBase):
         {'name': 'event_status_retain',
          'type': 'bool',
          'description': 'Event status message retain.'},
-        # temperature status
-        {'name': 'temperature_status_enabled',
+        # sensor status
+        {'name': 'sensor_status_enabled',
          'type': 'bool',
-         'description': 'Enable temperature status publishing of messages.'},
-        {'name': 'temperature_status_topic_format',
+         'description': 'Enable sensor status publishing of messages.'},
+        {'name': 'sensor_status_topic_format',
          'type': 'str',
-         'description': 'Temperature status topic format. Default: openmotics/temperature/{id}/state'},
-        {'name': 'temperature_status_qos',
+         'description': 'Sensor status topic format. Default: openmotics/sensor/{id}/state'},
+        {'name': 'sensor_status_qos',
          'type': 'enum',
          'choices': ['0', '1', '2'],
-         'description': 'Temperature status message quality of service. Default: 0'},
-        {'name': 'temperature_status_retain',
+         'description': 'Sensor status message quality of service. Default: 0'},
+        {'name': 'sensor_status_retain',
          'type': 'bool',
-         'description': 'Temperature status message retain.'},
-        {'name': 'temperature_status_poll_frequency',
+         'description': 'Sensor status message retain.'},
+        {'name': 'sensor_status_poll_frequency',
          'type': 'int',
-         'description': 'Polling frequency for temperature status in seconds. Default: 300, minimum: 10'},
-        # humidity status
-        {'name': 'humidity_status_enabled',
-         'type': 'bool',
-         'description': 'Enable humidity status publishing of messages.'},
-        {'name': 'humidity_status_topic_format',
-         'type': 'str',
-         'description': 'Humidity status topic format. Default: openmotics/humidity/{id}/state'},
-        {'name': 'humidity_status_qos',
-         'type': 'enum',
-         'choices': ['0', '1', '2'],
-         'description': 'Humidity status message quality of service. Default: 0'},
-        {'name': 'humidity_status_retain',
-         'type': 'bool',
-         'description': 'Humidity status message retain.'},
-        {'name': 'humidity_status_poll_frequency',
-         'type': 'int',
-         'description': 'Polling frequency for humidity status in seconds. Default: 300, minimum: 10'},
-        # brightness status
-        {'name': 'brightness_status_enabled',
-         'type': 'bool',
-         'description': 'Enable brightness status publishing of messages.'},
-        {'name': 'brightness_status_topic_format',
-         'type': 'str',
-         'description': 'Brightness status topic format. Default: openmotics/brightness/{id}/state'},
-        {'name': 'brightness_status_qos',
-         'type': 'enum',
-         'choices': ['0', '1', '2'],
-         'description': 'Brightness status message quality of service. Default: 0'},
-        {'name': 'brightness_status_retain',
-         'type': 'bool',
-         'description': 'Brightness status message retain. Default: False'},
-        {'name': 'brightness_status_poll_frequency',
-         'type': 'int',
-         'description': 'Polling frequency for brightness status in seconds. Default: 300, minimum: 10'},
+         'description': 'Polling frequency for sensor status in seconds. Default: 300, minimum: 10'},
         # power status
         {'name': 'power_status_enabled',
          'type': 'bool',
@@ -193,15 +159,9 @@ class MQTTClient(OMPluginBase):
         'output_status_qos': 0,
         'event_status_topic_format': 'openmotics/event/{id}/state',
         'event_status_qos': 0,
-        'temperature_status_topic_format': 'openmotics/temperature/{id}/state',
-        'temperature_status_qos': 0,
-        'temperature_status_poll_frequency': 300,
-        'humidity_status_topic_format': 'openmotics/humidity/{id}/state',
-        'humidity_status_qos': 0,
-        'humidity_status_poll_frequency': 300,
-        'brightness_status_topic_format': 'openmotics/brightness/{id}/state',
-        'brightness_status_qos': 0,
-        'brightness_status_poll_frequency': 300,
+        'sensor_status_topic_format': 'openmotics/sensor/{id}/state',
+        'sensor_status_qos': 0,
+        'sensor_status_poll_frequency': 300,
         'power_status_topic_format': 'openmotics/power/{module_id}/{sensor_id}/state',
         'power_status_qos': 0,
         'power_status_poll_frequency': 60,
@@ -262,26 +222,12 @@ class MQTTClient(OMPluginBase):
         self._event_retain  = self._config.get('event_status_retain')
         # sensors
         self._sensor_config = {
-            'temperature': {
-                'enabled':        self._config.get('temperature_status_enabled'),
-                'topic':          self._config.get('temperature_status_topic_format'),
-                'qos':            int(self._config.get('temperature_status_qos')),
-                'retain':         self._config.get('temperature_status_retain'),
-                'poll_frequency': int(self._config.get('temperature_status_poll_frequency'))
-            },
-            'humidity': {
-                'enabled':        self._config.get('humidity_status_enabled'),
-                'topic':          self._config.get('humidity_status_topic_format'),
-                'qos':            int(self._config.get('humidity_status_qos')),
-                'retain':         self._config.get('humidity_status_retain'),
-                'poll_frequency': int(self._config.get('humidity_status_poll_frequency'))
-            },
-            'brightness': {
-                'enabled':        self._config.get('brightness_status_enabled'),
-                'topic':          self._config.get('brightness_status_topic_format'),
-                'qos':            int(self._config.get('brightness_status_qos')),
-                'retain':         self._config.get('brightness_status_retain'),
-                'poll_frequency': int(self._config.get('brightness_status_poll_frequency'))
+            'sensor': {
+                'enabled':        self._config.get('sensor_status_enabled'),
+                'topic':          self._config.get('sensor__status_topic_format'),
+                'qos':            int(self._config.get('sensor__status_qos')),
+                'retain':         self._config.get('sensor__status_retain'),
+                'poll_frequency': int(self._config.get('sensor__status_poll_frequency'))
             },
             'power': {
                 'enabled':        self._config.get('power_status_enabled'),
@@ -298,7 +244,7 @@ class MQTTClient(OMPluginBase):
                 'poll_frequency': int(self._config.get('energy_status_poll_frequency'))
             }
         }
-        self._sensor_enabled = (self._sensor_config.get('temperature').get('enabled') or self._sensor_config.get('humidity').get('enabled') or self._sensor_config.get('brightness').get('enabled'))
+        self._sensor_enabled = self._sensor_config.get('sensor').get('enabled')
         self._power_enabled = (self._sensor_config.get('power').get('enabled') or self._sensor_config.get('energy').get('enabled'))
         # output command
         self._output_command_topic = self._config.get('output_command_topic')
@@ -605,7 +551,7 @@ class MQTTClient(OMPluginBase):
                 self.logger('Error processing event: {0}'.format(ex))
 
     @background_task
-    def background_task_temperature_status(self):
+    def background_task_sensor_status(self):
         self._create_background_task(
             'sensor',
             self.webinterface.get_sensor_status,
