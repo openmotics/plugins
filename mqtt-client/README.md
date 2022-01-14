@@ -134,6 +134,8 @@ More information on how to send these OpenMotics events can be found on the [Ope
 
 ##### Configuration:
 
+:warning: **Backwards incompatible**: This section is backwards incompatible with version 2 of the MQTT CLient plugin!
+
 ![Sensor Configuration Screenshot][config_sensor]
 
 * sensor_status_enabled: Enable OpenMotics to publish sensor status messages on the MQTT broker.
