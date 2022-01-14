@@ -426,7 +426,10 @@ class MQTTClient(OMPluginBase):
                         ids.append(sensor_id)
                         self._sensors[sensor_id] = {'name': config['name'],
                                                     'external_id': str(config['external_id']),
-                                                    'offset': float(config['offset'])}
+                                                    'offset': float(config['offset']),
+                                                    'physical_quantity': str(config['physical_quantity']),
+                                                    'source': config.get('source'),
+                                                    'unit': config.get('unit')}
                     for sensor_id in self._sensors.keys():
                         if sensor_id not in ids:
                             del self._sensors[sensor_id]
@@ -605,24 +608,8 @@ class MQTTClient(OMPluginBase):
     @background_task
     def background_task_temperature_status(self):
         self._create_background_task(
-            'temperature',
-            self.webinterface.get_sensor_temperature_status,
-            self._process_sensor_status
-        )()
-
-    @background_task
-    def background_task_humidity_status(self):
-        self._create_background_task(
-            'humidity',
-            self.webinterface.get_sensor_humidity_status,
-            self._process_sensor_status
-        )()
-
-    @background_task
-    def background_task_brightness_status(self):
-        self._create_background_task(
-            'brightness',
-            self.webinterface.get_sensor_brightness_status,
+            'sensor',
+            self.webinterface.get_sensor_status,
             self._process_sensor_status
         )()
 
@@ -649,7 +636,10 @@ class MQTTClient(OMPluginBase):
             sensor = self._sensors.get(sensor_id)
             if sensor:
                 sensor_data = {'id': sensor_id,
+                               'source': sensor.get('source'),
                                'external_id': sensor.get('external_id'),
+                               'physical_quantity': sensor.get('physical_quantity'),
+                               'unit': sensor.get('unit'),
                                'name': sensor.get('name'),
                                'value': float(sensor_value) + float(sensor.get('offset', 0)),
                                'timestamp': self._timestamp2isoformat()}
