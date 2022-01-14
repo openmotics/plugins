@@ -224,10 +224,10 @@ class MQTTClient(OMPluginBase):
         self._sensor_config = {
             'sensor': {
                 'enabled':        self._config.get('sensor_status_enabled'),
-                'topic':          self._config.get('sensor__status_topic_format'),
-                'qos':            int(self._config.get('sensor__status_qos')),
-                'retain':         self._config.get('sensor__status_retain'),
-                'poll_frequency': int(self._config.get('sensor__status_poll_frequency'))
+                'topic':          self._config.get('sensor_status_topic_format'),
+                'qos':            int(self._config.get('sensor_status_qos')),
+                'retain':         self._config.get('sensor_status_retain'),
+                'poll_frequency': int(self._config.get('sensor_status_poll_frequency'))
             },
             'power': {
                 'enabled':        self._config.get('power_status_enabled'),
