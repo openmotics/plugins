@@ -424,7 +424,9 @@ class MQTTClient(OMPluginBase):
                     for config in result['config']:
                         sensor_id = config['id']
                         ids.append(sensor_id)
-                        self._sensors[sensor_id] = {'name': config['name'], 'offset': float(config['offset'])}
+                        self._sensors[sensor_id] = {'name': config['name'],
+                                                    'external_id': str(config['external_id']),
+                                                    'offset': float(config['offset'])}
                     for sensor_id in self._sensors.keys():
                         if sensor_id not in ids:
                             del self._sensors[sensor_id]
@@ -647,8 +649,9 @@ class MQTTClient(OMPluginBase):
             sensor = self._sensors.get(sensor_id)
             if sensor:
                 sensor_data = {'id': sensor_id,
+                               'external_id': sensor.get('external_id'),
                                'name': sensor.get('name'),
-                               'value': float(sensor_value) + float(sensor.get('offset')),
+                               'value': float(sensor_value) + float(sensor.get('offset', 0)),
                                'timestamp': self._timestamp2isoformat()}
                 mqtt_messages.append({'topic': sensor_config.get('topic').format(id=sensor_id),
                                       'message': sensor_data})
