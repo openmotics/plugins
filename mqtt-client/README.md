@@ -130,110 +130,47 @@ In general all topics contain one or more parameters indicated by a placeholder 
 More information on how to send these OpenMotics events can be found on the [OpenMotics wiki: Action Types](http://wiki.openmotics.com/index.php/Action_Types), number 60.
 
 
-#### Temperature sensor state
+#### Sensor state
 
 ##### Configuration:
 
-![Temperature Configuration Screenshot][config_temperature]
+> :warning: **Backwards incompatible**: This section is backwards incompatible with version 2 of the MQTT CLient plugin!
 
-* temperature_status_enabled: Enable OpenMotics to publish temperature sensor status messages on the MQTT broker.
-* temperature_status_topic_format: Temperature sensor status topic format. Structure: `topic_prefix/{id}/topic_suffix`. Default: `openmotics/temperature/{id}/status`.
-* temperature_status_qos: Temperature status message quality of service. Default: 0. Possible values: 0, 1 or 2.
-* temperature_status_retain: Temperature status message retain. Default unchecked.
+![Sensor Configuration Screenshot][config_sensor]
+
+* sensor_status_enabled: Enable OpenMotics to publish sensor status messages on the MQTT broker.
+* sensor_status_topic_format: Sensor status topic format. Structure: `topic_prefix/{id}/topic_suffix`. Default: `openmotics/sensor/{id}/status`.
+* sensor_status_qos: Sensor status message quality of service. Default: 0. Possible values: 0, 1 or 2.
+* sensor_status_retain: Sensor status message retain. Default unchecked.
 
 ##### Payload:
 ```
 {
     "id": "<sensor id>",
     "name": "<sensor name>",
-    "value": <temperature in degrees Celsius>,
+    "external_id": "<sensor_external_id>",
+    "physical_quantity": "<sensor_physical_quantity>",
+    "unit": "<sensor_unit>",
+    "value": <sensor value in sensor unit>,
     "timestamp": <ISO format timestamp in {timezone}>
 }
 ```
 
 ##### Example:
-* Topic configuration: temperature_status_topic_format = openmotics/temperature/{id}/state
-* Actual topic: openmotics/temperature/3/state
+* Topic configuration: sensor_status_topic_format = openmotics/sensor/{id}/state
+* Actual topic: openmotics/sensor/3/state
 * Actual payload:
 ```
 {
     "id": 3,
+    "external_id": "philips/hue/fab2e1f4b1a",
+    "physical_quantity": "temperature",
+    "unit": "C",
     "name": "Garage",
     "value": 14.5,
     "timestamp": "2020-04-08T15:51:25.707819+00:00"
 }
 ```
-
-
-#### Humidity sensor state
-
-##### Configuration:
-
-![Humidity Configuration Screenshot][config_humidity]
-
-* humidity_status_enabled: Enable OpenMotics to publish humidity sensor status messages on the MQTT broker.
-* humidity_status_topic_format: Humidity sensor status topic format. Structure: `topic_prefix/{id}/topic_suffix`. Default: `openmotics/humidity/{id}/status`.
-* humidity_status_qos: Humidity status message quality of service. Default: 0. Possible values: 0, 1 or 2.
-* humidity_status_retain: Humidity status message retain. Default unchecked.
-
-##### Payload:
-```
-{
-    "id": "<sensor id>",
-    "name": "<sensor name>",
-    "value": <relative humidity in %>,
-    "timestamp": <ISO format timestamp in {timezone}>
-}
-```
-
-##### Example:
-* Topic configuration: humidity_status_topic_format = openmotics/humidity/{id}/state
-* Actual topic: openmotics/humidity/3/state
-* Actual payload:
-```
-{
-    "id": 3,
-    "name": "Garage",
-    "value": 56.5,
-    "timestamp": "2020-04-08T15:51:25.707819+00:00"
-}
-```
-
-
-#### Brightness sensor state
-
-##### Configuration:
-
-![Brightness Configuration Screenshot][config_brightness]
-
-* brightness_status_enabled: Enable OpenMotics to publish brightness sensor status messages on the MQTT broker.
-* brightness_status_topic_format: Brightness sensor status topic format. Structure: `topic_prefix/{id}/topic_suffix`. Default: `openmotics/brightness/{id}/status`.
-* brightness_status_qos: Brightness status message quality of service. Default: 0. Possible values: 0, 1 or 2.
-* brightness_status_retain: Brightness status message retain. Default unchecked.
-
-##### Payload:
-```
-{
-    "id": "<sensor id>",
-    "name": "<sensor name>",
-    "value": <brightness in lux>,
-    "timestamp": <ISO format timestamp in {timezone}>
-}
-```
-
-##### Example:
-* Topic configuration: brightness_status_topic_format = openmotics/brightness/{id}/state
-* Actual topic: openmotics/brightness/3/state
-* Actual payload:
-```
-{
-    "id": 3,
-    "name": "Garage",
-    "value": 596.62,
-    "timestamp": "2020-04-08T15:51:25.707819+00:00"
-}
-```
-
 
 #### Realtime Power state
 
@@ -363,9 +300,7 @@ Timezone used in payloads
 [config_input]: images/config_input.png "Configuration inputs"
 [config_output]: images/config_output.png "Configuration outputs"
 [config_event]: images/config_event.png "Configuration events"
-[config_temperature]: images/config_temperature.png "Configuration temperature sensors"
-[config_humidity]: images/config_humidity.png "Configuration humidity sensors"
-[config_brightness]: images/config_brightness.png "Configuration brightness sensors"
+[config_sensor]: images/config_temperature.png "Configuration sensors"
 [config_power]: images/config_power.png "Configuration realtime power"
 [config_energy]: images/config_energy.png "Configuration total energy"
 [config_output_command]: images/config_output_command.png "Configuration output command"
