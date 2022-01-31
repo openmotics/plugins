@@ -233,10 +233,10 @@ class Astro(OMPluginBase):
                                                                              action['data']['group_action_id'],
                                                                              action['source']))
                 elif action['task'] == 'bit':
-                    self.logger('* {0}: {1} Validation Bit {2} ({3}'.format(Astro._format_date(date),
-                                                                            action['data']['action'].capitalize(),
-                                                                            action['data']['bit_id'],
-                                                                            action['source']))
+                    self.logger('* {0}: {1} Validation Bit {2} ({3})'.format(Astro._format_date(date),
+                                                                             action['data']['action'].capitalize(),
+                                                                             action['data']['bit_id'],
+                                                                             action['source']))
 
     def _sleep_manager(self):
         while True:
