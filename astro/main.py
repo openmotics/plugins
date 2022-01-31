@@ -18,45 +18,51 @@ class Astro(OMPluginBase):
     """
 
     name = 'Astro'
-    version = '0.6.4'
+    version = '1.0.0'
     interfaces = [('config', '1.0')]
 
-    config_description = [{'name': 'location',
+    config_description = [{'name': 'coordinates',
                            'type': 'str',
-                           'description': 'A written location to be translated to coordinates using Google. Leave empty and provide coordinates below to prevent using the Google services.'},
-                          {'name': 'coordinates',
-                           'type': 'str',
-                           'description': 'Coordinates in the form of `lat;long` where both are a decimal numbers with dot as decimal separator. Leave empty to fill automatically using the location above.'},
-                          {'name': 'horizon_bit',
-                           'type': 'int',
-                           'description': 'The bit that indicates whether it is day. -1 when not in use.'},
-                          {'name': 'civil_bit',
-                           'type': 'int',
-                           'description': 'The bit that indicates whether it is day or civil twilight. -1 when not in use.'},
-                          {'name': 'nautical_bit',
-                           'type': 'int',
-                           'description': 'The bit that indicates whether it is day, civil or nautical twilight. -1 when not in use.'},
-                          {'name': 'astronomical_bit',
-                           'type': 'int',
-                           'description': 'The bit that indicates whether it is day, civil, nautical or astronomical twilight. -1 when not in use.'},
-                          {'name': 'bright_bit',
-                           'type': 'int',
-                           'description': 'The bit that indicates the brightest part of the day. -1 when not in use.'},
-                          {'name': 'bright_offset',
-                           'type': 'int',
-                           'description': 'The offset (in minutes) after sunrise and before sunset on which the bright_bit should be set.'},
-                          {'name': 'group_action',
-                           'type': 'int',
-                           'description': 'The ID of a Group Action to be called when another zone is entered. -1 when not in use.'}]
+                           'description': 'Coordinates in the form of `lat;long`.'},
+                          {'name': 'basic_configuration',
+                           'type': 'section',
+                           'description': 'Executing automations at a certain point',
+                           'repeat': True, 'min': 0,
+                           'content': [{'name': 'group_action_id',
+                                        'type': 'int',
+                                        'description': 'The Id of the Group Action / Automation that needs to be executed'},
+                                       {'name': 'sun_location',
+                                        'type': 'enum',
+                                        'description': 'The location of the sun at this point',
+                                        'choices': ['solar noon',
+                                                    'sunset', 'civil dawn', 'nautical dawn', 'astronomical dawn',
+                                                    'astronomical dusk', 'nautical dusk', 'civil dusk', 'sunrise']},
+                                       {'name': 'offset',
+                                        'type': 'int',
+                                        'description': 'Offset in minutes before (negative value) or after (positive value) the given sun location'}]},
+                          {'name': 'advanced_configuration',
+                           'type': 'section',
+                           'description': 'Setting/clearing validation bit at a certain point',
+                           'repeat': True, 'min': 0,
+                           'content': [{'name': 'action',
+                                        'type': 'enum',
+                                        'description': 'Whether to set or clear the validation bit',
+                                        'choices': ['set', 'clear']},
+                                       {'name': 'bit_id',
+                                        'type': 'int',
+                                        'description': 'The Id of the Validaten Bit that needs to set/cleared'},
+                                       {'name': 'sun_location',
+                                        'type': 'enum',
+                                        'description': 'The location of the sun at this point',
+                                        'choices': ['solar noon',
+                                                    'sunset', 'civil dawn', 'nautical dawn', 'astronomical dawn',
+                                                    'astronomical dusk', 'nautical dusk', 'civil dusk', 'sunrise']},
+                                       {'name': 'offset',
+                                        'type': 'int',
+                                        'description': 'Offset in minutes before (negative value) or after (positive value) the given sun location'}]}
+                          ]
 
-    default_config = {'location': 'Brussels,Belgium',
-                      'horizon_bit': -1,
-                      'civil_bit': -1,
-                      'nautical_bit': -1,
-                      'astronomical_bit': -1,
-                      'bright_bit': -1,
-                      'bright_offset': 60,
-                      'group_action': -1}
+    default_config = {}
 
     def __init__(self, webinterface, logger):
         super(Astro, self).__init__(webinterface, logger)
@@ -69,12 +75,15 @@ class Astro(OMPluginBase):
         if pytz_egg not in sys.path:
             sys.path.insert(0, pytz_egg)
 
-        self._bright_bit = -1
-        self._horizon_bit = -1
-        self._civil_bit = -1
-        self._nautical_bit = -1
-        self._astronomical_bit = -1
-        self._previous_bits = [None, None, None, None, None]
+        self._latitude = None
+        self._longitude = None
+
+        self._group_actions = {}
+        self._bits = {}
+
+        self._last_request_date = None
+        self._execution_plan = {}
+
         self._sleeper = Event()
         self._sleep_until = 0
 
@@ -86,79 +95,148 @@ class Astro(OMPluginBase):
         self.logger("Started Astro plugin")
 
     def _read_config(self):
-        for bit in ['bright_bit', 'horizon_bit', 'civil_bit', 'nautical_bit', 'astronomical_bit']:
-            try:
-                value = int(self._config.get(bit, Astro.default_config[bit]))
-            except ValueError:
-                value = Astro.default_config[bit]
-            setattr(self, '_{0}'.format(bit), value)
         try:
-            self._bright_offset = int(self._config.get('bright_offset', Astro.default_config['bright_offset']))
-        except ValueError:
-            self._bright_offset = Astro.default_config['bright_offset']
-        try:
-            self._group_action = int(self._config.get('group_action', Astro.default_config['group_action']))
-        except ValueError:
-            self._group_action = Astro.default_config['group_action']
+            import pytz
+            from pytz import reference
+            enabled = True
+        except ImportError:
+            self.logger('Could not import pytz')
+            enabled = False
 
-        self._previous_bits = [None, None, None, None, None]
-        self._coordinates = None
-        self._enabled = False
+        if enabled:
+            # Parse coordinates
+            coordinates = self._config.get('coordinates', '').strip()
+            match = re.match(r'^(-?\d+[\.,]\d+).*?[;,/].*?(-?\d+[\.,]\d+)$', coordinates)
+            if match:
+                latitude = match.group(1)
+                if ',' in latitude:
+                    latitude = latitude.replace(',', '.')
+                longitude = match.group(2)
+                if ',' in longitude:
+                    longitude = longitude.replace(',', '.')
+                try:
+                    self._latitude = float(latitude)
+                    self._longitude = float(longitude)
+                    self._print_coordinate_time()
+                except ValueError as ex:
+                    self.logger('Could not parse coordinates: {0}'.format(ex))
+                    enabled = False
+            else:
+                self.logger('Could not parse coordinates')
+                enabled = False
 
-        coordinates = self._config.get('coordinates', '').strip()
-        match = re.match(r'^(-?\d+\.\d+);(-?\d+\.\d+)$', coordinates)
-        if match:
-            self._latitude = match.group(1)
-            self._longitude = match.group(2)
-            self._enable_plugin()
-        else:
-            thread = Thread(target=self._translate_address)
-            thread.start()
-            self.logger('Astro is disabled')
+        if enabled:
+            # Parse group actions
+            group_actions = {}
+            for entry in self._config.get('basic_configuration', []):
+                sun_location = entry.get('sun_location')
+                if not sun_location:
+                    continue
+                try:
+                    group_action_id = int(entry.get('group_action_id'))
+                except ValueError:
+                    continue
+                try:
+                    offset = int(entry.get('offset', 0))
+                except ValueError:
+                    offset = 0
+                actions = group_actions.setdefault(sun_location, [])
+                actions.append({'group_action_id': group_action_id,
+                                'offset': offset})
+            self._group_actions = group_actions
 
-    def _translate_address(self):
-        wait = 0
-        location = self._config.get('location', '').strip()
-        if not location:
-            self.logger('No coordinates and no location. Please fill in one of both to enable the Astro plugin.')
-            return
-        while True:
-            api = 'https://maps.googleapis.com/maps/api/geocode/json?address={0}'.format(location)
-            try:
-                coordinates = requests.get(api).json()
-                if coordinates['status'] == 'OK':
-                    self._latitude = coordinates['results'][0]['geometry']['location']['lat']
-                    self._longitude = coordinates['results'][0]['geometry']['location']['lng']
-                    self._config['coordinates'] = '{0};{1}'.format(self._latitude, self._longitude)
-                    self.write_config(self._config)
-                    self._enable_plugin()
-                    return
-                error = coordinates['status']
-            except Exception as ex:
-                error = ex.message
-            if wait == 0:
-                wait = 1
-            elif wait == 1:
-                wait = 5
-            elif wait < 60:
-                wait = wait + 5
-            self.logger('Error calling Google Maps API, waiting {0} minutes to try again: {1}'.format(wait, error))
-            time.sleep(wait * 60)
-            if self._enabled is True:
-                return  # It might have been set in the mean time
+            # Parse bits
+            bits = {}
+            for entry in self._config.get('advanced_configuration', []):
+                sun_location = entry.get('sun_location')
+                if not sun_location:
+                    continue
+                action = entry.get('action', 'clear')
+                try:
+                    bit_id = int(entry.get('bit_id'))
+                except ValueError:
+                    continue
+                try:
+                    offset = int(entry.get('offset', 0))
+                except ValueError:
+                    offset = 0
+                actions = bits.setdefault(sun_location, [])
+                actions.append({'bit_id': bit_id,
+                                'action': action,
+                                'offset': offset})
+            self._bits = bits
 
-    def _enable_plugin(self):
+        self._print_actions()
+        self._enabled = enabled and (self._group_actions or self._bits)
+        self._last_request_date = None
+        self.logger('Astro is {0}abled'.format('en' if self._enabled else 'dis'))
+        self._sleeper.set()
+
+    @staticmethod
+    def _format_date(date, timezone=None):
+        from pytz import reference
+
+        if timezone is None:
+            timezone = reference.LocalTimezone()
+        if date.tzinfo is None:
+            date = date.replace(tzinfo=reference.LocalTimezone())
+        return date.astimezone(timezone).strftime('%Y-%m-%d %H:%M')
+
+    @staticmethod
+    def _format_offset(offset):
+        return ' with a {0} min offset'.format(
+            '+{0}'.format(offset) if offset > 0 else offset
+        ) if offset else ''
+
+    def _print_coordinate_time(self):
         import pytz
-        now = datetime.now(pytz.utc)
-        local_now = datetime.now()
-        self.logger('Latitude: {0} - Longitude: {1}'.format(self._latitude, self._longitude))
-        self.logger('It\'s now {0} Local time'.format(local_now.strftime('%Y-%m-%d %H:%M:%S')))
-        self.logger('It\'s now {0} UTC'.format(now.strftime('%Y-%m-%d %H:%M:%S')))
-        self.logger('Astro is enabled')
-        self._enabled = True
-        # Trigger complete recalculation
-        self._previous_bits = [None, None, None, None, None]
-        self._sleep_until = 0
+
+        now = datetime.now()
+        self.logger('Location:')
+        self.logger('* Latitude: {0} - Longitude: {1}'.format(self._latitude, self._longitude))
+        self.logger('* Time: {0} local time, {1} UTC'.format(Astro._format_date(now),
+                                                             Astro._format_date(now, timezone=pytz.UTC)))
+
+    def _print_actions(self):
+        sun_locations = set(self._group_actions.keys()) | set(self._bits.keys())
+        if sun_locations:
+            self.logger('Configured actions:')
+        for sun_location in sun_locations:
+            group_actions = self._group_actions.get(sun_location, [])
+            bits = self._bits.get(sun_location, [])
+            for entry in group_actions:
+                self.logger('* At {0}{1}: Execute Automation {2}'.format(
+                    sun_location,
+                    Astro._format_offset(entry['offset']),
+                    entry['group_action_id']
+                ))
+            for entry in bits:
+                self.logger('* At {0}{1}: {2} Validation Bit {3}'.format(
+                    sun_location,
+                    Astro._format_offset(entry['offset']),
+                    entry['action'].capitalize(),
+                    entry['bit_id']
+                ))
+
+    def _print_execution_plan(self):
+        if not self._execution_plan:
+            self.logger('Empty execution plan for {0}'.format(self._last_request_date.strftime('%Y-%m-%d')))
+            return
+        self.logger('Execution plan for {0}:'.format(self._last_request_date.strftime('%Y-%m-%d')))
+        for date in sorted(self._execution_plan.keys()):
+            date_plan = self._execution_plan.get(date, [])
+            if not date_plan:
+                continue
+            for action in date_plan:
+                if action['task'] == 'group_action':
+                    self.logger('* {0}: Execute Automation {1} ({2})'.format(Astro._format_date(date),
+                                                                             action['data']['group_action_id'],
+                                                                             action['source']))
+                elif action['task'] == 'bit':
+                    self.logger('* {0}: {1} Validation Bit {2} ({3}'.format(Astro._format_date(date),
+                                                                            action['data']['action'].capitalize(),
+                                                                            action['data']['bit_id'],
+                                                                            action['source']))
 
     def _sleep_manager(self):
         while True:
@@ -171,151 +249,144 @@ class Astro(OMPluginBase):
         self._sleeper.clear()
         self._sleeper.wait()
 
-    @staticmethod
-    def _convert(dt_string):
+    def _convert(self, dt_string):
         import pytz
-        date = datetime.strptime(dt_string, '%Y-%m-%dT%H:%M:%S+00:00')
-        date = pytz.utc.localize(date)
-        if date.year == 1970:
+
+        if dt_string is None:
             return None
-        return date
+        try:
+            date = datetime.strptime(dt_string, '%Y-%m-%dT%H:%M:%S+00:00')
+            date = pytz.utc.localize(date)
+            if date.year == 1970:
+                return None
+            return date
+        except Exception as ex:
+            self.logger('Could not parse date {0}: {1}'.format(dt_string, ex))
+            return None
 
     @background_task
     def run(self):
-        import pytz
-        self._previous_bits = [None, None, None, None, None]
         while True:
-            if self._enabled:
-                now = datetime.now(pytz.utc)
-                local_now = datetime.now()
-                local_tomorrow = datetime(local_now.year, local_now.month, local_now.day) + timedelta(days=1)
-                try:
-                    data = requests.get('http://api.sunrise-sunset.org/json?lat={0}&lng={1}&date={2}&formatted=0'.format(
-                        self._latitude, self._longitude, local_now.strftime('%Y-%m-%d')
-                    )).json()
-                    sleep = 24 * 60 * 60
-                    bits = [True, True, True, True, True]  # ['bright', day, civil, nautical, astronomical]
-                    if data['status'] == 'OK':
-                        # Load data
-                        sunrise = Astro._convert(data['results']['sunrise'])
-                        sunset = Astro._convert(data['results']['sunset'])
-                        has_sun = sunrise is not None and sunset is not None
-                        if has_sun is True:
-                            bright_start = sunrise + timedelta(minutes=self._bright_offset)
-                            bright_end = sunset - timedelta(minutes=self._bright_offset)
-                            has_bright = bright_start < bright_end
-                        else:
-                            has_bright = False
-                        civil_start = Astro._convert(data['results']['civil_twilight_begin'])
-                        civil_end = Astro._convert(data['results']['civil_twilight_end'])
-                        has_civil = civil_start is not None and civil_end is not None
-                        nautical_start = Astro._convert(data['results']['nautical_twilight_begin'])
-                        nautical_end = Astro._convert(data['results']['nautical_twilight_end'])
-                        has_nautical = nautical_start is not None and nautical_end is not None
-                        astronomical_start = Astro._convert(data['results']['astronomical_twilight_begin'])
-                        astronomical_end = Astro._convert(data['results']['astronomical_twilight_end'])
-                        has_astronomical = astronomical_start is not None and astronomical_end is not None
-                        # Analyse data
-                        if not any([has_sun, has_civil, has_nautical, has_astronomical]):
-                            # This is an educated guess; Polar day (sun never sets) and polar night (sun never rises) can
-                            # happen in the polar circles. However, since we have far more "gradients" in the night part,
-                            # polar night (as defined here - pitch black) only happens very close to the poles. So it's
-                            # unlikely this plugin is used there.
-                            info = 'polar day'
-                            bits = [True, True, True, True, True]
-                            sleep = (local_tomorrow - local_now).total_seconds()
-                        else:
-                            if has_bright is False:
-                                bits[0] = False
-                            else:
-                                bits[0] = bright_start < now < bright_end
-                                if bits[0] is True:
-                                    sleep = min(sleep, int((bright_end - now).total_seconds()))
-                                elif now < bright_start:
-                                    sleep = min(sleep, int((bright_start - now).total_seconds()))
-                            if has_sun is False:
-                                bits[1] = False
-                            else:
-                                bits[1] = sunrise < now < sunset
-                                if bits[1] is True:
-                                    sleep = min(sleep, (sunset - now).total_seconds())
-                                elif now < sunrise:
-                                    sleep = min(sleep, (sunrise - now).total_seconds())
-                            if has_civil is False:
-                                if has_sun is True:
-                                    bits[2] = not bits[1]
-                                else:
-                                    bits[2] = False
-                            else:
-                                bits[2] = civil_start < now < civil_end
-                                if bits[2] is True:
-                                    sleep = min(sleep, (civil_end - now).total_seconds())
-                                elif now < sunrise:
-                                    sleep = min(sleep, (civil_start - now).total_seconds())
-                            if has_nautical is False:
-                                if has_sun is True or has_civil is True:
-                                    bits[3] = not bits[2]
-                                else:
-                                    bits[3] = False
-                            else:
-                                bits[3] = nautical_start < now < nautical_end
-                                if bits[3] is True:
-                                    sleep = min(sleep, (nautical_end - now).total_seconds())
-                                elif now < sunrise:
-                                    sleep = min(sleep, (nautical_start - now).total_seconds())
-                            if has_astronomical is False:
-                                if has_sun is True or has_civil is True or has_nautical is True:
-                                    bits[4] = not bits[3]
-                                else:
-                                    bits[4] = False
-                            else:
-                                bits[4] = astronomical_start < now < astronomical_end
-                                if bits[4] is True:
-                                    sleep = min(sleep, (astronomical_end - now).total_seconds())
-                                elif now < sunrise:
-                                    sleep = min(sleep, (astronomical_start - now).total_seconds())
-                            sleep = min(sleep, int((local_tomorrow - local_now).total_seconds()))
-                            info = 'night'
-                            if bits[4] is True:
-                                info = 'astronimical twilight'
-                            if bits[3] is True:
-                                info = 'nautical twilight'
-                            if bits[2] is True:
-                                info = 'civil twilight'
-                            if bits[1] is True:
-                                info = 'day'
-                            if bits[0] is True:
-                                info = 'day (bright)'
-                        # Set bits in system
-                        for index, bit in {0: self._bright_bit,
-                                           1: self._horizon_bit,
-                                           2: self._civil_bit,
-                                           3: self._nautical_bit,
-                                           4: self._astronomical_bit}.iteritems():
-                            if bit > -1:
-                                result = json.loads(self.webinterface.do_basic_action(None, 237 if bits[index] else 238, bit))
-                                if result['success'] is False:
-                                    self.logger('Failed to set bit {0} to {1}'.format(bit, 1 if bits[index] else 0))
-                        if self._previous_bits != bits:
-                            if self._group_action != -1:
-                                result = json.loads(self.webinterface.do_basic_action(None, 2, self._group_action))
-                                if result['success'] is True:
-                                    self.logger('Group Action {0} triggered'.format(self._group_action))
-                                else:
-                                    self.logger('Failed to trigger Group Action {0}'.format(self._group_action))
-                            self._previous_bits = bits
-                        self.logger('It\'s {0}. Going to sleep for {1} seconds'.format(info, round(sleep, 1)))
-                        self._sleep(time.time() + sleep + 5)
-                    else:
-                        self.logger('Could not load data: {0}'.format(data['status']))
-                        sleep = (local_tomorrow - local_now).total_seconds()
-                        self._sleep(time.time() + sleep + 5)
-                except Exception as ex:
-                    self.logger('Error figuring out where the sun is: {0}'.format(ex))
-                    sleep = (local_tomorrow - local_now).total_seconds()
-                    self._sleep(time.time() + sleep + 5)
-            else:
+            from pytz import reference
+
+            if not self._enabled:
                 self._sleep(time.time() + 30)
+                continue
+
+            now = datetime.now(reference.LocalTimezone())
+            today = datetime(now.year, now.month, now.day,
+                             tzinfo=reference.LocalTimezone())
+            tomorrow = today + timedelta(days=1)
+            try:
+                if today != self._last_request_date:
+                    self._last_request_date = today
+                    self._build_execution_plan(now=now, date=now)
+                    self._print_execution_plan()
+
+                if not self._execution_plan:
+                    self.logger('Suspending. Wakeup scheduled at {0}...'.format(Astro._format_date(tomorrow)))
+                    sleep = (tomorrow - now).total_seconds()
+                    self._sleep(time.time() + sleep + 5)
+                    continue
+
+                next_action_date = tomorrow
+                next_action_delta = timedelta(days=2)
+                for date in list(self._execution_plan.keys()):
+                    delta = abs(date - now)
+                    if delta > timedelta(minutes=5):
+                        if date > now and delta < next_action_delta:
+                            next_action_date = date
+                            next_action_delta = delta
+                        continue
+                    plan = self._execution_plan.get(date, [])
+                    if plan:
+                        self.logger('Executing plan...')
+                    for entry in plan:
+                        if entry['task'] == 'group_action':
+                            group_action_id = entry['data']['group_action_id']
+                            try:
+                                result = json.loads(self.webinterface.do_basic_action(action_type=2,
+                                                                                      action_number=group_action_id))
+                                if not result.get('success'):
+                                    raise RuntimeError(result.get('msg', 'Unknown error'))
+                                self.logger('* Executing Automation {0}: Done'.format(group_action_id))
+                            except Exception as ex:
+                                self.logger('* Executing Automation {0} failed: {1}'.format(group_action_id, ex))
+                        elif entry['task'] == 'bit':
+                            bit_id = entry['data']['bit_id']
+                            action_words = 'Setting' if entry['data']['action'] == 'set' else 'Clearing'
+                            action = 237 if entry['data']['action'] == 'set' else 238
+                            try:
+                                result = json.loads(self.webinterface.do_basic_action(action_type=action,
+                                                                                      action_number=bit_id))
+                                if not result.get('success'):
+                                    raise RuntimeError(result.get('msg', 'Unknown error'))
+                                self.logger('* {0} Validation Bit {1}: Done'.format(action_words, bit_id))
+                            except Exception as ex:
+                                self.logger('* {0} Validation Bit {1} failed: {2}'.format(action_words, bit_id, ex))
+                    self._execution_plan.pop(date, None)
+                self.logger('Processing complete')
+                self.logger('Suspending. Wakeup scheduled at {0}...'.format(Astro._format_date(next_action_date)))
+                sleep = (next_action_date - now).total_seconds()
+                self._sleep(time.time() + sleep + 5)
+            except Exception as ex:
+                self.logger('Unexpected error while processing: {0}'.format(ex))
+                self.logger('Suspending. Wakeup scheduled at {0}...'.format(Astro._format_date(tomorrow)))
+                sleep = (tomorrow - now).total_seconds()
+                self._sleep(time.time() + sleep + 5)
+
+    def _build_execution_plan(self, now, date):
+        try:
+            data = requests.get('http://api.sunrise-sunset.org/json?lat={0}&lng={1}&date={2}&formatted=0'.format(
+                self._latitude, self._longitude, date.strftime('%Y-%m-%d')
+            )).json()
+            if data['status'] != 'OK':
+                raise RuntimeError(data['status'])
+            execution_plan = {}
+            field_map = {'solar noon': 'solar_noon',
+                         'sunset': 'sunset',
+                         'civil dawn': 'civil_twilight_end',
+                         'nautical dawn': 'nautical_twilight_end',
+                         'astronomical dawn': 'astronomical_twilight_end',
+                         'astronomical dusk': 'astronomical_twilight_begin',
+                         'nautical dusk': 'nautical_twilight_begin',
+                         'civil dusk': 'civil_twilight_begin',
+                         'sunrise': 'sunrise'}
+            for sun_location in set(self._group_actions.keys()) | set(self._bits.keys()):
+                group_actions = self._group_actions.get(sun_location, [])
+                bits = self._bits.get(sun_location, [])
+                if not group_actions and not bits:
+                    continue
+                date = self._convert(data['results'].get(field_map.get(sun_location, 'x')))
+                if date is None:
+                    continue
+                for entry in group_actions:
+                    entry_date = date + timedelta(minutes=entry['offset'])
+                    if entry_date < now:
+                        continue
+                    date_plan = execution_plan.setdefault(entry_date, [])
+                    date_plan.append({'task': 'group_action',
+                                      'source': '{0}{1}'.format(
+                                          sun_location,
+                                          Astro._format_offset(entry['offset'])
+                                      ),
+                                      'data': {'group_action_id': entry['group_action_id']}})
+                for entry in bits:
+                    entry_date = date + timedelta(minutes=entry['offset'])
+                    if entry_date < now:
+                        continue
+                    date_plan = execution_plan.setdefault(entry_date, [])
+                    date_plan.append({'task': 'bit',
+                                      'source': '{0}{1}'.format(
+                                          sun_location,
+                                          Astro._format_offset(entry['offset'])
+                                      ),
+                                      'data': {'action': entry['action'],
+                                               'bit_id': entry['bit_id']}})
+            self._execution_plan = execution_plan
+        except Exception as ex:
+            self.logger('Could not load data: {0}'.format(ex))
+            self._execution_plan = {}
 
     @om_expose
     def get_config_description(self):

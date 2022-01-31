@@ -3,6 +3,51 @@
 An astronomical plugin for providing the system with astronomical data (e.g. whether it's day or not, based on sunset/sunrise).
 A configuration example is described ath the bottom of the page.
 
+This documentation is for the Astro plugin version 1.x. Users currently using Astro 0.x are
+strongly advised to update and change all required configurations and/or Automations.
+
+**TODO: Remove the legacy configuration below**
+
+## Configuration
+
+### coordinates
+
+The key element for configuring the plugin are the coordinates of where the Gateway is located. These
+can be obtained by using a service such as Google Maps. When double-clicking on a location, the 
+URL will hold the coordinates.
+
+For example: `https://www.google.be/maps/@51.1149958,3.7771295,13.43z`
+
+Extracted coordinates: `51.1149958,3.7771295` (can be copied as-is in the configuration)
+
+### Basic configuration
+
+The easiest way to use the Astro plugin is to execute Automations (Group Actions) on certain sun
+locations (with optional offset). These can be used to turn on/off outputs, or perform various other actions.
+
+### Advanced configuration
+
+It's also possible to set or clear a Validation Bit at certain sun locations (with optional offset). These validation bits
+can be used in for example advanced Input configuration, or to directly enable/disable input or outputs.
+
+## Sun location
+
+The system uses a set of specific sun locations, all of which can be offset with time in minutes.
+
+* Solar noon. Remark: Highest point of the sun, regardless of whether the sun is above the horizon or not.
+* Sunrise/sunset. Remark: When the sun passes the visible horizon depends on the horizon features such as mountains
+* Civil dusk/dawn: Remark: Civil twilight is when typically no artificial lights are needed for 
+  outdoor activities
+* Nautical dusk/dawn
+* Astronomical dusk/dawn
+
+![Twilight](https://upload.wikimedia.org/wikipedia/commons/thumb/d/d2/Twilight_subcategories.svg/500px-Twilight_subcategories.svg.png)
+
+Image by TWCarlson [CC BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0) or [GFDL](http://www.gnu.org/copyleft/fdl.html), via Wikimedia 
+Commons. More can be read on [Wikipedia](https://en.wikipedia.org/wiki/Twilight).
+
+# Astro 0.x (legacy, will be removed)
+
 ## Configuration
 
 ```
