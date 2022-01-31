@@ -10,7 +10,7 @@ strongly advised to update and change all required configurations and/or Automat
 
 ## Configuration
 
-### coordinates
+### Coordinates
 
 The key element for configuring the plugin are the coordinates of where the Gateway is located. These
 can be obtained by using a service such as Google Maps. When double-clicking on a location, the 
@@ -35,7 +35,8 @@ can be used in for example advanced Input configuration, or to directly enable/d
 The system uses a set of specific sun locations, all of which can be offset with time in minutes.
 
 * Solar noon. Remark: Highest point of the sun, regardless of whether the sun is above the horizon or not.
-* Sunrise/sunset. Remark: When the sun passes the visible horizon depends on the horizon features such as mountains
+* Sunrise/sunset. Remark: This is the technical 0 degrees point. When the sun actually passes the visible horizon depends on the horizon features
+  such as mountains and will be different from this point. 
 * Civil dusk/dawn: Remark: Civil twilight is when typically no artificial lights are needed for 
   outdoor activities
 * Nautical dusk/dawn

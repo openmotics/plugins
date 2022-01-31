@@ -38,7 +38,7 @@ class Astro(OMPluginBase):
                                                     'sunset', 'civil dawn', 'nautical dawn', 'astronomical dawn',
                                                     'astronomical dusk', 'nautical dusk', 'civil dusk', 'sunrise']},
                                        {'name': 'offset',
-                                        'type': 'int',
+                                        'type': 'str',
                                         'description': 'Offset in minutes before (negative value) or after (positive value) the given sun location'}]},
                           {'name': 'advanced_configuration',
                            'type': 'section',
@@ -58,7 +58,7 @@ class Astro(OMPluginBase):
                                                     'sunset', 'civil dawn', 'nautical dawn', 'astronomical dawn',
                                                     'astronomical dusk', 'nautical dusk', 'civil dusk', 'sunrise']},
                                        {'name': 'offset',
-                                        'type': 'int',
+                                        'type': 'str',
                                         'description': 'Offset in minutes before (negative value) or after (positive value) the given sun location'}]}
                           ]
 
