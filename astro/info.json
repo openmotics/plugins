@@ -1,0 +1,6 @@
+{
+	"version" : "1.0.0",
+	"description" : "Astro",
+	"metric_source"  : "astro",
+	"metric_type" : "astro"
+}
