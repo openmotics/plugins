@@ -11,12 +11,7 @@ strongly advised to update and change all required configurations and/or Automat
 ### Coordinates
 
 The key element for configuring the plugin are the coordinates of where the Gateway/Brain/Brain+ module is located. These
-can be obtained by using a service such as Google Maps. When double-clicking on a location, the 
-URL will hold the coordinates.
-
-For example: `https://www.google.be/maps/@51.1149958,3.7771295,13.43z`
-
-Extracted coordinates: `51.1149958,3.7771295` (can be copied as-is in the configuration)
+can be obtained by using a service such as Google Maps (see example below) or other services.
 
 ### Basic configuration
 
