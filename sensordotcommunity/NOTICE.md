@@ -1,6 +1,6 @@
 OpenMotics Cloud
 
-Copyright 2018 OpenMotics BVBA
+Copyright 2022 OpenMotics BVBA
 
 This product includes and/or uses software developed by third parties. This
 software is listed below in no particular order, together with their licenses. The
@@ -15,10 +15,6 @@ INCLUDED AND/OR USED SOFTWARE
 
     Simple json                 MIT
         Copyright (c) 2006 Bob Ippolito
-
-    Philips HUE (https://meethue.com)
-        Use of HUE API according to conditions of use:
-        * https://www.developers.meethue.com/philips-hue-api
 
 LICENSES
 
