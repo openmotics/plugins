@@ -1,14 +1,8 @@
-"""
-A Hue plugin, for controlling lights connected to your Hue Bridge
-"""
 import logging
-import time
-import requests
-import simplejson as json
-from threading import Thread, Lock
-from plugins.base import om_expose, output_status, OMPluginBase, PluginConfigChecker, background_task, PluginWebResponse
+import json
+from plugin_runtime.base import om_expose, OMPluginBase, PluginConfigChecker, PluginWebResponse
+
 from .plugin_logs import PluginLogHandler
-from Queue import Queue, Empty
 
 if False:  # MYPY
     from typing import Dict, List, Optional, Callable
@@ -19,7 +13,7 @@ logger = logging.getLogger('openmotics')
 class SensorDotCommunity(OMPluginBase):
 
     name = 'SensorDotCommunity'
-    version = '1.0.0'
+    version = '1.0.1'
     interfaces = [('config', '1.0')]
 
     config_description = []
