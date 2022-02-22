@@ -16,7 +16,7 @@ class Pushsafer(OMPluginBase):
     """
 
     name = 'Pushsafer'
-    version = '2.1.0'
+    version = '2.1.1'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'privatekey',
@@ -85,6 +85,10 @@ class Pushsafer(OMPluginBase):
         self.logger('Pushsafer is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     def convert(self, data):
+        try:
+            basestring
+        except NameError:
+            basestring = str
         if isinstance(data, basestring):
             return str(data)
         elif isinstance(data, collections.Mapping):

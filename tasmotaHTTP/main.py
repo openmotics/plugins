@@ -14,7 +14,7 @@ class TasmotaHTTP(OMPluginBase):
     """
 
     name = 'tasmotaHTTP'
-    version = '1.0.0'
+    version = '1.0.1'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'refresh_interval',
@@ -107,6 +107,10 @@ class TasmotaHTTP(OMPluginBase):
     @om_expose
     def set_config(self, config):
         config = json.loads(config)
+        try:
+            basestring
+        except NameError:
+            basestring = str
         for key in config:
             if isinstance(config[key], basestring):
                 config[key] = str(config[key])

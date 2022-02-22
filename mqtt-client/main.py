@@ -21,7 +21,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '3.0.0'
+    version = '3.0.2'
     interfaces = [('config', '1.0')]
 
     energy_module_config = {
@@ -729,6 +729,10 @@ class MQTTClient(OMPluginBase):
     def set_config(self, config):
         try:
             config = json.loads(config)
+            try:
+                basestring
+            except NameError:
+                basestring = str
             for key in config:
                 if isinstance(config[key], basestring):
                     config[key] = str(config[key])

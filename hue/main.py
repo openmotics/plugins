@@ -8,7 +8,12 @@ import simplejson as json
 from threading import Thread, Lock
 from plugins.base import om_expose, output_status, OMPluginBase, PluginConfigChecker, background_task
 from .plugin_logs import PluginLogHandler
-from Queue import Queue, Empty
+
+try:
+    from queue import Queue, Empty
+except ModuleNotFoundError:
+    from Queue import Queue, Empty
+
 
 if False:  # MYPY
     from typing import Dict, List, Optional, Callable
@@ -19,7 +24,7 @@ logger = logging.getLogger('openmotics')
 class Hue(OMPluginBase):
 
     name = 'Hue'
-    version = '1.1.0'
+    version = '1.1.2'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_url',
@@ -295,6 +300,10 @@ class Hue(OMPluginBase):
     def set_config(self, config):
         config = json.loads(config)
         for key in config:
+            try:
+                basestring
+            except NameError:
+                basestring = str
             if isinstance(config[key], basestring):
                 config[key] = str(config[key])
         self._config_checker.check_config(config)

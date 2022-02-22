@@ -15,7 +15,7 @@ class Pushetta(OMPluginBase):
     """
 
     name = 'Pushetta'
-    version = '1.0.12'
+    version = '1.0.13'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_key',
@@ -59,6 +59,10 @@ class Pushetta(OMPluginBase):
         self._enabled = self._api_key != '' and self._input_id > -1 and self._channel != '' and self._message != ''
 
     def convert(self,data):
+        try:
+            basestring
+        except NameError:
+            basestring = str
         if isinstance(data,basestring):
             return str(data)
         elif isinstance(data,collections.Mapping):

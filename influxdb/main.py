@@ -10,13 +10,15 @@ from collections import deque
 from plugins.base import om_expose, OMPluginBase, PluginConfigChecker, om_metric_receive
 
 
+
+
 class InfluxDB(OMPluginBase):
     """
     An InfluxDB plugin, for sending statistics to InfluxDB
     """
 
     name = 'InfluxDB'
-    version = '2.0.61'
+    version = '2.0.62'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -93,11 +95,15 @@ class InfluxDB(OMPluginBase):
             _values = {}
             for key in values.keys()[:]:
                 value = values[key]
+                try:
+                    basestring
+                except NameError:
+                    basestring = str
                 if isinstance(value, basestring):
                     value = '"{0}"'.format(value)
                 if isinstance(value, bool):
                     value = str(value)
-                if isinstance(value, int) or isinstance(value, long):
+                if isinstance(value, int):
                     value = '{0}i'.format(value)
                 _values[key] = value
 
@@ -189,6 +195,10 @@ class InfluxDB(OMPluginBase):
     @om_expose
     def set_config(self, config):
         config = json.loads(config)
+        try:
+            basestring
+        except NameError:
+            basestring = str
         for key in config:
             if isinstance(config[key], basestring):
                 config[key] = str(config[key])

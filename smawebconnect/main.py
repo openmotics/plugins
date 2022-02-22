@@ -27,7 +27,7 @@ class SMAWebConnect(OMPluginBase):
     """
 
     name = 'SMAWebConnect'
-    version = '0.0.34'
+    version = '0.0.35'
     interfaces = [('config', '1.0'), ('metrics', '1.0')]
 
     counter_device_types = ['gas', 'heat', 'water', 'electricity']
@@ -394,6 +394,10 @@ class SMAWebConnect(OMPluginBase):
     @om_expose
     def set_config(self, config):
         config = json.loads(config)
+        try:
+            basestring
+        except NameError:
+            basestring = str
         for key in config:
             if isinstance(config[key], basestring):
                 config[key] = str(config[key])

@@ -17,7 +17,7 @@ class Statful(OMPluginBase):
     """
 
     name = 'Statful'
-    version = '1.0.0'
+    version = '1.0.1'
     url = 'https://api.statful.com/tel/v2.0/metrics'
     interfaces = [('config', '1.0')]
 
@@ -78,13 +78,17 @@ class Statful(OMPluginBase):
 
             values = metric['values']
             _values = {}
+            try:
+                basestring
+            except NameError:
+                basestring = str
             for key in values.keys()[:]:
                 value = values[key]
                 if isinstance(value, basestring):
                     value = '"{0}"'.format(value)
                 if isinstance(value, bool):
                     value = int(value == True)
-                if isinstance(value, int) or isinstance(value, long):
+                if isinstance(value, int):
                     value = '{0}'.format(value)
                 _values[key] = value
 
@@ -182,6 +186,10 @@ class Statful(OMPluginBase):
     @om_expose
     def set_config(self, config):
         config = json.loads(config)
+        try:
+            basestring
+        except NameError:
+            basestring = str
         for key in config:
             if isinstance(config[key], basestring):
                 config[key] = str(config[key])

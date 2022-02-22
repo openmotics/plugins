@@ -15,7 +15,7 @@ class Fibaro(OMPluginBase):
     """
 
     name = 'Fibaro'
-    version = '2.0.17'
+    version = '2.0.18'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
@@ -204,6 +204,10 @@ class Fibaro(OMPluginBase):
     @om_expose
     def set_config(self, config):
         config = json.loads(config)
+        try:
+            basestring
+        except NameError:
+            basestring = str
         for key in config:
             if isinstance(config[key], basestring):
                 config[key] = str(config[key])

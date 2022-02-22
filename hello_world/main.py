@@ -85,3 +85,5 @@ class HelloWorldPlugin(OMPluginBase):
     def say_hello(self):
         name = self._config['first_name']
         logger.info(f" welcome {name}")
+
+
