@@ -1,7 +1,7 @@
 """
 An astronomical plugin, for providing the system with astronomical data (e.g. whether it's day or not, based on the sun's location)
 """
-
+import six
 import re
 import sys
 import time
@@ -399,12 +399,8 @@ class Astro(OMPluginBase):
     @om_expose
     def set_config(self, config):
         config = json.loads(config)
-        try:
-            basestring
-        except NameError:
-            basestring = str
         for key in config:
-            if isinstance(config[key], basestring):
+            if isinstance(config[key], six.string_types):
                 config[key] = str(config[key])
         self._config_checker.check_config(config)
         self._config = config

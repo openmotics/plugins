@@ -16,7 +16,7 @@
 """
 A Polysun plugin
 """
-
+import six
 import time
 import simplejson as json
 from collections import deque
@@ -223,12 +223,8 @@ class Polysun(OMPluginBase):
     @om_expose
     def set_config(self, config):
         config = json.loads(config)
-        try:
-            basestring
-        except NameError:
-            basestring = str
         for key in config:
-            if isinstance(config[key], basestring):
+            if isinstance(config[key], six.string_types):
                 config[key] = str(config[key])
         self._config_checker.check_config(config)
         self._config = config

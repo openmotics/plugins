@@ -2,7 +2,7 @@
 """
 An Statful plugin, for sending metrics to Statful (adapted from InfluxDB plugin)
 """
-
+import six
 import time
 import requests
 import simplejson as json
@@ -78,25 +78,21 @@ class Statful(OMPluginBase):
 
             values = metric['values']
             _values = {}
-            try:
-                basestring
-            except NameError:
-                basestring = str
             for key in values.keys()[:]:
                 value = values[key]
-                if isinstance(value, basestring):
+                if isinstance(value, six.string_types):
                     value = '"{0}"'.format(value)
                 if isinstance(value, bool):
                     value = int(value == True)
-                if isinstance(value, int):
+                if isinstance(value, int) or isinstance(value, six.integer_types):
                     value = '{0}'.format(value)
                 _values[key] = value
 
             tags = {'source': metric['source'].lower()}
             if self._add_custom_tag:
                 tags['custom_tag'] = self._add_custom_tag
-            for tag, tvalue in metric['tags'].iteritems():
-                if isinstance(tvalue, basestring):
+            for tag, tvalue in six.iteritems(metric['tags']):
+                if isinstance(tvalue, six.string_types):
                     # send tag values as ascii. specification details at https://www.statful.com/docs/metrics-ingestion-protocol.html#Metrics-Ingestion-Protocol
                     tags[tag] = tvalue.decode("utf-8").encode('ascii', 'ignore').replace(' ', '_').replace(',', '.')
                 else:
@@ -113,7 +109,7 @@ class Statful(OMPluginBase):
     def _build_entries(key, tags, value, timestamp):
         if isinstance(value, dict):
             _entries = []
-            for vname, vvalue in value.iteritems():
+            for vname, vvalue in six.iteritems(value):
                 _entries.append(Statful._build_entry(key, tags, vname, vvalue, timestamp))
             return _entries
 
@@ -123,7 +119,7 @@ class Statful(OMPluginBase):
     def _build_entry(metric, tags, key, value, timestamp):
         return 'openmotics.{0},{1} {2}{3}'.format(metric if key is None else '{0}.{1}'.format(metric, key),
                                        ','.join('{0}={1}'.format(tname, tvalue)
-                                                for tname, tvalue in tags.iteritems()),
+                                                for tname, tvalue in six.iteritems(tags)),
                                        value,
                                        '' if timestamp is None else ' {:.0f}'.format(timestamp))
 
@@ -186,12 +182,8 @@ class Statful(OMPluginBase):
     @om_expose
     def set_config(self, config):
         config = json.loads(config)
-        try:
-            basestring
-        except NameError:
-            basestring = str
         for key in config:
-            if isinstance(config[key], basestring):
+            if isinstance(config[key], six.string_types):
                 config[key] = str(config[key])
         self._config_checker.check_config(config)
         self._config = config

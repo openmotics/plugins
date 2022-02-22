@@ -2,7 +2,7 @@
 An MQTT client plugin for sending/receiving data to/from an MQTT broker.
 For more info: https://github.com/openmotics/plugins/blob/master/mqtt-client/README.md
 """
-
+import six
 import sys
 import re
 import time
@@ -729,12 +729,8 @@ class MQTTClient(OMPluginBase):
     def set_config(self, config):
         try:
             config = json.loads(config)
-            try:
-                basestring
-            except NameError:
-                basestring = str
             for key in config:
-                if isinstance(config[key], basestring):
+                if isinstance(config[key], six.string_types):
                     config[key] = str(config[key])
             self._config_checker.check_config(config)
             self._config = config

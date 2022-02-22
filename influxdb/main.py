@@ -1,7 +1,7 @@
 """
 An InfluxDB plugin, for sending statistics to InfluxDB
 """
-
+import six
 import time
 import requests
 import simplejson as json
@@ -95,15 +95,11 @@ class InfluxDB(OMPluginBase):
             _values = {}
             for key in values.keys()[:]:
                 value = values[key]
-                try:
-                    basestring
-                except NameError:
-                    basestring = str
-                if isinstance(value, basestring):
+                if isinstance(value, six.string_types):
                     value = '"{0}"'.format(value)
                 if isinstance(value, bool):
                     value = str(value)
-                if isinstance(value, int):
+                if isinstance(value, int) or isinstance(value, six.integer_types):
                     value = '{0}i'.format(value)
                 _values[key] = value
 
@@ -111,7 +107,7 @@ class InfluxDB(OMPluginBase):
             if self._add_custom_tag:
                 tags['custom_tag'] = self._add_custom_tag
             for tag, tvalue in metric['tags'].iteritems():
-                if isinstance(tvalue, basestring):
+                if isinstance(tvalue, six.string_types):
                     tags[tag] = tvalue.replace(' ', '\ ').replace(',', '\,')
                 else:
                     tags[tag] = tvalue
@@ -195,12 +191,8 @@ class InfluxDB(OMPluginBase):
     @om_expose
     def set_config(self, config):
         config = json.loads(config)
-        try:
-            basestring
-        except NameError:
-            basestring = str
         for key in config:
-            if isinstance(config[key], basestring):
+            if isinstance(config[key], six.string_types):
                 config[key] = str(config[key])
         self._config_checker.check_config(config)
         self._config = config

@@ -1,7 +1,7 @@
 """
 A Pushetta (http://www.pushetta.com) plugin for pushing events through Pushetta
 """
-
+import six
 import requests
 import collections
 import simplejson as json
@@ -59,14 +59,10 @@ class Pushetta(OMPluginBase):
         self._enabled = self._api_key != '' and self._input_id > -1 and self._channel != '' and self._message != ''
 
     def convert(self,data):
-        try:
-            basestring
-        except NameError:
-            basestring = str
-        if isinstance(data,basestring):
+        if isinstance(data, six.string_types):
             return str(data)
         elif isinstance(data,collections.Mapping):
-            return dict(map(self.convert, data.iteritems()))
+            return dict(map(self.convert, six.iteritems(data)))
         elif isinstance(data,collections.Iterable):
             return type(data)(map(self.convert,data))
         else:

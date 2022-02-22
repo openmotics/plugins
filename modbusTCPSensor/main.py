@@ -1,7 +1,7 @@
 """
 Get sensor values from modbus
 """
-
+import six
 import sys
 import time
 import struct
@@ -172,12 +172,8 @@ class ModbusTCPSensor(OMPluginBase):
     @om_expose
     def set_config(self, config):
         config = json.loads(config)
-        try:
-            basestring
-        except NameError:
-            basestring = str
         for key in config:
-            if isinstance(config[key], basestring):
+            if isinstance(config[key], six.string_types):
                 config[key] = str(config[key])
         self._config_checker.check_config(config)
         self.write_config(config)

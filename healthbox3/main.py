@@ -1,7 +1,7 @@
 """
 A Healthbox 3 plugin, for reading and controlling your Renson Healthbox 3
 """
-
+import six
 import requests
 import simplejson as json
 import time
@@ -66,7 +66,7 @@ class Healthbox(OMPluginBase):
                     for key, value in input.items()}
         elif isinstance(input, list):
             return [self._byteify(element) for element in input]
-        elif isinstance(input, unicode):
+        elif isinstance(input, six.text_type):
             return input.encode('utf-8')
         else:
             return input
@@ -169,12 +169,8 @@ class Healthbox(OMPluginBase):
     @om_expose
     def set_config(self, config):
         config = json.loads(config)
-        try:
-            basestring
-        except NameError:
-            basestring = str
         for key in config:
-            if isinstance(config[key], basestring):
+            if isinstance(config[key], six.string_types):
                 config[key] = str(config[key])
         self._config_checker.check_config(config)
         self._config = config

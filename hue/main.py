@@ -1,18 +1,18 @@
 """
 A Hue plugin, for controlling lights connected to your Hue Bridge
 """
+import six
 import logging
 import time
 import requests
 import simplejson as json
+from six.moves.queue import Queue, Empty
 from threading import Thread, Lock
 from plugins.base import om_expose, output_status, OMPluginBase, PluginConfigChecker, background_task
 from .plugin_logs import PluginLogHandler
 
-try:
-    from queue import Queue, Empty
-except ModuleNotFoundError:
-    from Queue import Queue, Empty
+
+
 
 
 if False:  # MYPY
@@ -300,11 +300,7 @@ class Hue(OMPluginBase):
     def set_config(self, config):
         config = json.loads(config)
         for key in config:
-            try:
-                basestring
-            except NameError:
-                basestring = str
-            if isinstance(config[key], basestring):
+            if isinstance(config[key], six.string_types):
                 config[key] = str(config[key])
         self._config_checker.check_config(config)
         self._config = config
