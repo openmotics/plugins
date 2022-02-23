@@ -2,6 +2,7 @@
 A plugin to let two Gateways work together
 """
 
+import six
 import time
 import requests
 import simplejson as json
@@ -15,7 +16,7 @@ class Syncer(OMPluginBase):
     """
 
     name = 'Syncer'
-    version = '0.0.1'
+    version = '0.0.2'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'gateway_ip',
@@ -180,7 +181,7 @@ class Syncer(OMPluginBase):
     def set_config(self, config):
         config = json.loads(config)
         for key in config:
-            if isinstance(config[key], basestring):
+            if isinstance(config[key], six.string_types):
                 config[key] = str(config[key])
         self._config_checker.check_config(config)
         self._config = config

@@ -2,6 +2,7 @@
 A Pushsafer (http://www.pushsafer.com) plugin for pushing events through Pushsafer
 """
 
+import six
 import collections
 import time
 import requests
@@ -16,7 +17,7 @@ class Pushsafer(OMPluginBase):
     """
 
     name = 'Pushsafer'
-    version = '2.1.0'
+    version = '2.1.1'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'privatekey',
@@ -85,10 +86,10 @@ class Pushsafer(OMPluginBase):
         self.logger('Pushsafer is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     def convert(self, data):
-        if isinstance(data, basestring):
+        if isinstance(data, six.string_types):
             return str(data)
         elif isinstance(data, collections.Mapping):
-            return dict(map(self.convert, data.iteritems()))
+            return dict(map(self.convert, data.items()))
         elif isinstance(data, collections.Iterable):
             return type(data)(map(self.convert, data))
         else:
