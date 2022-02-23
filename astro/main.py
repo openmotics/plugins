@@ -1,6 +1,7 @@
 """
 An astronomical plugin, for providing the system with astronomical data (e.g. whether it's day or not, based on the sun's location)
 """
+
 import six
 import re
 import sys

@@ -1,6 +1,7 @@
 """
 A Pushetta (http://www.pushetta.com) plugin for pushing events through Pushetta
 """
+
 import six
 import requests
 import collections
@@ -62,7 +63,7 @@ class Pushetta(OMPluginBase):
         if isinstance(data, six.string_types):
             return str(data)
         elif isinstance(data,collections.Mapping):
-            return dict(map(self.convert, six.iteritems(data)))
+            return dict(map(self.convert, data.items()))
         elif isinstance(data,collections.Iterable):
             return type(data)(map(self.convert,data))
         else:

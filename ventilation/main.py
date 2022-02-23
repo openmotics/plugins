@@ -1,6 +1,7 @@
 """
 A ventilation plugin, using statistical humidity data or the dew point to control the ventilation
 """
+
 import six
 import time
 import math

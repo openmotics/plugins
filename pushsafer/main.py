@@ -1,6 +1,7 @@
 """
 A Pushsafer (http://www.pushsafer.com) plugin for pushing events through Pushsafer
 """
+
 import six
 import collections
 import time
@@ -88,7 +89,7 @@ class Pushsafer(OMPluginBase):
         if isinstance(data, six.string_types):
             return str(data)
         elif isinstance(data, collections.Mapping):
-            return dict(map(self.convert, six.iteritems(data)))
+            return dict(map(self.convert, data.items()))
         elif isinstance(data, collections.Iterable):
             return type(data)(map(self.convert, data))
         else:

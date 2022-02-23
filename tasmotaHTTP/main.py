@@ -1,6 +1,7 @@
 """
 An Tasmota HTTP plugin
 """
+
 import six
 import time
 import requests

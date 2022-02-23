@@ -16,6 +16,7 @@
 """
 A Polysun plugin
 """
+
 import six
 import time
 import simplejson as json

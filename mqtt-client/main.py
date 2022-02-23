@@ -2,6 +2,7 @@
 An MQTT client plugin for sending/receiving data to/from an MQTT broker.
 For more info: https://github.com/openmotics/plugins/blob/master/mqtt-client/README.md
 """
+
 import six
 import sys
 import re
@@ -21,7 +22,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '3.0.2'
+    version = '3.0.1'
     interfaces = [('config', '1.0')]
 
     energy_module_config = {

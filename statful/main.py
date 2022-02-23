@@ -2,6 +2,7 @@
 """
 An Statful plugin, for sending metrics to Statful (adapted from InfluxDB plugin)
 """
+
 import six
 import time
 import requests
@@ -84,14 +85,14 @@ class Statful(OMPluginBase):
                     value = '"{0}"'.format(value)
                 if isinstance(value, bool):
                     value = int(value == True)
-                if isinstance(value, int) or isinstance(value, six.integer_types):
+                if isinstance(value, six.integer_types):
                     value = '{0}'.format(value)
                 _values[key] = value
 
             tags = {'source': metric['source'].lower()}
             if self._add_custom_tag:
                 tags['custom_tag'] = self._add_custom_tag
-            for tag, tvalue in six.iteritems(metric['tags']):
+            for tag, tvalue in metric['tags'].items():
                 if isinstance(tvalue, six.string_types):
                     # send tag values as ascii. specification details at https://www.statful.com/docs/metrics-ingestion-protocol.html#Metrics-Ingestion-Protocol
                     tags[tag] = tvalue.decode("utf-8").encode('ascii', 'ignore').replace(' ', '_').replace(',', '.')
@@ -109,7 +110,7 @@ class Statful(OMPluginBase):
     def _build_entries(key, tags, value, timestamp):
         if isinstance(value, dict):
             _entries = []
-            for vname, vvalue in six.iteritems(value):
+            for vname, vvalue in value.items():
                 _entries.append(Statful._build_entry(key, tags, vname, vvalue, timestamp))
             return _entries
 
@@ -119,7 +120,7 @@ class Statful(OMPluginBase):
     def _build_entry(metric, tags, key, value, timestamp):
         return 'openmotics.{0},{1} {2}{3}'.format(metric if key is None else '{0}.{1}'.format(metric, key),
                                        ','.join('{0}={1}'.format(tname, tvalue)
-                                                for tname, tvalue in six.iteritems(tags)),
+                                                for tname, tvalue in tags.items()),
                                        value,
                                        '' if timestamp is None else ' {:.0f}'.format(timestamp))
 

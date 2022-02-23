@@ -1,6 +1,7 @@
 """
 A Hue plugin, for controlling lights connected to your Hue Bridge
 """
+
 import six
 import logging
 import time
@@ -10,8 +11,6 @@ from threading import Thread, Lock
 from six.moves.queue import Queue, Empty
 from plugins.base import om_expose, output_status, OMPluginBase, PluginConfigChecker, background_task, PluginWebResponse
 from .plugin_logs import PluginLogHandler
-
-
 
 if False:  # MYPY
     from typing import Dict, List, Optional, Callable

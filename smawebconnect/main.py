@@ -12,6 +12,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 import six
 import time
 import requests
@@ -124,7 +125,7 @@ class SMAWebConnect(OMPluginBase):
                                         'type': 'gauge', 'unit': 'Boolean'}] +
                                       [{'name': entry['name'], 'description': entry['description'],
                                         'unit': entry['unit'], 'type': entry['type']}
-                                       for entry in six.itervalues(FIELD_MAPPING)]}]
+                                        for entry in FIELD_MAPPING.values()]}]
 
     def __init__(self, webinterface, logger):
         super(SMAWebConnect, self).__init__(webinterface, logger)
@@ -243,7 +244,7 @@ class SMAWebConnect(OMPluginBase):
         if data is None:
             raise RuntimeError('Unexpected response: {0}'.format(response))
         self._log_debug('Read values (ip: {0}, serial number: {1}):'.format(ip, serial))
-        for key, info in six.iteritems(SMAWebConnect.FIELD_MAPPING):
+        for key, info in SMAWebConnect.FIELD_MAPPING.items():
             name = info['name']
             unit = info['unit']
             if key in data:

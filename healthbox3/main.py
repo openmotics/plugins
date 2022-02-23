@@ -1,6 +1,7 @@
 """
 A Healthbox 3 plugin, for reading and controlling your Renson Healthbox 3
 """
+
 import six
 import requests
 import simplejson as json

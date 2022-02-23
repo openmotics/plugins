@@ -1,6 +1,7 @@
 """
 An OpenWeatherMap plugin
 """
+
 import six
 import time
 import requests
@@ -155,7 +156,7 @@ class OpenWeatherMap(OMPluginBase):
                         self.logger('Error while fetching UV index: {0}'.format(ex))
                 # Push all sensor data
                 try:
-                    for sensor_id, values in six.iteritems(sensor_values):
+                    for sensor_id, values in sensor_values.items():
                         if values != previous_values.get(sensor_id, []):
                             self.logger('Updating sensor {0} to temp: {1}, humidity: {2}'.format(sensor_id,
                                                                                                  values[0] if values[0] is not None else '-',

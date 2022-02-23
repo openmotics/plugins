@@ -1,6 +1,7 @@
 """
 An InfluxDB plugin, for sending statistics to InfluxDB
 """
+
 import six
 import time
 import requests
@@ -8,8 +9,6 @@ import simplejson as json
 from threading import Thread
 from collections import deque
 from plugins.base import om_expose, OMPluginBase, PluginConfigChecker, om_metric_receive
-
-
 
 
 class InfluxDB(OMPluginBase):
@@ -99,7 +98,7 @@ class InfluxDB(OMPluginBase):
                     value = '"{0}"'.format(value)
                 if isinstance(value, bool):
                     value = str(value)
-                if isinstance(value, int) or isinstance(value, six.integer_types):
+                if isinstance(value, six.integer_types):
                     value = '{0}i'.format(value)
                 _values[key] = value
 

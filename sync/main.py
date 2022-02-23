@@ -1,6 +1,7 @@
 """
 A plugin to let two Gateways work together
 """
+
 import six
 import time
 import requests

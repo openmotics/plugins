@@ -1,6 +1,7 @@
 """
 A Fibaro plugin, for controlling devices in your Fibaro Home Center (lite)
 """
+
 import six
 import time
 import requests

@@ -1,6 +1,7 @@
 """
 Get sensor values from modbus
 """
+
 import six
 import sys
 import time
