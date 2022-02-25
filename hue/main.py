@@ -210,7 +210,7 @@ class Hue(OMPluginBase):
         hue_sensors = {}
         response = requests.get(url=self._endpoint.format('sensors'))
         if response.status_code is 200:
-            for hue_sensor_id, data in response.json().iteritems():
+            for hue_sensor_id, data in response.json().items():
                 if data.get('type') == 'ZLLTemperature':
                     hue_sensors[hue_sensor_id] = self._parseSensorObject(hue_sensor_id, data, sensor_type='temperature')
         else:
@@ -221,7 +221,7 @@ class Hue(OMPluginBase):
         hue_lights = {}
         response = requests.get(url=self._endpoint.format('lights'))
         if response.status_code is 200:
-            for hue_light_id, data in response.json().iteritems():
+            for hue_light_id, data in response.json().items():
                 hue_lights[hue_light_id] = self._parseLightObject(hue_light_id, data)
         else:
             logger.error('Failed to pull state for all outputs (HTTP %s)', response.status_code)
@@ -269,10 +269,10 @@ class Hue(OMPluginBase):
 
     def log_remote_asset_list(self):
         hue_lights = self._getAllLightsState()
-        for hue_id, hue_light in hue_lights.iteritems():
+        for hue_id, hue_light in hue_lights.items():
             logger.info('Discovered hue output %s (hue id: %s)', hue_light.get('name'), hue_id)
         hue_sensors = self._getAllSensorsState()
-        for hue_id, hue_sensor in hue_sensors.iteritems():
+        for hue_id, hue_sensor in hue_sensors.items():
             logger.info('Discovered hue sensor %s (hue id: %s)', hue_sensor.get('name'), hue_id)
 
     def start_state_poller(self):
@@ -315,7 +315,7 @@ class Hue(OMPluginBase):
                         _latest_value_buffer[hue_light_id] = (status, dimmer)  # this will ensure only the latest value is taken
                     except Empty:
                         break
-                for hue_light_id, (status, dimmer) in _latest_value_buffer.iteritems():
+                for hue_light_id, (status, dimmer) in _latest_value_buffer.items():
                     self._send(hue_light_id, status, dimmer)
                     self.sleep(0.1)  # "throttle" requests to the bridge to avoid overloading
             except Exception as ex:
