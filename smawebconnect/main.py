@@ -231,6 +231,7 @@ class SMAWebConnect(OMPluginBase):
             endpoint = '{0}/dyn/getValues.json?sid={1}'.format(ip, sid)
             response = requests.post(endpoint,
                                      json={'destDev': [], 'keys': SMAWebConnect.FIELD_MAPPING.keys()},
+                                     timeout=10,
                                      verify=False).json()
             if response.get('err') == 401:
                 self._login(sma_device)
