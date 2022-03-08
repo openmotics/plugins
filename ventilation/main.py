@@ -2,6 +2,7 @@
 A ventilation plugin, using statistical humidity data or the dew point to control the ventilation
 """
 
+import six
 import time
 import math
 import traceback
@@ -18,7 +19,7 @@ class Ventilation(OMPluginBase):
     """
 
     name = 'Ventilation'
-    version = '2.0.15'
+    version = '2.0.16'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
@@ -462,7 +463,7 @@ class Ventilation(OMPluginBase):
     def set_config(self, config):
         config = json.loads(config)
         for key in config:
-            if isinstance(config[key], basestring):
+            if isinstance(config[key], six.string_types):
                 config[key] = str(config[key])
         self._config_checker.check_config(config)
         self._config = config

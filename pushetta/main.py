@@ -2,6 +2,7 @@
 A Pushetta (http://www.pushetta.com) plugin for pushing events through Pushetta
 """
 
+import six
 import requests
 import collections
 import simplejson as json
@@ -15,7 +16,7 @@ class Pushetta(OMPluginBase):
     """
 
     name = 'Pushetta'
-    version = '1.0.12'
+    version = '1.0.13'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_key',
@@ -59,10 +60,10 @@ class Pushetta(OMPluginBase):
         self._enabled = self._api_key != '' and self._input_id > -1 and self._channel != '' and self._message != ''
 
     def convert(self,data):
-        if isinstance(data,basestring):
+        if isinstance(data, six.string_types):
             return str(data)
         elif isinstance(data,collections.Mapping):
-            return dict(map(self.convert, data.iteritems()))
+            return dict(map(self.convert, data.items()))
         elif isinstance(data,collections.Iterable):
             return type(data)(map(self.convert,data))
         else:

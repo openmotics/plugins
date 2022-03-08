@@ -2,6 +2,7 @@
 A Fibaro plugin, for controlling devices in your Fibaro Home Center (lite)
 """
 
+import six
 import time
 import requests
 import simplejson as json
@@ -15,7 +16,7 @@ class Fibaro(OMPluginBase):
     """
 
     name = 'Fibaro'
-    version = '2.0.17'
+    version = '2.0.18'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
@@ -205,7 +206,7 @@ class Fibaro(OMPluginBase):
     def set_config(self, config):
         config = json.loads(config)
         for key in config:
-            if isinstance(config[key], basestring):
+            if isinstance(config[key], six.string_types):
                 config[key] = str(config[key])
         self._config_checker.check_config(config)
         self._config = config

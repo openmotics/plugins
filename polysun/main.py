@@ -17,6 +17,7 @@
 A Polysun plugin
 """
 
+import six
 import time
 import simplejson as json
 from collections import deque
@@ -37,7 +38,7 @@ class Polysun(OMPluginBase):
         DOWN = 'down'
 
     name = 'Polysun'
-    version = '0.1.5'
+    version = '0.1.6'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'mapping',
@@ -224,7 +225,7 @@ class Polysun(OMPluginBase):
     def set_config(self, config):
         config = json.loads(config)
         for key in config:
-            if isinstance(config[key], basestring):
+            if isinstance(config[key], six.string_types):
                 config[key] = str(config[key])
         self._config_checker.check_config(config)
         self._config = config

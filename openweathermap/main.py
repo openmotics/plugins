@@ -2,6 +2,7 @@
 An OpenWeatherMap plugin
 """
 
+import six
 import time
 import requests
 import simplejson as json
@@ -14,7 +15,7 @@ class OpenWeatherMap(OMPluginBase):
     """
 
     name = 'OpenWeatherMap'
-    version = '1.0.0'
+    version = '1.0.1'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_key',
@@ -155,7 +156,7 @@ class OpenWeatherMap(OMPluginBase):
                         self.logger('Error while fetching UV index: {0}'.format(ex))
                 # Push all sensor data
                 try:
-                    for sensor_id, values in sensor_values.iteritems():
+                    for sensor_id, values in sensor_values.items():
                         if values != previous_values.get(sensor_id, []):
                             self.logger('Updating sensor {0} to temp: {1}, humidity: {2}'.format(sensor_id,
                                                                                                  values[0] if values[0] is not None else '-',
@@ -186,7 +187,7 @@ class OpenWeatherMap(OMPluginBase):
     def set_config(self, config):
         config = json.loads(config)
         for key in config:
-            if isinstance(config[key], basestring):
+            if isinstance(config[key], six.string_types):
                 config[key] = str(config[key])
         self._config_checker.check_config(config)
         self._config = config

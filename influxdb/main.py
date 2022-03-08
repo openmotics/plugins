@@ -2,6 +2,7 @@
 An InfluxDB plugin, for sending statistics to InfluxDB
 """
 
+import six
 import time
 import requests
 import simplejson as json
@@ -16,7 +17,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '2.0.61'
+    version = '2.0.62'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -93,11 +94,11 @@ class InfluxDB(OMPluginBase):
             _values = {}
             for key in values.keys()[:]:
                 value = values[key]
-                if isinstance(value, basestring):
+                if isinstance(value, six.string_types):
                     value = '"{0}"'.format(value)
                 if isinstance(value, bool):
                     value = str(value)
-                if isinstance(value, int) or isinstance(value, long):
+                if isinstance(value, six.integer_types):
                     value = '{0}i'.format(value)
                 _values[key] = value
 
@@ -105,7 +106,7 @@ class InfluxDB(OMPluginBase):
             if self._add_custom_tag:
                 tags['custom_tag'] = self._add_custom_tag
             for tag, tvalue in metric['tags'].iteritems():
-                if isinstance(tvalue, basestring):
+                if isinstance(tvalue, six.string_types):
                     tags[tag] = tvalue.replace(' ', '\ ').replace(',', '\,')
                 else:
                     tags[tag] = tvalue
@@ -190,7 +191,7 @@ class InfluxDB(OMPluginBase):
     def set_config(self, config):
         config = json.loads(config)
         for key in config:
-            if isinstance(config[key], basestring):
+            if isinstance(config[key], six.string_types):
                 config[key] = str(config[key])
         self._config_checker.check_config(config)
         self._config = config

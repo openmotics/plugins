@@ -2,6 +2,7 @@
 An Tasmota HTTP plugin
 """
 
+import six
 import time
 import requests
 import simplejson as json
@@ -14,7 +15,7 @@ class TasmotaHTTP(OMPluginBase):
     """
 
     name = 'tasmotaHTTP'
-    version = '1.0.0'
+    version = '1.0.1'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'refresh_interval',
@@ -108,7 +109,7 @@ class TasmotaHTTP(OMPluginBase):
     def set_config(self, config):
         config = json.loads(config)
         for key in config:
-            if isinstance(config[key], basestring):
+            if isinstance(config[key], six.string_types):
                 config[key] = str(config[key])
         self._config_checker.check_config(config)
         self._config = config
