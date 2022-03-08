@@ -2,5 +2,8 @@
 *.tgz
 *.md5
 
+#OS
+.DS_Store
+
 # Editors
 .idea

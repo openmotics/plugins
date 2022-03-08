@@ -28,7 +28,7 @@ class SMAWebConnect(OMPluginBase):
     """
 
     name = 'SMAWebConnect'
-    version = '0.0.35'
+    version = '0.0.36'
     interfaces = [('config', '1.0'), ('metrics', '1.0')]
 
     counter_device_types = ['gas', 'heat', 'water', 'electricity']
@@ -232,6 +232,7 @@ class SMAWebConnect(OMPluginBase):
             endpoint = '{0}/dyn/getValues.json?sid={1}'.format(ip, sid)
             response = requests.post(endpoint,
                                      json={'destDev': [], 'keys': SMAWebConnect.FIELD_MAPPING.keys()},
+                                     timeout=10,
                                      verify=False).json()
             if response.get('err') == 401:
                 self._login(sma_device)
