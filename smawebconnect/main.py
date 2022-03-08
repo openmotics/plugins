@@ -28,7 +28,7 @@ class SMAWebConnect(OMPluginBase):
     """
 
     name = 'SMAWebConnect'
-    version = '0.0.35'
+    version = '0.0.36'
     interfaces = [('config', '1.0'), ('metrics', '1.0')]
 
     counter_device_types = ['gas', 'heat', 'water', 'electricity']
