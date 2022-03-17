@@ -19,7 +19,7 @@ class Astro(OMPluginBase):
     """
 
     name = 'Astro'
-    version = '1.0.1'
+    version = '1.0.2'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'coordinates',
@@ -346,12 +346,12 @@ class Astro(OMPluginBase):
             execution_plan = {}
             field_map = {'solar noon': 'solar_noon',
                          'sunset': 'sunset',
-                         'civil dawn': 'civil_twilight_end',
-                         'nautical dawn': 'nautical_twilight_end',
-                         'astronomical dawn': 'astronomical_twilight_end',
-                         'astronomical dusk': 'astronomical_twilight_begin',
-                         'nautical dusk': 'nautical_twilight_begin',
-                         'civil dusk': 'civil_twilight_begin',
+                         'civil dusk': 'civil_twilight_end',
+                         'nautical dusk': 'nautical_twilight_end',
+                         'astronomical dusk': 'astronomical_twilight_end',
+                         'astronomical dawn': 'astronomical_twilight_begin',
+                         'nautical dawn': 'nautical_twilight_begin',
+                         'civil dawn': 'civil_twilight_begin',
                          'sunrise': 'sunrise'}
             for sun_location in set(self._group_actions.keys()) | set(self._bits.keys()):
                 group_actions = self._group_actions.get(sun_location, [])
