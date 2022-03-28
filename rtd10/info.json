@@ -1,0 +1,6 @@
+{
+	"version" : "0.1.4",
+	"description" : "RTD10",
+	"metric_source"  : "rtd10",
+	"metric_type" : "rtd10"
+}
