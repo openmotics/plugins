@@ -6,6 +6,8 @@ A configuration example is described at the bottom of the page.
 This documentation is for the Astro plugin version 1.x. Users currently using Astro 0.x are
 strongly advised to update and change all required configurations and/or Automations. 
 
+This plugin is powered by: https://sunrise-sunset.org/
+
 ## Configuration
 
 ### Coordinates
