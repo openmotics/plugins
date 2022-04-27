@@ -49,7 +49,7 @@ class Healthbox(OMPluginBase):
         self._serial = self._config['serial']
         self._sensor_mapping = self._config.get('sensor_mapping', [])
 
-        self._endpoint = 'http://{0}/v1/api/data/current'
+        self._endpoint = 'http://{0}/v2/api/data/current'
         self._headers = {'X-Requested-With': 'OpenMotics plugin: Healthbox',
                          'X-Healthbox-Version': '2'}
 
@@ -178,3 +178,76 @@ class Healthbox(OMPluginBase):
         self._read_config()
         self.write_config(config)
         return json.dumps({'success': True})
+
+
+
+
+
+
+
+# ----------------------------------------------- current code copy from endura delta plugin
+# figure out if values are already stored in this plugin or if we need to capture them
+    # get_metric_data?
+# after storage figure out how to upload them
+
+    def _register_sensor(self, reg_key, sensor_id, sensor_name, physical_quantity, unit_of_measure):
+        # Registering the sensor
+        external_id = str(reg_key)+ ' ' + str(sensor_id)
+        name        = str(reg_key)+ ' ' + str(sensor_name)
+        data = {
+            'external_id'      : external_id, #TODO klopt het dat dit "external_id" is en bij _update_sensor "id"?
+            'source'           : {'type': 'plugin', 'name': EnduraDeltaPlugin.name},
+            'name'             : name,
+            'physical_quantity': physical_quantity,
+            'unit'             : unit_of_measure,
+        }
+        response = self.webinterface.set_sensor_configuration(config=json.dumps(data))
+        
+        # Processing the response
+        data = json.loads(response)
+        if data is None or not data.get('success', False):
+            self.logger('Could not register new sensor {} for Endura Delta with key {}, registration failed through API'.format(sensor_id, reg_key))
+            self.logger(data)
+            return None
+        data = json.loads(response)
+        return next((x['id'] for x in data['config'] if x.get('source', {}).get('name') == EnduraDeltaPlugin.name), None)
+
+    def _update_sensor(self, reg_key, sensor_id, value): # TODO whole function
+        external_id = str(reg_key)+ ' ' + str(sensor_id)
+        data = {'id': external_id, 'value': value}
+        response = self.webinterface.set_sensor_status(status=json.dumps(data))
+        data = json.loads(response)
+        if data is None or not data.get('success', False):
+            self.logger('Could not update sensor data for sensor {} for Endura Delta with key {}'.format(sensor_id, reg_key))
+            return None
+
+    @background_task
+    def _sensor_manager(self):
+        self.logger("Starting to register and update sensors in the cloud")
+        while not self._enabled:
+            time.sleep(2)
+        while self._enabled:
+            # Get registered sensors on the cloud
+            response = self.webinterface.get_sensor_configurations()
+            cloud_sensors = json.loads(response)
+            # get list of all endura delta devices and loop over devices
+            reg_keys = self.discovered_devices.keys()
+            for reg_key in reg_keys:
+                edd = self.discovered_devices[reg_key]  # type: EnduraDeltaDriver
+                if edd is None:
+                    self.logger('Could not get Endura Delta information, driver is not working properly to request data')
+                    continue
+                # get list of variables available to this device
+                variables = edd.get_list_of_variables()
+                # check if sensor in sensor list is available on the device (safety check)
+                for sensor in self.sensors:
+                    if sensor['sensor_id'] in variables:
+                        # Now we know that the sensor exists on the device, check if it is already registered on the gateway
+                        if sensor['sensor_id'] not in cloud_sensors:
+                            # Register the sensor on the gateway
+                            self._register_sensor(reg_key, sensor['sensor_id'], sensor['sensor_name'], sensor['physical_quantity'], sensor['unit'])
+                        # get sensor data
+                        sensor_data = edd.get_variable(sensor['sensor_id'])
+                        # update sensor data of known sensor in EDD
+                        self._update_sensor(reg_key, sensor['sensor_id'], sensor_data)
+            time.sleep(30)
