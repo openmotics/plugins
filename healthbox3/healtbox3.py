@@ -97,6 +97,13 @@ class HealthBox3Driver:
         self._sync()
         self.sync_thread.start()
 
+    def stop(self):
+        # type: () -> None
+        """ Stop the sync thread to cleanly close of the Endura Delta object"""
+
+        # then stopping the syncing
+        self.is_running = False
+
     def stop_connection(self):
         # type: () -> None
         """ Stop the sync thread to cleanly close of the HealthBox3 object"""
@@ -266,7 +273,7 @@ class HealthBox3Driver:
     def _sync_variables(self):
         # Function to sync variables from HealthBox3 to gateway cache
         # Get values from healthbox
-        resp = self._perform_get_request(EnduraDeltaDriver.Endpoints.DATA)
+        resp = self._perform_get_request(HealthBox3Driver.Endpoints.DATA)
         if resp is None:
             return
         if resp.status_code != 200:
@@ -278,13 +285,95 @@ class HealthBox3Driver:
         # upsert values
         self.dataframes.upsert_from_dataframe_list(dataframe_list)
 
+    @background_task
     def _sync(self):
         """ General sync function to sync all data with the device """
-        # TODO
-        pass
+        while self.is_running:
+            try:
+                time.sleep(self.sync_delay)
+                self._sync_variables()
+            except KeyboardInterrupt:
+                self.stop()
 
     class Endpoints:
         def __init__(self):
             pass
         DATA = '/v2/api/data/current'
         
+class HealthBox3Manager:
+    DISCOVER_PORT = 49152  # The port to send the discover package to
+    DISCOVER_IP = '255.255.255.255'
+    DISCOVER_MESSAGE = 'RENSON_DEVICE/JSON?'
+    LISTEN_PORT = 4096  # The port to listen on to receive the reply packages back
+    DEVICE_TYPE = 'HEALTHBOX3'
+
+    def __init__(self):
+        # discovery elements
+        self.is_discovering = False
+        self.discovered_devices = []
+        self.discover_socket = None
+
+        self.send_discovery_packet_thread = Thread(target=self._send_discovery_packet)
+        self.send_discovery_packet_thread.daemon = True
+
+    def _send_discovery_packet(self):
+        while self.is_discovering:
+            self.discover_socket.sendto(
+                b'RENSON_DEVICE/JSON?',
+                ('<broadcast>', HealthBox3Manager.DISCOVER_PORT)
+            )
+            receiving = True
+            while receiving:
+                try:
+                    received = self.discover_socket.recvfrom(1024)
+                    response_check = HealthBox3Manager._check_received_packet_for_discovery(received)
+                    if response_check is not None:
+                        if response_check not in self.discovered_devices:
+                            self.discovered_devices.append(response_check)
+                except KeyboardInterrupt:
+                    receiving = False
+                    self.is_discovering = False
+                except Exception:
+                    time.sleep(2)
+                    receiving = False
+
+    @staticmethod
+    def _check_received_packet_for_discovery(packet):
+        # type: (Tuple[str, Tuple[str, int]]) -> Optional[str]
+        if not isinstance(packet, tuple):
+            return
+        content = packet[0]
+        if 'Device' in content and 'IP' in content:
+            try:
+                content_json = json.loads(content)
+                if 'Device' in content_json and 'IP' in content_json:
+                    device_type = content_json['Device']
+                    device_ip = content_json['IP']
+                    if device_type == HealthBox3Manager.DEVICE_TYPE:
+                        return device_ip
+            except:
+                return None
+        return None
+
+    def get_registration_key(self, ip):
+        edd = HealthBox3Driver(ip=ip)
+        reg_key = edd.get_variable('Registration key')
+        return reg_key
+
+    def start_discovery(self):
+        if self.discover_socket is None:
+            self.discover_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # creating a new UDP socket
+            self.discover_socket.bind(('', HealthBox3Manager.LISTEN_PORT))  # listen on socket on discover port
+            self.discover_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)  # enable broadcast on socket
+            self.discover_socket.settimeout(2.0)
+        self.is_discovering = True
+        if not self.send_discovery_packet_thread.is_alive():
+            self.send_discovery_packet_thread.start()
+
+    def stop_discovery(self):
+        self.is_discovering = False
+        if self.send_discovery_packet_thread.is_alive():
+            self.send_discovery_packet_thread.join(timeout=5)
+        if self.discover_socket is not None:
+            self.discover_socket.close()
+            self.discover_socket = None
