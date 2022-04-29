@@ -11,35 +11,39 @@ class DataFrame:
     def __init__(self,
     			 identifier,
                  name,
-                 data_type,
+                 unit=None,
                  value=None,
                  description=None,
+                 room=None,
                  ):
         # type: (str, str, str, int, str) -> None
 		self.identifier  = identifier
 		self.name        = name
-		self.data_type   = data_type
+		self.unit        = unit
 		self.value       = value
 		self.description = description
-
-    class DataTypes:
-        """ enum: different types of data """
-        def __init__(self):
-            pass
-        STRING = 'String'
-        UNSIGNED32 = 'Unsigned32'
-        SIGNED32 = 'Signed32'
-        FLOAT32 = 'Float32'
+        self.room        = room
 
 class HealtBox3Storage:
-    def __init__(self, description, serial):
-        # type: (str, Tuple[int, int, int]) -> None
+    def __init__(self):
         self.dataframes = {}  # type: Dict[str, DataFrame]
 
-    def add_dataframe(self, dataframe):
+    def upsert_from_dataframe_list(self, dataframe_list):
+        # type: (List[SingleDataFrame]) -> None
+        """ receives a list of SingleDataFrames and creates a structure of dataframes """
+        for dataframe in dataframe_list:
+            if dataframe.identifier not in self.dataframes.keys():
+                self.dataframes[dataframe.identifier] = dataframe
+            else:
+                self.update_value(dataframe.identifier, dataframe.value)
+        return
+
+    def add_single_dataframe(self, dataframe):
         # type: (SingleDataFrame) -> None
-        if self.name == dataframe.name:
+        if dataframe.identifier not in self.dataframes.keys():
             self.dataframes[dataframe.identifier] = dataframe
+            return True
+        return False
 
     def get_value(self, identifier):
         # type (identifier) -> int
@@ -179,8 +183,8 @@ class HealthBox3Driver:
             return None
         return self.hbs.get_value(name, index)
 
-    def upsert_cached_variable(self, identifier, value):
-        # type: (str, Any, Index) -> str
+    def upsert_cached_variable(self, identifier, name=None, unit=None, value, description=None, room=None):
+        # type: (str, str, Type, Any, str) -> bool
         """
         Will create/update a variable in the cache of the gateway
         """
@@ -189,18 +193,95 @@ class HealthBox3Driver:
         # if no existing value
         if not response:
             df = DataFrame(
-				identifier  = identifier,
-				name        = identifier,
-				data_type   = DataFrame.DataTypes.STRING,
-				value       = value,
-				description = None,
+                identifier = identifier,
+                name=name,
+                unit=unit,
+                value=value,
+                description=description,
+                room=room,
             )
 
-            self.hbs.add_dataframe(df)
+            self.hbs.add_single_dataframe(df)
             response = True
         return response
 
-# TODO schrijven van functie die de informatie uit de HB3 haald en hier opslaat in bruikbare wijze
+    def _extract_data(self, data):
+        # boilerplate to be able to get the information out of the healthbox in a usable manner
+        # type: (json response) -> list
+        dataframe_list = []
+
+        # get general (unnested) information
+        for key, value in data.items():
+            if not isinstance(value, list) and not isinstance(value, dict): # filtering out nested dicts and lists
+                dataframe = DataFrame(
+                    identifier=key, 
+                    name=key, 
+                    value=value
+                )
+                dataframe_list.append(dataframe)
+
+        # get global information
+        for key, value in data['global']['parameter'].items():
+            dataframe = DataFrame(
+                identifier=key, 
+                name=key, 
+                value=value['value']
+            )
+            dataframe_list.append(dataframe)
+
+        # get global sensor information
+        for sensor in data['sensor']:
+            identifier = str(sensor['basic_id']) + ' - ' + str(sensor['name'])
+            dataframe = DataFrame(
+                identifier=identifier, 
+                name=sensor['type'], 
+                value=sensor['parameter']['index']['value'], 
+                unit=sensor['parameter']['index']['unit'], 
+                room=sensor['basic_id']
+            )
+            dataframe_list.append(dataframe)
+
+        # get sensor information per room
+        for key, roomnr in data['room'].items(): # loop over the available rooms
+            for sensor in roomnr['sensor']: # dive into sensors per room
+                identifier = str(sensor['basic_id']) + ' - ' + str(sensor['name'])
+
+                # jump into parameter -> first dict in this dict -> get unit and value
+                values_view = sensor['parameter'].values()
+                value_iterator = iter(values_view)
+                first_value = next(value_iterator)
+                value = first_value['value']
+                unit = first_value['unit']
+
+                dataframe = DataFrame(
+                    identifier=identifier, 
+                    name=sensor['type'], 
+                    value=value, 
+                    unit=unit, 
+                    room=sensor['basic_id']
+                )
+                dataframe_list.append(dataframe)
+        return dataframe_list
+
+    def _sync_variables(self):
+        # Function to sync variables from HealthBox3 to gateway cache
+        # Get values from healthbox
+        resp = self._perform_get_request(EnduraDeltaDriver.Endpoints.DATA)
+        if resp is None:
+            return
+        if resp.status_code != 200:
+            return
+        data_json = resp.json()
+
+        # process values
+        dataframe_list = self._extract_data(data_json)
+        # upsert values
+        self.dataframes.upsert_from_dataframe_list(dataframe_list)
+
+    def _sync(self):
+        """ General sync function to sync all data with the device """
+        # TODO
+        pass
 
     class Endpoints:
         def __init__(self):
