@@ -9,16 +9,118 @@ import time
 from socket import *
 from threading import Thread
 from plugins.base import om_expose, output_status, OMPluginBase, PluginConfigChecker, background_task, om_metric_data
+from .api_handler import ApiHandler
+from .healtbox3 import HealthBox3Manager, HealthBox3Driver
 
-class Healthbox(OMPluginBase):
+class HealthboxPlugin(OMPluginBase):
     """
     A Healthbox 3 plugin, for reading and controlling your Renson Healthbox 3
     """
 
-    name = 'Healthbox'
+    name = 'Healthbox3'
     version = '1.0.1'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
+
+    def __init__(self, webinterface, logger):
+        super(HealthboxPlugin, self).__init__(webinterface, logger)
+
+        self.api_handler = ApiHandler(self.logger)
+        self.discovered_devices = {}  # dict of all the endura delta drivers mapped with register key as key
+        self.reg_key_to_gateway_id = {}  # mapping of register key to gateway id (for api calls)
+
+        self.healtbox_manager = HealthBox3Manager()
+        self.healtbox_manager.set_discovery_callback(self.discover_callback)
+        self.healtbox_manager.start_discovery()
+
+    def discover_callback(self, ip):
+        # type: (str) -> None
+        """ callback for when a new device has been discovered """
+        reg_key = self.healtbox_manager.get_registration_key(ip)
+        if reg_key is not None:
+            try:
+                self.discovered_devices[reg_key] = EnduraDeltaDriver(ip=ip)
+                self.logger('Found Endura Delta device @ ip: {} with registration key: {}'.format(ip, reg_key))
+                self.register_ventilation_config(reg_key)
+            except Exception as ex:
+                self.logger("Discovered device @ {}, but could not connect to the device... {}".format(ip, ex))
+
+    def register_ventilation_config(self, reg_key): #TODO does the healthbox have a reg_key?
+        # type: (str) -> None
+        """ Registers a new device to the gateway """
+        if reg_key not in self.discovered_devices:
+            self.logger('Could not register new ventilation device, registration key is not known to the plugin')
+            return
+        hbd = self.discovered_devices[reg_key]
+        if hbd is None:
+            self.logger('Could not register new ventilation device, driver is not working properly to request data')
+            return
+        registration_key = hbd.get_variable('Registration key') #TODO does the heathbox have a reg_key?
+        config = {
+            "external_id": registration_key,
+            "source": {"type": "plugin", "name": HealthboxPlugin.name},
+            "name": hbd.get_variable('Device name'), #TODO does the healthbox have a device name?
+            "amount_of_levels": 4,
+            "device": {"type": "Healthbox 3",
+                       "vendor": "Renson",
+                       "serial": registration_key
+            }
+        }
+        self.api_handler.add_request(self.webinterface.set_ventilation_configuration, {'config': json.dumps(config)}, self.handle_register_response)
+
+    def handle_register_response(self, data):
+        # type: (str) -> bool
+        """ handles the response received from the register request """
+        data_dict = json.loads(data)
+        if data_dict is None or 'success' not in data_dict:
+            self.logger('Could not register new ventilation device, API endpoint did not respond with valid answer')
+            return False
+        if not data_dict['success']:
+            self.logger('Could not register new ventilation device, registration failed trough API')
+            return False
+
+        if 'config' not in data_dict:
+            self.logger('Could not register new ventilation device, API endpoint did not respond with valid answer')
+            return False
+        gateway_id = data_dict['config']['id']
+        reg_key = data_dict['config']['external_id']
+        self.reg_key_to_gateway_id[reg_key] = gateway_id
+        self.logger('Successfully registered new ventilation device @ gateway id: {}'.format(gateway_id))
+        if not self._is_collecting_metrics:
+            self.start_metric_collection()
+        return True
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# original code below
+
+
+
 
     config_description = [{'name': 'serial',
                            'type': 'str',
@@ -179,75 +281,3 @@ class Healthbox(OMPluginBase):
         self.write_config(config)
         return json.dumps({'success': True})
 
-
-
-
-
-
-
-# ----------------------------------------------- current code copy from endura delta plugin
-# figure out if values are already stored in this plugin or if we need to capture them
-    # get_metric_data?
-# after storage figure out how to upload them
-
-    def _register_sensor(self, reg_key, sensor_id, sensor_name, physical_quantity, unit_of_measure):
-        # Registering the sensor
-        external_id = str(reg_key)+ ' ' + str(sensor_id)
-        name        = str(reg_key)+ ' ' + str(sensor_name)
-        data = {
-            'external_id'      : external_id, #TODO klopt het dat dit "external_id" is en bij _update_sensor "id"?
-            'source'           : {'type': 'plugin', 'name': EnduraDeltaPlugin.name},
-            'name'             : name,
-            'physical_quantity': physical_quantity,
-            'unit'             : unit_of_measure,
-        }
-        response = self.webinterface.set_sensor_configuration(config=json.dumps(data))
-        
-        # Processing the response
-        data = json.loads(response)
-        if data is None or not data.get('success', False):
-            self.logger('Could not register new sensor {} for Endura Delta with key {}, registration failed through API'.format(sensor_id, reg_key))
-            self.logger(data)
-            return None
-        data = json.loads(response)
-        return next((x['id'] for x in data['config'] if x.get('source', {}).get('name') == EnduraDeltaPlugin.name), None)
-
-    def _update_sensor(self, reg_key, sensor_id, value): # TODO whole function
-        external_id = str(reg_key)+ ' ' + str(sensor_id)
-        data = {'id': external_id, 'value': value}
-        response = self.webinterface.set_sensor_status(status=json.dumps(data))
-        data = json.loads(response)
-        if data is None or not data.get('success', False):
-            self.logger('Could not update sensor data for sensor {} for Endura Delta with key {}'.format(sensor_id, reg_key))
-            return None
-
-    @background_task
-    def _sensor_manager(self):
-        self.logger("Starting to register and update sensors in the cloud")
-        while not self._enabled:
-            time.sleep(2)
-        while self._enabled:
-            # Get registered sensors on the cloud
-            response = self.webinterface.get_sensor_configurations()
-            cloud_sensors = json.loads(response)
-            # get list of all endura delta devices and loop over devices
-            reg_keys = self.discovered_devices.keys()
-            for reg_key in reg_keys:
-                edd = self.discovered_devices[reg_key]  # type: EnduraDeltaDriver
-                if edd is None:
-                    self.logger('Could not get Endura Delta information, driver is not working properly to request data')
-                    continue
-                # get list of variables available to this device
-                variables = edd.get_list_of_variables()
-                # check if sensor in sensor list is available on the device (safety check)
-                for sensor in self.sensors:
-                    if sensor['sensor_id'] in variables:
-                        # Now we know that the sensor exists on the device, check if it is already registered on the gateway
-                        if sensor['sensor_id'] not in cloud_sensors:
-                            # Register the sensor on the gateway
-                            self._register_sensor(reg_key, sensor['sensor_id'], sensor['sensor_name'], sensor['physical_quantity'], sensor['unit'])
-                        # get sensor data
-                        sensor_data = edd.get_variable(sensor['sensor_id'])
-                        # update sensor data of known sensor in EDD
-                        self._update_sensor(reg_key, sensor['sensor_id'], sensor_data)
-            time.sleep(30)

@@ -356,8 +356,8 @@ class HealthBox3Manager:
         return None
 
     def get_registration_key(self, ip):
-        edd = HealthBox3Driver(ip=ip)
-        reg_key = edd.get_variable('Registration key')
+        hbd = HealthBox3Driver(ip=ip)
+        reg_key = hbd.get_variable('Registration key')
         return reg_key
 
     def start_discovery(self):
