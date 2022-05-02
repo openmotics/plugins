@@ -1,6 +1,17 @@
 """
 A Healthbox 3 plugin, for reading and controlling your Renson Healthbox 3
 """
+"""
+structuur:
+
+3 threads:
+    device discovery
+    device data pulling
+    cloud data syncing
+
+local caching:
+    dict with as key the reg_key of the device and value? (dict voor de variabele maar ook object voor status etc?)
+"""
 
 import six
 import requests
