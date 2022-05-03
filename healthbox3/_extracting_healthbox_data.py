@@ -345,3 +345,171 @@ def _extract_data(data):
 ip = "someIP"
 # response = requests.get("http://{}/v2/api/data/current".format(ip)).json()
 _extract_data(response)
+
+"""
+output:
+
+sensor
+    identifier: device_type
+    name: device_type
+    value: HEALTHBOX3
+    unit: None
+    description: None
+    room: None
+sensor
+    identifier: description
+    name: description
+    value: Healthbox 3.0
+    unit: None
+    description: None
+    room: None
+sensor
+    identifier: serial
+    name: serial
+    value: someSerialNumber
+    unit: None
+    description: None
+    room: None
+sensor
+    identifier: warranty_number
+    name: warranty_number
+    value: WARRANTY
+    unit: None
+    description: None
+    room: None
+sensor
+    identifier: device name
+    name: device name
+    value: HEALTHBOX3[WARRANTY]
+    unit: None
+    description: None
+    room: None
+sensor
+    identifier: legislation country
+    name: legislation country
+    value: be
+    unit: None
+    description: None
+    room: None
+sensor
+    identifier: warranty
+    name: warranty
+    value: WARRANTY
+    unit: None
+    description: None
+    room: None
+sensor
+    identifier: 0 - global air quality index
+    name: global air quality index
+    value: 58.89601160589506
+    unit: 
+    description: None
+    room: 0
+sensor
+    identifier: 1 - indoor temperature[1]_HealthBox 3[Healthbox3] - temperature
+    name: indoor temperature
+    value: 23.08836181640624
+    unit: deg C
+    description: None
+    room: 1
+sensor
+    identifier: 1 - indoor relative humidity[1]_HealthBox 3[Healthbox3] - humidity
+    name: indoor relative humidity
+    value: 30.2701416015625
+    unit: pct
+    description: None
+    room: 1
+sensor
+    identifier: 1 - indoor air quality index[1]_HealthBox 3[Healthbox3] - index
+    name: indoor air quality index
+    value: 46.66332026222561
+    unit: 
+    description: None
+    room: 1
+sensor
+    identifier: 1 - indoor air quality index[1]_HealthBox 3[Healthbox3] - main_pollutant
+    name: indoor air quality index
+    value: indoor relative humidity
+    unit: 
+    description: None
+    room: 1
+sensor
+    identifier: 2 - indoor temperature[2]_HealthBox 3[Healthbox3] - temperature
+    name: indoor temperature
+    value: 23.94789044022278
+    unit: deg C
+    description: None
+    room: 2
+sensor
+    identifier: 2 - indoor relative humidity[2]_HealthBox 3[Healthbox3] - humidity
+    name: indoor relative humidity
+    value: 27.403677424277102
+    unit: pct
+    description: None
+    room: 2
+sensor
+    identifier: 2 - indoor volatile organic compounds[2]_HealthBox 3[Healthbox3] - concentration
+    name: indoor volatile organic compounds
+    value: 878.5087565134127
+    unit: ppm
+    description: None
+    room: 2
+sensor
+    identifier: 2 - indoor volatile organic compounds[2]_HealthBox 3[Healthbox3] - concentration_maximum
+    name: indoor volatile organic compounds
+    value: 1730.395470712454
+    unit: ppm
+    description: None
+    room: 2
+sensor
+    identifier: 2 - indoor volatile organic compounds[2]_HealthBox 3[Healthbox3] - raw
+    name: indoor volatile organic compounds
+    value: 27098.0
+    unit: ppm
+    description: None
+    room: 2
+sensor
+    identifier: 2 - indoor air quality[2]_HealthBox 3[Healthbox3] - co2
+    name: indoor air quality
+    value: 123456789.0
+    unit: ppm
+    description: None
+    room: 2
+sensor
+    identifier: 2 - indoor air quality[2]_HealthBox 3[Healthbox3] - concentration
+    name: indoor air quality
+    value: 1234567.89
+    unit: ppm
+    description: None
+    room: 2
+sensor
+    identifier: 2 - indoor air quality[2]_HealthBox 3[Healthbox3] - resistance
+    name: indoor air quality
+    value: 191629.0
+    unit: ohm
+    description: None
+    room: 2
+sensor
+    identifier: 2 - indoor air quality[2]_HealthBox 3[Healthbox3] - voc
+    name: indoor air quality
+    value: 178.0
+    unit: ppb
+    description: None
+    room: 2
+sensor
+    identifier: 2 - indoor air quality index[2]_HealthBox 3[Healthbox3] - index
+    name: indoor air quality index
+    value: 60.53146499210699
+    unit: 
+    description: None
+    room: 2
+sensor
+    identifier: 2 - indoor air quality index[2]_HealthBox 3[Healthbox3] - main_pollutant
+    name: indoor air quality index
+    value: indoor relative humidity
+    unit: 
+    description: None
+    room: 2
+
+
+"""

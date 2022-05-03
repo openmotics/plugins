@@ -24,7 +24,7 @@ class DataFrame:
                  value=None,
                  description=None,
                  room=None,
-                 cloud_id=None,
+                 gateway_id=None,
                  ):
         # type: (str, str, str, str, str, str, str) -> None
         self.identifier  = identifier
@@ -33,7 +33,7 @@ class DataFrame:
         self.value       = value
         self.description = description
         self.room        = room
-        self.cloud_id    = cloud_id
+        self.gateway_id  = gateway_id
 
 class HealtBox3Storage:
     def __init__(self):
@@ -69,17 +69,17 @@ class HealtBox3Storage:
         self.dataframes[identifier].value = value
         return True
 
-    def get_cloud_id(self, identifier):
-        # type (Index) -> int
+    def get_gateway_id(self, identifier):
+        # type (identifier) -> int
         if identifier in self.dataframes.keys():
-            return self.dataframes[identifier].cloud_id
+            return self.dataframes[identifier].gateway_id
         return None
 
-    def update_cloud_id(self, index, cloud_id):
+    def update_gateway_id(self, identifier, gateway_id):
         # type: (identifier, int) -> bool
         if identifier not in self.dataframes.keys():
             return False
-        self.dataframes[identifier].cloud_id = cloud_id
+        self.dataframes[identifier].gateway_id = gateway_id
         return True
 
     def get_list_of_variables(self):
@@ -114,8 +114,8 @@ class HealthBox3Driver:
         self.sync_thread.daemon = True
 
         # start the connection if an ip is provided
-        # if self.ip is not None:
-            # self.start_connection()
+        if self.ip is not None:
+            self.start_connection()
 
     def start_connection(self):
         self._sync_variables()
@@ -236,6 +236,22 @@ class HealthBox3Driver:
             response = True
         return response
 
+    def get_gateway_id(self, name):
+        # type: (str, Index) -> Optional[Any]
+        """ Retrieves a variable from the cache """
+        if name not in self.get_list_of_variables():
+            return None
+        return self.hbs.get_gateway_id(name)
+
+    def set_gateway_id(self, identifier, gateway_id):
+        # type: (str, Any, Index) -> str
+        """
+        Will update a variable on the Endura Delta device
+        """
+        # set the cached state also up to date
+        response = self.hbs.update_gateway_id(identifier=identifier, gateway_id=gateway_id)
+        return response
+
     def _extract_data(self, data):
         # boilerplate to be able to get the information out of the healthbox in a usable manner
         # type: (json response) -> list
@@ -307,9 +323,9 @@ class HealthBox3Driver:
         # upsert values
         self.hbs.upsert_from_dataframe_list(dataframe_list)
 
-    # @background_task
     def _sync_periodically(self):
         """ General sync function to sync all data with the device """
+        self.logger("Starting to sync ")
         while self.is_running:
             try:
                 time.sleep(self.sync_delay)
@@ -329,15 +345,17 @@ class HealthBox3Manager:
     DISCOVER_MESSAGE = 'RENSON_DEVICE/JSON?'
     DEVICE_TYPE = 'HEALTHBOX3'
 
-    def __init__(self):
+    def __init__(self, logger):
         # discovery elements
         self.is_discovering = False
         self.discovered_devices = [] # List of ip's
         self.discover_socket = None
         self.discover_callback = None
 
-        # self.send_discovery_packet_thread = Thread(target=self._send_discovery_packet)
-        # self.send_discovery_packet_thread.daemon = True
+        self.logger = logger
+
+        self.send_discovery_packet_thread = Thread(target=self._send_discovery_packet)
+        self.send_discovery_packet_thread.daemon = True
 
     def _send_discovery_packet(self):
         while self.is_discovering:
@@ -368,7 +386,6 @@ class HealthBox3Manager:
         if not isinstance(packet, tuple):
             return None
         content = packet[0]
-        # if 'Device' in content and 'IP' in content:
         try:
             content_json = json.loads(content)
             if 'Device' in content_json and 'IP' in content_json:
@@ -384,6 +401,11 @@ class HealthBox3Manager:
         if not callable(callback):
             raise HealthBox3Exception("Could not set callback: {}, not a callable type".format(callback))
         self.discover_callback = callback
+
+    def get_serial(self, ip):
+        hbd = HealthBox3Driver(ip=ip)
+        serial = hbd.get_variable('serial')
+        return serial
 
     def start_discovery(self):
         if self.discover_socket is None:
@@ -405,20 +427,20 @@ class HealthBox3Manager:
 
 
     def test(self):
-    # testing the code
-    # searching the healthboxes
-    hbm = HealthBox3Manager()
-    hbm.is_discovering = True
-    hbm.discover_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # creating a new UDP socket
-    hbm.discover_socket.bind(('', HealthBox3Manager.LISTEN_PORT))  # listen on socket on discover port
-    hbm.discover_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)  # enable broadcast on socket
-    hbm.discover_socket.settimeout(2.0)
-    hbm._send_discovery_packet()
-    ip = hbm.discovered_devices[0]
-    print(ip)
-    # pull info from the first healthbox
-    healthbox = HealthBox3Driver(ip = ip)
-    healthbox._sync_variables()
-    print(healthbox.get_list_of_variables())
-    print(healthbox.get_variable('serial'))
-    print(healthbox.get_variable('2 - indoor air quality[2]_HealthBox 3[Healthbox3] - co2'))
+        # testing the code
+        # searching the healthboxes
+        hbm = HealthBox3Manager()
+        hbm.is_discovering = True
+        hbm.discover_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # creating a new UDP socket
+        hbm.discover_socket.bind(('', HealthBox3Manager.LISTEN_PORT))  # listen on socket on discover port
+        hbm.discover_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)  # enable broadcast on socket
+        hbm.discover_socket.settimeout(2.0)
+        hbm._send_discovery_packet()
+        ip = hbm.discovered_devices[0]
+        print(ip)
+        # pull info from the first healthbox
+        healthbox = HealthBox3Driver(ip = ip)
+        healthbox._sync_variables()
+        print(healthbox.get_list_of_variables())
+        print(healthbox.get_variable('serial'))
+        print(healthbox.get_variable('2 - indoor air quality[2]_HealthBox 3[Healthbox3] - co2'))

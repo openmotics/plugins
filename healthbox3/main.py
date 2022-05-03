@@ -29,55 +29,162 @@ class HealthboxPlugin(OMPluginBase):
     """
 
     name = 'Healthbox3'
-    version = '1.0.1'
+    version = '1.0.5'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
+
+    config_descr = [
+        {'name': 'update_delay', 'type': 'int', 'description': 'The time to wait in seconds between polling statements for syncing back with the device'}
+    ]
+    default_config = {'update_delay': 30}
 
     def __init__(self, webinterface, logger):
         super(HealthboxPlugin, self).__init__(webinterface, logger)
 
+        self.__config = self.read_config(HealthboxPlugin.default_config)
+        self.__config_checker = PluginConfigChecker(HealthboxPlugin.config_descr)
+        self._enabled = True
+
         self.api_handler = ApiHandler(self.logger)
         self.discovered_devices = {}  # dict of all the endura delta drivers mapped with register key as key
-        self.reg_key_to_gateway_id = {}  # mapping of register key to gateway id (for api calls)
+        self.serial_key_to_gateway_id = {}  # mapping of register key to gateway id (for api calls)
+
+        self.logger("Started Healthbox 3 plugin")
 
         self.healtbox_manager = HealthBox3Manager()
         self.healtbox_manager.set_discovery_callback(self.discover_callback)
         self.healtbox_manager.start_discovery()
 
+        self.sensors =   [
+                {
+                    'sensor_id'        :'1 - indoor temperature[1]_HealthBox 3[Healthbox3] - temperature',
+                    'sensor_name'      :'Temperature Room 1',
+                    'physical_quantity':'temperature',
+                    'unit'             :'celcius',
+                },
+                {
+                    'sensor_id'        :'1 - indoor relative humidity[1]_HealthBox 3[Healthbox3] - humidity',
+                    'sensor_name'      :'Humidity Room 1',
+                    'physical_quantity':'humidity',
+                    'unit'             :'percent',
+                },
+                {
+                    'sensor_id'        :'1 - indoor air quality[1]_HealthBox 3[Healthbox3] - co2',
+                    'sensor_name'      :'CO2 Room 1',
+                    'physical_quantity':'co2',
+                    'unit'             :'parts_per_million',
+                },
+                {
+                    'sensor_id'        :'1 - indoor volatile organic compounds[1]_HealthBox 3[Healthbox3] - concentration',
+                    'sensor_name'      :'VOC Room 1',
+                    'physical_quantity':'voc',
+                    'unit'             :'parts_per_million',
+                },
+                {
+                    'sensor_id'        :'2 - indoor temperature[2]_HealthBox 3[Healthbox3] - temperature',
+                    'sensor_name'      :'Temperature Room 2',
+                    'physical_quantity':'temperature',
+                    'unit'             :'celcius',
+                },
+                {
+                    'sensor_id'        :'2 - indoor relative humidity[2]_HealthBox 3[Healthbox3] - humidity',
+                    'sensor_name'      :'Humidity Room 2',
+                    'physical_quantity':'humidity',
+                    'unit'             :'percent',
+                },
+                {
+                    'sensor_id'        :'2 - indoor air quality[2]_HealthBox 3[Healthbox3] - co2',
+                    'sensor_name'      :'CO2 Room 2',
+                    'physical_quantity':'co2',
+                    'unit'             :'parts_per_million',
+                },
+                {
+                    'sensor_id'        :'2 - indoor volatile organic compounds[2]_HealthBox 3[Healthbox3] - concentration',
+                    'sensor_name'      :'VOC Room 2',
+                    'physical_quantity':'voc',
+                    'unit'             :'parts_per_million',
+                },
+
+            ]
+
+    @om_expose
+    def get_config_description(self):
+        return json.dumps(HealthboxPlugin.config_descr)
+
+    @om_expose
+    def get_config(self):
+        return json.dumps(self.__config)
+
+    @om_expose
+    def set_config(self, config):
+        config = json.loads(config)
+        try:
+            self._check_config(config)
+        except Exception as ex:
+            self.logger("Could not set new config, config check failed: {}".format(ex))
+            return json.dumps({'success': False})
+
+        self.__config_checker.check_config(config)
+        self.write_config(config)
+        self.__config = config
+        self.logger("Succesfully saved new config")
+
+        return json.dumps({'success': True})
+
+    @staticmethod
+    def _check_config(config):
+        # check if all fields are populated
+        if 'update_delay' not in config:
+            raise RuntimeError('Config has no field "update_delay" (required)')
+
+        # check all the fields if they are valid input
+        delay = config['update_delay']
+        try:
+            delay = int(delay)
+        except Exception as ex:
+            raise RuntimeError('field "update_delay": ({}) is not a valid input in the provided config (not int)'.format(delay))
+
+    @background_task
+    def background_worker(self):
+        while True:
+            self.api_handler.do_requests()
+            time.sleep(10)
+
     def discover_callback(self, ip):
         # type: (str) -> None
         """ callback for when a new device has been discovered """
-        reg_key = self.healtbox_manager.get_registration_key(ip)
-        if reg_key is not None:
+        serial_key = self.healtbox_manager.get_serial(ip)
+        if serial_key is not None:
             try:
-                self.discovered_devices[reg_key] = EnduraDeltaDriver(ip=ip)
-                self.logger('Found Endura Delta device @ ip: {} with registration key: {}'.format(ip, reg_key))
-                self.register_ventilation_config(reg_key)
+                self.discovered_devices[serial_key] = HealthBox3Driver(ip=ip)
+                self.logger('Found Endura Delta device @ ip: {} with serial key: {}'.format(ip, serial_key))
+                self.register_ventilation_config(serial_key)
             except Exception as ex:
                 self.logger("Discovered device @ {}, but could not connect to the device... {}".format(ip, ex))
 
-    def register_ventilation_config(self, reg_key): #TODO does the healthbox have a reg_key?
+    def register_ventilation_config(self, serial_key):
         # type: (str) -> None
         """ Registers a new device to the gateway """
-        if reg_key not in self.discovered_devices:
-            self.logger('Could not register new ventilation device, registration key is not known to the plugin')
+        if serial_key not in self.discovered_devices:
+            self.logger('Could not register new ventilation device, serial key is not known to the plugin')
             return
-        hbd = self.discovered_devices[reg_key]
+        hbd = self.discovered_devices[serial_key]
         if hbd is None:
             self.logger('Could not register new ventilation device, driver is not working properly to request data')
             return
-        registration_key = hbd.get_variable('Registration key') #TODO does the heathbox have a reg_key?
+        serial_key = hbd.get_variable('serial')
         config = {
-            "external_id": registration_key,
+            "external_id": serial_key,
             "source": {"type": "plugin", "name": HealthboxPlugin.name},
-            "name": hbd.get_variable('Device name'), #TODO does the healthbox have a device name?
+            "name": hbd.get_variable('device name'),
             "amount_of_levels": 4,
             "device": {"type": "Healthbox 3",
                        "vendor": "Renson",
-                       "serial": registration_key
+                       "serial": serial_key
             }
         }
         self.api_handler.add_request(self.webinterface.set_ventilation_configuration, {'config': json.dumps(config)}, self.handle_register_response)
+        # self.api_handler.add_request(self.webinterface.ventilation.register(registration_key) ) # TODO
 
     def handle_register_response(self, data):
         # type: (str) -> bool
@@ -89,206 +196,65 @@ class HealthboxPlugin(OMPluginBase):
         if not data_dict['success']:
             self.logger('Could not register new ventilation device, registration failed trough API')
             return False
-
         if 'config' not in data_dict:
             self.logger('Could not register new ventilation device, API endpoint did not respond with valid answer')
             return False
+
         gateway_id = data_dict['config']['id']
-        reg_key = data_dict['config']['external_id']
-        self.reg_key_to_gateway_id[reg_key] = gateway_id
-        self.logger('Successfully registered new ventilation device @ gateway id: {}'.format(gateway_id))
-        if not self._is_collecting_metrics:
-            self.start_metric_collection()
+        serial_key = data_dict['config']['external_id']
+        self.serial_key_to_gateway_id[serial_key] = gateway_id
+        self.logger('Successfully registered new ventilation device with serial: {} @ gateway id: {}'.format(serial_key, gateway_id))
         return True
 
+    def _register_sensor(self, serial_key, sensor_id, sensor_name, physical_quantity, unit_of_measure):
+        # Registering the sensor
+        external_id = str(serial_key)+ ' ' + str(sensor_id)
+        name        = str(serial_key)+ ' ' + str(sensor_name)
+        config = {
+            'name' : name, 
+        }
+        response = self.webinterface.sensor.register(external_id = external_id, physical_quantity = physical_quantity, unit = unit_of_measure, config=config)
+        return response
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# original code below
-
-
-
-
-    config_description = [{'name': 'serial',
-                           'type': 'str',
-                           'description': 'The serial of the Healthbox 3. E.g. 250424P0031'}]
-
-    metric_definitions = [{'type': 'aqi',
-                           'tags': ['type', 'description', 'serial'],
-                           'metrics': [{'name': 'aqi',
-                                        'description': 'Global air quality index',
-                                        'type': 'gauge',
-                                        'unit': 'aqi'}]}]
-
-    default_config = {'serial': ''}
-
-    def __init__(self, webinterface, logger):
-        super(Healthbox, self).__init__(webinterface, logger)
-        self.logger('Starting Healthbox plugin...')
-
-        self._config = self.read_config(Healthbox.default_config)
-        self._config_checker = PluginConfigChecker(Healthbox.config_description)
-
-        self._read_config()
-
-        self._previous_output_state = {}
-        self.logger("Started Healthbox plugin")
-
-    def _read_config(self):
-        self._serial = self._config['serial']
-        self._sensor_mapping = self._config.get('sensor_mapping', [])
-
-        self._endpoint = 'http://{0}/v2/api/data/current'
-        self._headers = {'X-Requested-With': 'OpenMotics plugin: Healthbox',
-                         'X-Healthbox-Version': '2'}
-
-        self._ip = self._discover_ip_for_serial(self._serial)
-        if self._ip:
-            self.logger("Healthbox found with serial {0}and ip address {1}".format(self._serial, self._ip))
-        else:
-            self.logger("Healthbox  with serial {0} not found!".format(self._serial))
-        self._enabled = (self._ip != '' and self._serial != '')
-        self.logger('Healthbox is {0}'.format('enabled' if self._enabled else 'disabled'))
-
-    def _byteify(self, input):
-        if isinstance(input, dict):
-            return {self._byteify(key): self._byteify(value)
-                    for key, value in input.items()}
-        elif isinstance(input, list):
-            return [self._byteify(element) for element in input]
-        elif isinstance(input, six.text_type):
-            return input.encode('utf-8')
-        else:
-            return input
-
-    def _discover_ip_for_serial(self, serial):
-        hb3Ip = ''
-        # Create a UDP socket for devices discovery
-        sock = socket(AF_INET, SOCK_DGRAM)
-        sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-        sock.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
-        sock.settimeout(5)
-
-        server_address = ('255.255.255.255', 49152)
-        message = 'RENSON_DEVICE/JSON?'
-
-        discovered_devices = []
-        try:
-            sent = sock.sendto(message.encode(), server_address)
-            while True:
-                data, server = sock.recvfrom(4096)
-                if data.decode('UTF-8'):
-                    discovered_devices.append(json.loads(data))
-                else:
-                    print('Verification failed')
-                print('Trying again...')
-
-        except Exception as ex:
-            if len(discovered_devices) == 0:
-                self.logger('Error during discovery for serial: {0}'.format(ex))
-
-        finally:
-            sock.close()
-
-        for device in discovered_devices:
-            if device.get('serial') == serial:
-                hb3Ip = device.get('IP')
-
-        if hb3Ip == '':
-            self.logger('Error during discovery for serial: {0}'.format(serial))
-        return hb3Ip
-
+    def _update_sensor(self, serial_key, sensor_id, value, gateway_id):
+        data = {'id': gateway_id, 'value': value}
+        response = self.webinterface.sensor.set_status(sensor_id = gateway_id, value = value)
+        if response is None:
+            self.logger('Could not update sensor data for sensor {} for Endura Delta with key {}'.format(sensor_id, serial_key))
+            return False
+        return True
 
     @background_task
-    def run(self):
-        while True:
-            if not self._enabled:
-                start = time.time()
-                try:
-                    self._ip = self._discover_ip_for_serial(self._serial)
-                    if self._ip:
-                        self._enabled = True
-                        self.logger('Healthbox is {0}'.format('enabled' if self._enabled else 'disabled'))
-                except Exception as ex:
-                    self.logger('Error while fetching ip address: {0}'.format(ex))
-                # This loop should run approx. every 60 seconds
-                sleep = 60 - (time.time() - start)
-                if sleep < 0:
-                    sleep = 1
-                time.sleep(sleep)
-            else:
-                time.sleep(60)
-
-    @om_metric_data(interval=15)
-    def get_metric_data(self):
-        if self._enabled:
-            now = time.time()
-            try:
-                response = requests.get(url=self._endpoint.format(self._ip))
-                if response.status_code != 200:
-                    self.logger('Failed to load healthbox data')
-                    return
-                result = response.json()
-                serial = result.get('serial')
-                sensors = result.get('sensor')
-                description = result.get('description')
-                if serial and sensors and description:
-                    for sensor in result['sensor']:
-                        if sensor['type'] == 'global air quality index':
-                            yield {'type': 'aqi',
-                                'timestamp': now,
-                                'tags': {'type': 'Healthbox',
-                                            'description':description,
-                                            'serial': serial},
-                                'values': {'aqi': float(sensor['parameter']['index']['value'])}
-                            }
-            except Exception as ex:
-                self.logger("Error while fetching metric date from healthbox: {0}".format(ex))
-                self._enabled = False
-                self.logger('Healthbox is {0}'.format('enabled' if self._enabled else 'disabled'))
-                return
-
-    @om_expose
-    def get_config_description(self):
-        return json.dumps(Healthbox.config_description)
-
-    @om_expose
-    def get_config(self):
-        return json.dumps(self._config)
-
-    @om_expose
-    def set_config(self, config):
-        config = json.loads(config)
-        for key in config:
-            if isinstance(config[key], six.string_types):
-                config[key] = str(config[key])
-        self._config_checker.check_config(config)
-        self._config = config
-        self._read_config()
-        self.write_config(config)
-        return json.dumps({'success': True})
+    def _sensor_manager(self):
+        self.logger("Starting to register and update sensors on the gateway")
+        while not self._enabled:
+            time.sleep(2)
+        while self._enabled:
+            # get list of all endura delta devices and loop over devices
+            serial_keys = self.discovered_devices.keys()
+            for serial_key in serial_keys:
+                hbd = self.discovered_devices[serial_key]  # type: HealthBox3Driver
+                if hbd is None:
+                    self.logger('Could not get Healthbox3 information, driver is not working properly to request data')
+                    continue
+                # get list of variables available to this device
+                variables = hbd.get_list_of_variables()
+                # check if sensor in sensor list is available on the device (safety check)
+                for sensor in self.sensors:
+                    if sensor['sensor_id'] not in variables:
+                        continue
+                    # Now we know that the sensor exists on the device, check if it is already registered on the cloud
+                    gateway_id = hbd.get_gateway_id(sensor['sensor_id'])
+                    if not gateway_id:
+                        # Register the sensor on the cloud
+                        response = self._register_sensor(serial_key, sensor['sensor_id'], sensor['sensor_name'], sensor['physical_quantity'], sensor['unit'])
+                        # save the gateway_id on the gateway
+                        hbd.set_gateway_id(sensor['sensor_id'], response.id)
+                        gateway_id = hbd.get_gateway_id(sensor['sensor_id'])
+                    # get sensor data
+                    sensor_data = hbd.get_variable(sensor['sensor_id'])
+                    # update sensor data of known sensor in EDD
+                    self._update_sensor(serial_key, sensor['sensor_id'], sensor_data, gateway_id)
+            time.sleep(30)
+            # test
 
