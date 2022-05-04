@@ -29,7 +29,7 @@ class HealthboxPlugin(OMPluginBase):
     """
 
     name = 'Healthbox3'
-    version = '1.0.5'
+    version = '1.0.6'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
@@ -174,37 +174,20 @@ class HealthboxPlugin(OMPluginBase):
             return
         serial_key = hbd.get_variable('serial')
         config = {
-            "external_id": serial_key,
-            "source": {"type": "plugin", "name": HealthboxPlugin.name},
             "name": hbd.get_variable('device name'),
-            "amount_of_levels": 4,
-            "device": {"type": "Healthbox 3",
+            "amount_of_levels": 2,
+            "device": {"type": "HealthBox3",
                        "vendor": "Renson",
                        "serial": serial_key
             }
         }
-        self.api_handler.add_request(self.webinterface.set_ventilation_configuration, {'config': json.dumps(config)}, self.handle_register_response)
-        # self.api_handler.add_request(self.webinterface.ventilation.register(registration_key) ) # TODO
-
-    def handle_register_response(self, data):
-        # type: (str) -> bool
-        """ handles the response received from the register request """
-        data_dict = json.loads(data)
-        if data_dict is None or 'success' not in data_dict:
-            self.logger('Could not register new ventilation device, API endpoint did not respond with valid answer')
-            return False
-        if not data_dict['success']:
+        response = self.webinterface.ventilation.register(serial_key, config)
+        if not response:
             self.logger('Could not register new ventilation device, registration failed trough API')
-            return False
-        if 'config' not in data_dict:
-            self.logger('Could not register new ventilation device, API endpoint did not respond with valid answer')
-            return False
-
-        gateway_id = data_dict['config']['id']
-        serial_key = data_dict['config']['external_id']
+        gateway_id = response.id
+        serial_key = response.external_id
         self.serial_key_to_gateway_id[serial_key] = gateway_id
-        self.logger('Successfully registered new ventilation device with serial: {} @ gateway id: {}'.format(serial_key, gateway_id))
-        return True
+        self.logger('Successfully registered new ventilation device @ gateway id: {}'.format(gateway_id))
 
     def _register_sensor(self, serial_key, sensor_id, sensor_name, physical_quantity, unit_of_measure):
         # Registering the sensor
@@ -214,6 +197,8 @@ class HealthboxPlugin(OMPluginBase):
             'name' : name, 
         }
         response = self.webinterface.sensor.register(external_id = external_id, physical_quantity = physical_quantity, unit = unit_of_measure, config=config)
+        if not response:
+            return None
         return response
 
     def _update_sensor(self, serial_key, sensor_id, value, gateway_id):
@@ -248,6 +233,9 @@ class HealthboxPlugin(OMPluginBase):
                     if not gateway_id:
                         # Register the sensor on the cloud
                         response = self._register_sensor(serial_key, sensor['sensor_id'], sensor['sensor_name'], sensor['physical_quantity'], sensor['unit'])
+                        if response == None:
+                            self.logger('Failed to register sensor in gateway with sensor_id {} and serial_key {}'.format(sensor['sensor_id'], serial_key))
+                            continue
                         # save the gateway_id on the gateway
                         hbd.set_gateway_id(sensor['sensor_id'], response.id)
                         gateway_id = hbd.get_gateway_id(sensor['sensor_id'])

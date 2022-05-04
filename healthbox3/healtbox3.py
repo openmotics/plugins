@@ -16,7 +16,7 @@ class HealthBox3Exception(Exception):
     pass
 
 class DataFrame:
-    """" This will hold all the data for one variable in the Endura Delta device """
+    """" This will hold all the data for one variable in the HealthBox3 """
     def __init__(self,
                  identifier,
                  name,
@@ -254,25 +254,25 @@ class HealthBox3Driver:
 
     def _extract_data(self, data):
         # boilerplate to be able to get the information out of the healthbox in a usable manner
-        # type: (json response) -> list
+        # type: (dict) -> list
         dataframe_list = []
 
         # get general (unnested) information
         for key, value in data.items():
             if not isinstance(value, list) and not isinstance(value, dict): # filtering out nested dicts and lists
                 dataframe = DataFrame(
-                    identifier =key, 
-                    name       =key, 
-                    value      =value
+                    identifier = key, 
+                    name       = key, 
+                    value      = value
                 )
                 dataframe_list.append(dataframe)
 
         # get global information
         for key, value in data['global']['parameter'].items():
             dataframe = DataFrame(
-                identifier =key, 
-                name       =key, 
-                value      =value['value']
+                identifier = key, 
+                name       = key, 
+                value      = value['value']
             )
             dataframe_list.append(dataframe)
 
@@ -280,11 +280,11 @@ class HealthBox3Driver:
         for sensor in data['sensor']:
             identifier = str(sensor['basic_id']) + ' - ' + str(sensor['name'])
             dataframe = DataFrame(
-                identifier =identifier, 
-                name       =sensor['type'], 
-                value      =sensor['parameter']['index']['value'], 
-                unit       =sensor['parameter']['index']['unit'], 
-                room       =sensor['basic_id']
+                identifier = identifier, 
+                name       = sensor['type'], 
+                value      = sensor['parameter']['index']['value'], 
+                unit       = sensor['parameter']['index']['unit'], 
+                room       = sensor['basic_id']
             )
             dataframe_list.append(dataframe)
 
@@ -293,17 +293,17 @@ class HealthBox3Driver:
             for sensor in roomnr['sensor']: # dive into sensors per room
                 # jump into parameter -> first dict in this dict -> get unit and value
                 for key, value in sensor['parameter'].items():
-                    sub_key   = key
-                    sub_value = value['value']
-                    sub_unit  = value['unit']
+                    sub_key    = key
+                    sub_value  = value['value']
+                    sub_unit   = value['unit']
                     identifier = str(sensor['basic_id']) + ' - ' +  str(sensor['name'] + ' - ' + str(sub_key))
 
                     dataframe = DataFrame(
-                        identifier =identifier, 
-                        name       =sensor['type'], 
-                        value      =sub_value, 
-                        unit       =sub_unit, 
-                        room       =sensor['basic_id']
+                        identifier = identifier, 
+                        name       = sensor['type'], 
+                        value      = sub_value, 
+                        unit       = sub_unit, 
+                        room       = sensor['basic_id']
                     )
                     dataframe_list.append(dataframe)
         return dataframe_list
@@ -325,7 +325,6 @@ class HealthBox3Driver:
 
     def _sync_periodically(self):
         """ General sync function to sync all data with the device """
-        self.logger("Starting to sync ")
         while self.is_running:
             try:
                 time.sleep(self.sync_delay)
@@ -345,14 +344,12 @@ class HealthBox3Manager:
     DISCOVER_MESSAGE = 'RENSON_DEVICE/JSON?'
     DEVICE_TYPE = 'HEALTHBOX3'
 
-    def __init__(self, logger):
+    def __init__(self):
         # discovery elements
         self.is_discovering = False
         self.discovered_devices = [] # List of ip's
         self.discover_socket = None
         self.discover_callback = None
-
-        self.logger = logger
 
         self.send_discovery_packet_thread = Thread(target=self._send_discovery_packet)
         self.send_discovery_packet_thread.daemon = True
@@ -360,7 +357,7 @@ class HealthBox3Manager:
     def _send_discovery_packet(self):
         while self.is_discovering:
             self.discover_socket.sendto(
-                b'RENSON_DEVICE/JSON?',
+                HealthBox3Manager.DISCOVER_MESSAGE,
                 ('<broadcast>', HealthBox3Manager.DISCOVER_PORT)
             )
             receiving = True
