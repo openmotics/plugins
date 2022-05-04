@@ -152,7 +152,7 @@ class HealthBox3Driver:
 
         # Prepare the url string
         url = 'http://'
-        if endpoint[0] == '/':
+        if endpoint.startswith('/'):
             url += self.ip + endpoint + options_str
         else:
             url += self.ip + '/' + endpoint + options_str
@@ -165,10 +165,7 @@ class HealthBox3Driver:
             self.is_connected = False
         try:
             resp = requests.get(self._format_url(HealthBox3Driver.Endpoints.DATA))
-            if resp.status_code != 200:
-                self.is_connected = False
-            else:
-                self.is_connected = True
+            self.is_connected = resp.status_code == 200
         except:
             self.is_connected = False
 
