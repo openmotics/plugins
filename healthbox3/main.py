@@ -29,7 +29,7 @@ class HealthboxPlugin(OMPluginBase):
     """
 
     name = 'Healthbox3'
-    version = '1.0.6'
+    version = '1.0.7'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
@@ -46,7 +46,7 @@ class HealthboxPlugin(OMPluginBase):
         self._enabled = True
 
         self.api_handler = ApiHandler(self.logger)
-        self.discovered_devices = {}  # dict of all the endura delta drivers mapped with register key as key
+        self.discovered_devices = {}  # dict of all the Healthbox3 drivers mapped with register key as key
         self.serial_key_to_gateway_id = {}  # mapping of register key to gateway id (for api calls)
 
         self.logger("Started Healthbox 3 plugin")
@@ -55,52 +55,28 @@ class HealthboxPlugin(OMPluginBase):
         self.healtbox_manager.set_discovery_callback(self.discover_callback)
         self.healtbox_manager.start_discovery()
 
-        self.sensors =   [
+        self.sensorsGeneral =   [
                 {
-                    'sensor_id'        :'1 - indoor temperature[1]_HealthBox 3[Healthbox3] - temperature',
-                    'sensor_name'      :'Temperature Room 1',
+                    'sensor_id'        :'roomID - indoor temperature[roomID]_HealthBox 3[Healthbox3] - temperature',
+                    'sensor_name'      :'Temperature Room roomID',
                     'physical_quantity':'temperature',
                     'unit'             :'celcius',
                 },
                 {
-                    'sensor_id'        :'1 - indoor relative humidity[1]_HealthBox 3[Healthbox3] - humidity',
-                    'sensor_name'      :'Humidity Room 1',
+                    'sensor_id'        :'roomID - indoor relative humidity[roomID]_HealthBox 3[Healthbox3] - humidity',
+                    'sensor_name'      :'Humidity Room roomID',
                     'physical_quantity':'humidity',
                     'unit'             :'percent',
                 },
                 {
-                    'sensor_id'        :'1 - indoor air quality[1]_HealthBox 3[Healthbox3] - co2',
-                    'sensor_name'      :'CO2 Room 1',
+                    'sensor_id'        :'roomID - indoor air quality[roomID]_HealthBox 3[Healthbox3] - co2',
+                    'sensor_name'      :'CO2 Room roomID',
                     'physical_quantity':'co2',
                     'unit'             :'parts_per_million',
                 },
                 {
-                    'sensor_id'        :'1 - indoor volatile organic compounds[1]_HealthBox 3[Healthbox3] - concentration',
-                    'sensor_name'      :'VOC Room 1',
-                    'physical_quantity':'voc',
-                    'unit'             :'parts_per_million',
-                },
-                {
-                    'sensor_id'        :'2 - indoor temperature[2]_HealthBox 3[Healthbox3] - temperature',
-                    'sensor_name'      :'Temperature Room 2',
-                    'physical_quantity':'temperature',
-                    'unit'             :'celcius',
-                },
-                {
-                    'sensor_id'        :'2 - indoor relative humidity[2]_HealthBox 3[Healthbox3] - humidity',
-                    'sensor_name'      :'Humidity Room 2',
-                    'physical_quantity':'humidity',
-                    'unit'             :'percent',
-                },
-                {
-                    'sensor_id'        :'2 - indoor air quality[2]_HealthBox 3[Healthbox3] - co2',
-                    'sensor_name'      :'CO2 Room 2',
-                    'physical_quantity':'co2',
-                    'unit'             :'parts_per_million',
-                },
-                {
-                    'sensor_id'        :'2 - indoor volatile organic compounds[2]_HealthBox 3[Healthbox3] - concentration',
-                    'sensor_name'      :'VOC Room 2',
+                    'sensor_id'        :'roomID - indoor volatile organic compounds[roomID]_HealthBox 3[Healthbox3] - concentration',
+                    'sensor_name'      :'VOC Room roomID',
                     'physical_quantity':'voc',
                     'unit'             :'parts_per_million',
                 },
@@ -157,7 +133,7 @@ class HealthboxPlugin(OMPluginBase):
         if serial_key is not None:
             try:
                 self.discovered_devices[serial_key] = HealthBox3Driver(ip=ip)
-                self.logger('Found Endura Delta device @ ip: {} with serial key: {}'.format(ip, serial_key))
+                self.logger('Found Healthbox3 device @ ip: {} with serial key: {}'.format(ip, serial_key))
                 self.register_ventilation_config(serial_key)
             except Exception as ex:
                 self.logger("Discovered device @ {}, but could not connect to the device... {}".format(ip, ex))
@@ -189,6 +165,21 @@ class HealthboxPlugin(OMPluginBase):
         self.serial_key_to_gateway_id[serial_key] = gateway_id
         self.logger('Successfully registered new ventilation device @ gateway id: {}'.format(gateway_id))
 
+    def _define_sensors_with_rooms(self, rooms, sensor_list):
+        # type: (list, list of dicts) -> list of dicts
+        # because we do not want to boilerplate the variable names for all availe rooms, we introduce this function
+        new_sensor_list = []
+        # loop over all the room numbers
+        for room in rooms:
+            # loop over all the sensors per room
+            for sensor in sensor_list:
+                # add roomnumber to sensor
+                new_sensor = {}
+                for key, value in sensor.items():
+                    new_sensor[key] = value.replace('roomID', str(room))
+                new_sensor_list.append(new_sensor)
+        return new_sensor_list
+
     def _register_sensor(self, serial_key, sensor_id, sensor_name, physical_quantity, unit_of_measure):
         # Registering the sensor
         external_id = str(serial_key)+ ' ' + str(sensor_id)
@@ -205,7 +196,7 @@ class HealthboxPlugin(OMPluginBase):
         data = {'id': gateway_id, 'value': value}
         response = self.webinterface.sensor.set_status(sensor_id = gateway_id, value = value)
         if response is None:
-            self.logger('Could not update sensor data for sensor {} for Endura Delta with key {}'.format(sensor_id, serial_key))
+            self.logger('Could not update sensor data for sensor {} for HealthBox3 with key {}'.format(sensor_id, serial_key))
             return False
         return True
 
@@ -215,7 +206,7 @@ class HealthboxPlugin(OMPluginBase):
         while not self._enabled:
             time.sleep(2)
         while self._enabled:
-            # get list of all endura delta devices and loop over devices
+            # get list of all Healthbox3 devices and loop over devices
             serial_keys = self.discovered_devices.keys()
             for serial_key in serial_keys:
                 hbd = self.discovered_devices[serial_key]  # type: HealthBox3Driver
@@ -224,8 +215,11 @@ class HealthboxPlugin(OMPluginBase):
                     continue
                 # get list of variables available to this device
                 variables = hbd.get_list_of_variables()
+                # get sensors per room
+                rooms = hbd.get_available_rooms()
+                sensors = self._define_sensors_with_rooms(rooms, self.sensorsGeneral)
                 # check if sensor in sensor list is available on the device (safety check)
-                for sensor in self.sensors:
+                for sensor in sensors:
                     if sensor['sensor_id'] not in variables:
                         continue
                     # Now we know that the sensor exists on the device, check if it is already registered on the cloud

@@ -38,6 +38,7 @@ class DataFrame:
 class HealtBox3Storage:
     def __init__(self):
         self.dataframes = {}  # type: Dict[str, DataFrame]
+        self.available_rooms = [] # type: list
 
     def upsert_from_dataframe_list(self, dataframe_list):
         # type: (List[SingleDataFrame]) -> None
@@ -84,7 +85,7 @@ class HealtBox3Storage:
 
     def get_list_of_variables(self):
         # type: () -> List[str]
-        """ returns a list of all the possible variables in the Endura Delta system """
+        """ returns a list of all the possible variables in the HealthBox3 system """
         return list(self.dataframes.keys())
 
     def __len__(self):
@@ -123,7 +124,7 @@ class HealthBox3Driver:
 
     def stop(self):
         # type: () -> None
-        """ Stop the sync thread to cleanly close of the Endura Delta object"""
+        """ Stop the sync thread to cleanly close of the HealthBox3 object"""
 
         # then stopping the syncing
         self.is_running = False
@@ -233,6 +234,10 @@ class HealthBox3Driver:
             response = True
         return response
 
+    def get_available_rooms(self):
+        # type: () -> list
+        return self.hbs.available_rooms        
+
     def get_gateway_id(self, name):
         # type: (str, Index) -> Optional[Any]
         """ Retrieves a variable from the cache """
@@ -243,7 +248,7 @@ class HealthBox3Driver:
     def set_gateway_id(self, identifier, gateway_id):
         # type: (str, Any, Index) -> str
         """
-        Will update a variable on the Endura Delta device
+        Will update a variable on the HealthBox3 device
         """
         # set the cached state also up to date
         response = self.hbs.update_gateway_id(identifier=identifier, gateway_id=gateway_id)
@@ -253,6 +258,7 @@ class HealthBox3Driver:
         # boilerplate to be able to get the information out of the healthbox in a usable manner
         # type: (dict) -> list
         dataframe_list = []
+        room_list      = []
 
         # get general (unnested) information
         for key, value in data.items():
@@ -287,6 +293,7 @@ class HealthBox3Driver:
 
         # get sensor per room information
         for key, roomnr in data['room'].items(): # loop over the available rooms
+            room_list.append(key)
             for sensor in roomnr['sensor']: # dive into sensors per room
                 # jump into parameter -> first dict in this dict -> get unit and value
                 for key, value in sensor['parameter'].items():
@@ -303,7 +310,7 @@ class HealthBox3Driver:
                         room       = sensor['basic_id']
                     )
                     dataframe_list.append(dataframe)
-        return dataframe_list
+        return dataframe_list, key
 
     def _sync_variables(self):
         # Function to sync variables from HealthBox3 to gateway cache
@@ -316,9 +323,10 @@ class HealthBox3Driver:
         data_json = resp.json()
 
         # process values
-        dataframe_list = self._extract_data(data_json)
+        dataframe_list, room_list = self._extract_data(data_json)
         # upsert values
         self.hbs.upsert_from_dataframe_list(dataframe_list)
+        self.hbs.available_rooms = room_list
 
     def _sync_periodically(self):
         """ General sync function to sync all data with the device """
