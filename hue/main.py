@@ -365,29 +365,21 @@ class Hue(OMPluginBase):
 
     def _register_sensor(self, name, external_id):
         logger.debug('Registering sensor with name %s and external_id %s', name, external_id)
-        data = {
-            'external_id': external_id,
-            'source': {'type': 'plugin', 'name': Hue.name},
-            'name': name,
-            'physical_quantity': 'temperature',
-            'unit': 'celcius',
-        }
-        response = self.webinterface.set_sensor_configuration(config=json.dumps(data))
-        data = json.loads(response)
-        if data is None or not data.get('success', False):
-            logger.error('Could not register new sensor, registration failed trough API')
-            logger.error(data)
+        try:
+            config = {
+                'name': name,
+            }
+            response = self.webinterface.sensor.register(external_id = external_id, physical_quantity = 'temperature', unit = 'celcius', config = config)
+            return response.id
+        except Exception as e:
+            logger.warning('Failed registering sensor with name %s and external_id %s with exception %s', name, external_id, str(e.message))
             return None
-        response = self.webinterface.get_sensor_configurations()
-        data = json.loads(response)
-        sensor_id = next((x['id'] for x in data['config'] if x.get('external_id') == external_id and x.get('source', {}).get('name') == Hue.name), None)
-        logger.info('Registered new sensor with name %s and external_id %s', name, external_id)
-        return sensor_id
+
 
     def _update_sensor(self, sensor_id, value):
         logger.debug('Updating sensor %s with status %s', sensor_id, value)
-        data = {'id': sensor_id, 'value': value}
-        response = self.webinterface.set_sensor_status(status=json.dumps(data))
-        data = json.loads(response)
-        if data is None or not data.get('success', False):
+        response = self.webinterface.sensor.set_status(sensor_id = sensor_id, value = value)
+        if response is None:
             logger.warning('Could not set the updated sensor value')
+            return False
+        return True
