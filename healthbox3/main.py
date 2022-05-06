@@ -55,6 +55,7 @@ class HealthboxPlugin(OMPluginBase):
         self.healtbox_manager.set_discovery_callback(self.discover_callback)
         self.healtbox_manager.start_discovery()
 
+        # roomID is used as a placeholder for the room number, this is replaced through _define_sensors_with_rooms function
         self.sensorsGeneral =   [
                 {
                     'sensor_id'        :'roomID - indoor temperature[roomID]_HealthBox 3[Healthbox3] - temperature',
