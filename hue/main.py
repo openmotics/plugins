@@ -365,13 +365,16 @@ class Hue(OMPluginBase):
 
     def _register_sensor(self, name, external_id):
         logger.debug('Registering sensor with name %s and external_id %s', name, external_id)
-        config = {
-            'name': name,
-        }
-        response = self.webinterface.sensor.register(external_id = external_id, physical_quantity = 'temperature', unit = 'celcius', config = config)
-        if not response:
+        try:
+            config = {
+                'name': name,
+            }
+            response = self.webinterface.sensor.register(external_id = external_id, physical_quantity = 'temperature', unit = 'celcius', config = config)
+            return response.id
+        except Exception as e:
+            logger.warning('Failed registering sensor with name %s and external_id %s with exception %s', name, external_id, str(e.message))
             return None
-        return response.id
+
 
     def _update_sensor(self, sensor_id, value):
         logger.debug('Updating sensor %s with status %s', sensor_id, value)
