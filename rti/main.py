@@ -22,9 +22,10 @@ import serial
 import simplejson as json
 import six
 import time
+from contextlib import contextmanager
 from six.moves.queue import Queue
 
-from plugins.base import om_expose, background_task, output_status, OMPluginBase, PluginConfigChecker
+from plugins.base import om_expose, background_task, output_status, thermostat_status, thermostat_group_status, OMPluginBase, PluginConfigChecker
 
 
 class RTI(OMPluginBase):
@@ -96,21 +97,18 @@ class RTI(OMPluginBase):
                     self.logger('Invalid command: {0}'.format(command))
                     continue
                 identifier = command.split('=')[0]
-                match = re.match(r'^automation\.(\d+)=execute$', command)
-                if match is not None:
-                    group_action_id = int(match.groups()[0])
-                    try:
+                with self._process_message(command=command, identifier=identifier,
+                                           regex=r'^automation\.(\d+)=execute$') as matches:
+                    if matches is not None:
+                        group_action_id = int(matches[0])
                         RTI._execute_api(function=self.webinterface.do_group_action,
                                          group_action_id=group_action_id)
-                    except Exception as ex:
-                        self._process_exception(identifier=identifier, exception=ex)
-                    continue
-                match = re.match(r'^output\.(\d+)\.state=(on|off|toggle)$', command)
-                if match is not None:
-                    matches = match.groups()
-                    output_id = int(matches[0])
-                    state = matches[1]
-                    try:
+                        continue
+                with self._process_message(command=command, identifier=identifier,
+                                           regex=r'^output\.(\d+)\.state=(on|off|toggle)$') as matches:
+                    if matches is not None:
+                        output_id = int(matches[0])
+                        state = matches[1]
                         if state in ['on', 'off']:
                             RTI._execute_api(function=self.webinterface.set_output,
                                              id=output_id,
@@ -119,36 +117,118 @@ class RTI(OMPluginBase):
                             RTI._execute_api(function=self.webinterface.do_basic_action,
                                              action_type=162,  # Toggle
                                              action_number=output_id)
-                    except Exception as ex:
-                        self._process_exception(identifier=identifier, exception=ex)
-                    continue
-                match = re.match(r'^output\.(\d+)\.dimmer=(\d+)$', command)
-                if match is not None:
-                    matches = match.groups()
-                    output_id = int(matches[0])
-                    value = min(100, max(0, int(matches[1])))
-                    try:
+                        continue
+                with self._process_message(command=command, identifier=identifier,
+                                           regex=r'^output\.(\d+)\.dimmer=(\d+)$') as matches:
+                    if matches is not None:
+                        output_id = int(matches[0])
+                        value = min(100, max(0, int(matches[1])))
                         RTI._execute_api(function=self.webinterface.set_output,
                                          id=output_id,
                                          is_on=value > 0,
                                          dimmer=value)
-                    except Exception as ex:
-                        self._process_exception(identifier=identifier, exception=ex)
-                    continue
-                match = re.match(r'^output=request_current_states$', command)
-                if match is not None:
-                    try:
+                        continue
+                with self._process_message(command=command, identifier=identifier,
+                                           regex=r'^output=request_current_states$') as matches:
+                    if matches is not None:
                         status = RTI._execute_api(function=self.webinterface.get_output_status).get('status', [])
                         for entry in status:
                             self.output_status({'id': entry['id'],
                                                 'status': {'on': entry['status'] == 1,
                                                            'value': entry['dimmer']}})
-                    except Exception as ex:
-                        self._process_exception(identifier=identifier, exception=ex)
-                    continue
+                        continue
+                with self._process_message(command=command, identifier=identifier,
+                                           regex=r'^thermostat\.(\d+)\.preset=(away|party|vacation|auto)$') as matches:
+                    if matches is not None:
+                        thermostat_id = int(matches[0])
+                        preset = matches[1]
+                        RTI._execute_api(function=self.webinterface.set_thermostat,
+                                         thermostat_id=thermostat_id,
+                                         preset=preset)
+                        continue
+                with self._process_message(command=command, identifier=identifier,
+                                           regex=r'^thermostat\.(\d+)\.setpoint=([\d.]+)$') as matches:
+                    if matches is not None:
+                        thermostat_id = int(matches[0])
+                        setpoint = float(matches[1])
+                        RTI._execute_api(function=self.webinterface.set_thermostat,
+                                         thermostat_id=thermostat_id,
+                                         temperature=setpoint)
+                        continue
+                with self._process_message(command=command, identifier=identifier,
+                                           regex=r'^thermostat\.(\d+)\.state=(on|off)$') as matches:
+                    if matches is not None:
+                        thermostat_id = int(matches[0])
+                        RTI._execute_api(function=self.webinterface.set_thermostat,
+                                         thermostat_id=thermostat_id,
+                                         state=matches[1])
+                        continue
+                with self._process_message(command=command, identifier=identifier,
+                                           regex=r'^thermostat=request_current_states$') as matches:
+                    if matches is not None:
+                        status = RTI._execute_api(function=self.webinterface.get_thermostat_group_status).get('status', [])
+                        for group_entry in status:
+                            for entry in group_entry['thermostats']:
+                                self.thermostat_status({'id': entry['id'],
+                                                        'status': {'preset': entry['preset'],
+                                                                   'state': entry['state'],
+                                                                   'current_setpoint': entry['setpoint_temperature'],
+                                                                   'actual_temperature': entry['actual_temperature']}})
+                        continue
+                with self._process_message(command=command, identifier=identifier,
+                                           regex=r'^thermostat_group\.(\d+)\.mode=(cooling|heating)$') as matches:
+                    if matches is not None:
+                        thermostat_group_id = int(matches[0])
+                        RTI._execute_api(function=self.webinterface.set_thermostat_group,
+                                         thermostat_group_id=thermostat_group_id,
+                                         mode=matches[1])
+                        continue
+                with self._process_message(command=command, identifier=identifier,
+                                           regex=r'^thermostat_group=request_current_states$') as matches:
+                    if matches is not None:
+                        status = RTI._execute_api(function=self.webinterface.get_thermostat_group_status).get('status', [])
+                        for group_entry in status:
+                            self.thermostat_group_status({'id': group_entry['id'],
+                                                          'status': {'mode': group_entry['mode']}})
+                        continue
                 self.logger('Unprocessed command: {0}'.format(command))
             except Exception as main_exception:
                 self.logger('Unexpected exception while processing command {0}: {1}'.format(command, main_exception))
+
+    @contextmanager
+    def _process_message(self, command, identifier, regex):
+        match = re.match(regex, command)
+        if match is not None:
+            try:
+                yield match.groups()
+            except Exception as ex:
+                self._process_exception(identifier=identifier, exception=ex)
+        else:
+            yield None
+
+    @thermostat_group_status(version=1)
+    def thermostat_group_status(self, status):
+        if self._enabled is False:
+            return
+        try:
+            thermostat_group_id = status['id']
+            self._write_serial('thermostat_group.{0}.mode={1}'.format(thermostat_group_id,
+                                                                      status['status']['mode'].lower()))
+        except Exception as ex:
+            self.logger('Could not process thermostat group event {0}: {1}'.format(status, ex))
+
+    @thermostat_status(version=1)
+    def thermostat_status(self, status):
+        if self._enabled is False:
+            return
+        try:
+            thermostat_id = status['id']
+            self._write_serial('thermostat.{0}.preset={1}'.format(thermostat_id, status['status']['preset'].lower()))
+            self._write_serial('thermostat.{0}.setpoint={1}'.format(thermostat_id, status['status']['current_setpoint']))
+            self._write_serial('thermostat.{0}.state={1}'.format(thermostat_id, status['status']['state'].lower()))
+            self._write_serial('thermostat.{0}.temperature={1}'.format(thermostat_id, status['status']['actual_temperature']))
+        except Exception as ex:
+            self.logger('Could not process thermostat event {0}: {1}'.format(status, ex))
 
     @output_status(version=2)
     def output_status(self, output_event):

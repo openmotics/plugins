@@ -22,12 +22,13 @@ Malformed messages will be discarded without notification.
 For example:
 * `output.5.state=error|Communication timed out`
 
-However, the gateway will send the same messages if an entity's state is changed.
-This means that when the message `output.5.state=on` is sent to the gateway (as a
-command), and this results in output 5's state to be actually changed, the 
-gateway will in turn send the message `output.5.state=on` (as an event) to the 
-RTI device. If no state was changed because of the message (e.g. the output was 
-already on), no message (event) will be sent by the gateway.
+When states change on the system, the gateway will send these messages to report
+this new value. This means that when the message `output.5.state=on` is sent to
+the gateway (as a command), and this results in output 5's state to be actually
+changed, the gateway will in turn send the message `output.5.state=on` (as an 
+event) to the RTI device. If not state was changed, no message will be sent by
+the gateway. Due to internal workings, the gateway might hoever send events
+even if the state was not changed.
 
 ### Messages
 
@@ -56,17 +57,17 @@ already on), no message (event) will be sent by the gateway.
 * `thermostat.<id>.temperature=<value>`
   * Command: This is a red-only value
   * Event: Reports the current temperature for thermostat `<id>`.
-* `thermostat.request_current_states`
+* `thermostat.<id>.state=<on|off>`
+  * Command: Turns on or off thermostat `<id>`
+  * Event: Thermostat `<id>` was turned on or off
+* `thermostat=request_current_states`
   * Command: Requests that the gateway sends events for all thermostat states
   * Event: This message is not available as an event. Instead, multiple
     `thermostat.<id>.xxx=xxx` messages can be expected
-* `thermostat_group.<id>.state=<on|off>`
-  * Command: Turns on or off thermostat group `<id>`
-  * Event: Thermostat group `<id>` was turned on or off
 * `thermostat_group.<id>.mode=<cooling|heating>`
   * Command: Changes the mode for thermostat group `<id>` to `cooling` or `heating`
   * Event: The mode for thermostat group `<id>` was changed
-* `thermostat_group.request_current_states`
+* `thermostat_group=request_current_states`
   * Command: Requests that the gateway sends events for all thermostat group states
   * Event: This message is not available as an event. Instead, multiple
     `thermostat_group.<id>.xxx=xxx` messages can be expected
