@@ -256,6 +256,7 @@ class HealthBox3Driver:
 
     def _extract_data(self, data):
         # boilerplate to be able to get the information out of the healthbox in a usable manner
+        # input the json response from the healthbox and output a list of sensors and a list of roomnumbers
         # type: (dict) -> list
         dataframe_list = []
         room_list      = []
@@ -310,7 +311,7 @@ class HealthBox3Driver:
                         room       = sensor['basic_id']
                     )
                     dataframe_list.append(dataframe)
-        return dataframe_list, key
+        return dataframe_list, room_list
 
     def _sync_variables(self):
         # Function to sync variables from HealthBox3 to gateway cache
