@@ -155,7 +155,7 @@ class HealthboxPlugin(OMPluginBase):
                                             amount_of_levels=2,
                                             device_type='HealthBox3',
                                             device_vendor='Renson',
-                                            device_serial='serial_key')
+                                            device_serial=serial_key)
         logger.info('Successfully registered new ventilation device')
 
     def _define_sensors_with_rooms(self, rooms, sensor_list):
