@@ -173,26 +173,6 @@ class HealthboxPlugin(OMPluginBase):
                 new_sensor_list.append(new_sensor)
         return new_sensor_list
 
-    def _register_sensor(self, serial_key, sensor_id, sensor_name, physical_quantity, unit_of_measure):
-        # Registering the sensor
-        external_id = str(serial_key)+ ' ' + str(sensor_id)
-        name        = str(serial_key)+ ' ' + str(sensor_name)
-        config = {
-            'name' : name,
-        }
-        response = self.webinterface.sensor.register(external_id = external_id, physical_quantity = physical_quantity, unit = unit_of_measure, config=config)
-        if not response:
-            return None
-        return response
-
-    def _update_sensor(self, serial_key, sensor_id, value, gateway_id):
-        data = {'id': gateway_id, 'value': value}
-        response = self.webinterface.sensor.set_status(sensor_id = gateway_id, value = value)
-        if response is None:
-            logger.error('Could not update sensor data for sensor {} for HealthBox3 with key {}'.format(sensor_id, serial_key))
-            return False
-        return True
-
     @background_task
     def _sensor_manager(self):
         logger.info("Starting to register and update sensors on the gateway")
@@ -215,21 +195,21 @@ class HealthboxPlugin(OMPluginBase):
                 for sensor in sensors:
                     if sensor['sensor_id'] not in variables:
                         continue
-                    # Now we know that the sensor exists on the device, check if it is already registered on the cloud
-                    gateway_id = hbd.get_gateway_id(sensor['sensor_id'])
-                    if not gateway_id:
-                        # Register the sensor on the cloud
-                        response = self._register_sensor(serial_key, sensor['sensor_id'], sensor['sensor_name'], sensor['physical_quantity'], sensor['unit'])
-                        if response == None:
-                            logger.error('Failed to register sensor in gateway with sensor_id {} and serial_key {}'.format(sensor['sensor_id'], serial_key))
-                            continue
-                        # save the gateway_id on the gateway
-                        hbd.set_gateway_id(sensor['sensor_id'], response.id)
-                        gateway_id = hbd.get_gateway_id(sensor['sensor_id'])
+                    # Now we know that the sensor exists on the device, check if it is already registered on the gateway
+                    gateway_sensor = hbd.get_gateway_sensor(sensor['sensor_id'])
+                    if not gateway_sensor:
+                        # Register the sensor on the gateway
+                        external_id = '{0} {1}'.format(serial_key, sensor['sensor_id'])
+                        name = '{0} {1}'.format(serial_key, sensor['sensor_name'])
+                        gateway_sensor = self.connector.sensor.register(external_id=external_id,
+                                                                        physical_quantity=sensor['physical_quantity'],
+                                                                        unit=sensor['unit'],
+                                                                        name=name)
+                        hbd.set_gateway_sensor(sensor['sensor_id'], gateway_sensor)
                     # get sensor data
                     sensor_data = hbd.get_variable(sensor['sensor_id'])
-                    # update sensor data of known sensor in EDD
-                    self._update_sensor(serial_key, sensor['sensor_id'], sensor_data, gateway_id)
+                    self.connector.sensor.report_status(sensor=gateway_sensor,
+                                                        value=sensor_data)
             time.sleep(30)
             # test
 

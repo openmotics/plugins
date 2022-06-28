@@ -11,6 +11,9 @@ Driver is the API handler and interface with the device, also holds the Storage
 Manager Handles discovery and keeps track of the discovered devices
 """
 
+if False:  # MYPY
+    from typing import Any
+
 
 class HealthBox3Exception(Exception):
     pass
@@ -24,16 +27,16 @@ class DataFrame:
                  value=None,
                  description=None,
                  room=None,
-                 gateway_id=None,
+                 gateway_sensor=None,
                  ):
-        # type: (str, str, str, str, str, str, str) -> None
+        # type: (str, str, str, str, str, str, Any) -> None
         self.identifier  = identifier
         self.name        = name
         self.unit        = unit
         self.value       = value
         self.description = description
         self.room        = room
-        self.gateway_id  = gateway_id
+        self.gateway_sensor = gateway_sensor
 
 class HealtBox3Storage:
     def __init__(self):
@@ -70,17 +73,17 @@ class HealtBox3Storage:
         self.dataframes[identifier].value = value
         return True
 
-    def get_gateway_id(self, identifier):
+    def get_gateway_sensor(self, identifier):
         # type (identifier) -> int
         if identifier in self.dataframes.keys():
-            return self.dataframes[identifier].gateway_id
+            return self.dataframes[identifier].gateway_sensor
         return None
 
-    def update_gateway_id(self, identifier, gateway_id):
+    def update_gateway_sensor(self, identifier, gateway_sensor):
         # type: (identifier, int) -> bool
         if identifier not in self.dataframes.keys():
             return False
-        self.dataframes[identifier].gateway_id = gateway_id
+        self.dataframes[identifier].gateway_sensor = gateway_sensor
         return True
 
     def get_list_of_variables(self):
@@ -236,22 +239,22 @@ class HealthBox3Driver:
 
     def get_available_rooms(self):
         # type: () -> list
-        return self.hbs.available_rooms        
+        return self.hbs.available_rooms
 
-    def get_gateway_id(self, name):
+    def get_gateway_sensor(self, name):
         # type: (str, Index) -> Optional[Any]
         """ Retrieves a variable from the cache """
         if name not in self.get_list_of_variables():
             return None
-        return self.hbs.get_gateway_id(name)
+        return self.hbs.get_gateway_sensor(name)
 
-    def set_gateway_id(self, identifier, gateway_id):
+    def set_gateway_sensor(self, identifier, gateway_sensor):
         # type: (str, Any, Index) -> str
         """
         Will update a variable on the HealthBox3 device
         """
         # set the cached state also up to date
-        response = self.hbs.update_gateway_id(identifier=identifier, gateway_id=gateway_id)
+        response = self.hbs.update_gateway_sensor(identifier=identifier, gateway_sensor=gateway_sensor)
         return response
 
     def _extract_data(self, data):
@@ -265,8 +268,8 @@ class HealthBox3Driver:
         for key, value in data.items():
             if not isinstance(value, list) and not isinstance(value, dict): # filtering out nested dicts and lists
                 dataframe = DataFrame(
-                    identifier = key, 
-                    name       = key, 
+                    identifier = key,
+                    name       = key,
                     value      = value
                 )
                 dataframe_list.append(dataframe)
@@ -274,8 +277,8 @@ class HealthBox3Driver:
         # get global information
         for key, value in data['global']['parameter'].items():
             dataframe = DataFrame(
-                identifier = key, 
-                name       = key, 
+                identifier = key,
+                name       = key,
                 value      = value['value']
             )
             dataframe_list.append(dataframe)
@@ -284,10 +287,10 @@ class HealthBox3Driver:
         for sensor in data['sensor']:
             identifier = str(sensor['basic_id']) + ' - ' + str(sensor['name'])
             dataframe = DataFrame(
-                identifier = identifier, 
-                name       = sensor['type'], 
-                value      = sensor['parameter']['index']['value'], 
-                unit       = sensor['parameter']['index']['unit'], 
+                identifier = identifier,
+                name       = sensor['type'],
+                value      = sensor['parameter']['index']['value'],
+                unit       = sensor['parameter']['index']['unit'],
                 room       = sensor['basic_id']
             )
             dataframe_list.append(dataframe)
@@ -304,10 +307,10 @@ class HealthBox3Driver:
                     identifier = str(sensor['basic_id']) + ' - ' +  str(sensor['name'] + ' - ' + str(sub_key))
 
                     dataframe = DataFrame(
-                        identifier = identifier, 
-                        name       = sensor['type'], 
-                        value      = sub_value, 
-                        unit       = sub_unit, 
+                        identifier = identifier,
+                        name       = sensor['type'],
+                        value      = sub_value,
+                        unit       = sub_unit,
                         room       = sensor['basic_id']
                     )
                     dataframe_list.append(dataframe)
@@ -342,7 +345,7 @@ class HealthBox3Driver:
         def __init__(self):
             pass
         DATA = '/v2/api/data/current'
-        
+
 class HealthBox3Manager:
     LISTEN_PORT = 49152  # The port to listen on to receive the reply packages back
     DISCOVER_PORT = 49152  # The port to send the discover package to
