@@ -76,6 +76,12 @@ class HealthboxPlugin(OMPluginBase):
                     'unit'             :'parts_per_million',
                 },
                 {
+                    'sensor_id'        :'roomID - indoor CO2[roomID]_HealthBox 3[Healthbox3] - concentration',
+                    'sensor_name'      :'CO2 Room roomID',
+                    'physical_quantity':'co2',
+                    'unit'             :'parts_per_million',
+                },
+                {
                     'sensor_id'        :'roomID - indoor volatile organic compounds[roomID]_HealthBox 3[Healthbox3] - concentration',
                     'sensor_name'      :'VOC Room roomID',
                     'physical_quantity':'voc',
@@ -186,7 +192,7 @@ class HealthboxPlugin(OMPluginBase):
         external_id = str(serial_key)+ ' ' + str(sensor_id)
         name        = str(serial_key)+ ' ' + str(sensor_name)
         config = {
-            'name' : name, 
+            'name' : name,
         }
         response = self.webinterface.sensor.register(external_id = external_id, physical_quantity = physical_quantity, unit = unit_of_measure, config=config)
         if not response:
