@@ -76,6 +76,12 @@ class HealthboxPlugin(OMPluginBase):
                     'unit'             :'parts_per_million',
                 },
                 {
+                    'sensor_id'        :'roomID - indoor CO2[roomID]_HealthBox 3[Healthbox3] - concentration',
+                    'sensor_name'      :'CO2 Room roomID',
+                    'physical_quantity':'co2',
+                    'unit'             :'parts_per_million',
+                },
+                {
                     'sensor_id'        :'roomID - indoor volatile organic compounds[roomID]_HealthBox 3[Healthbox3] - concentration',
                     'sensor_name'      :'VOC Room roomID',
                     'physical_quantity':'voc',
