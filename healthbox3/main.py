@@ -214,8 +214,8 @@ class HealthboxPlugin(OMPluginBase):
                         hbd.set_gateway_sensor(sensor['sensor_id'], gateway_sensor)
                     # get sensor data
                     sensor_data = hbd.get_variable(sensor['sensor_id'])
-                    self.connector.sensor.report_status(sensor=gateway_sensor,
-                                                        value=sensor_data)
+                    self.connector.sensor.report_state(sensor=gateway_sensor,
+                                                       value=sensor_data)
             time.sleep(30)
             # test
 
