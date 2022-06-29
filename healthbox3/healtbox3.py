@@ -203,6 +203,19 @@ class HealthBox3Driver:
                 self.is_connected = False
             return resp
 
+    def get_boost_level(self, roomnr):
+        endpoint = HealthBox3Driver.Endpoints.BOOST + str(roomnr)
+        return self._perform_get_request(endpoint)
+
+    def set_boost_level(self, roomnr, level, timeout):
+        endpoint = HealthBox3Driver.Endpoints.BOOST + str(roomnr)
+        body = {
+                "enable": 'True',
+                "level": level,
+                "timeout": timeout
+                }
+        return self._perform_post_request(endpoint, body)
+
     def get_list_of_variables(self):
         # type: () -> List[str]
         """ Returns a list of variables in the system """
@@ -345,6 +358,7 @@ class HealthBox3Driver:
         def __init__(self):
             pass
         DATA = '/v2/api/data/current'
+        BOOST = '/v2/api/boost/'
 
 class HealthBox3Manager:
     LISTEN_PORT = 49152  # The port to listen on to receive the reply packages back
