@@ -55,6 +55,11 @@ class HealthboxPlugin(OMPluginBase):
         self.healtbox_manager.set_discovery_callback(self.discover_callback)
         self.healtbox_manager.start_discovery()
 
+        self.connector.ventilation.attach_set_auto(self._set_auto, version=1)
+        self.connector.ventilation.attach_set_manual(self.set_boost_level, version=1)
+
+        self.separator = "-+-"
+
         # roomID is used as a placeholder for the room number, this is replaced through _define_sensors_with_rooms function
         self.sensorsGeneral =   [
                 {
@@ -157,16 +162,61 @@ class HealthboxPlugin(OMPluginBase):
             logger.error('Could not register new ventilation device, driver is not working properly to request data')
             return
         serial_key = hbd.get_variable('serial')
-        self.connector.ventilation.register(external_id=serial_key,
-                                            name=hbd.get_variable('device name'),
-                                            amount_of_levels=2,
-                                            device_type='HealthBox3',
-                                            device_vendor='Renson',
-                                            device_serial=serial_key)
-        logger.info('Successfully registered new ventilation device')
+        for room in hbd.get_available_rooms():
+            self.connector.ventilation.register(external_id=serial_key + self.separator + str(room),
+                                                name=hbd.get_variable('device name'),
+                                                amount_of_levels=300,
+                                                device_type='HealthBox3',
+                                                device_vendor='Renson',
+                                                device_serial=serial_key)
+            logger.info('Successfully registered new ventilation device')
+
+    def _split_external_id(self, external_id):
+            split = external_id.split(separator)
+            if len(split) != 2:
+                logger.error("error splitting external_id")
+                return None, None
+            serial_key = split[0]
+            roomnr = split[1]
+            return serial_key, roomnr
+
+    def get_boost_level(self, external_id):
+        # type: (string, string) -> none
+        device_serial, roomnr = self._split_external_id(external_id)
+        if roomnr is None:
+            logger.error("invalid room nr")
+            return
+        hbd = self.discovered_devices[device_serial]
+        if hbd is None:
+            logger.error('No HealthBox3 with device_serial: ' + str(device_serial))
+            return
+        hbd.get_boost_level(roomnr)
+
+    def set_boost_level(self, external_id, level, timeout):
+        # type: (string, string, int, int) -> none
+        if level < 0:
+            logger.error('Invalid boost level: ' + str(level))
+            return
+        if timeout < 0:
+            logger.error('Invalid boost timeout: ' + str(timeout))
+            return
+        device_serial, roomnr = self._split_external_id(external_id)
+        if roomnr is None:
+            logger.error("invalid room nr")
+            return
+        hbd = self.discovered_devices[device_serial]
+        if hbd is None:
+            logger.error('No HealthBox3 with device_serial ' + device_serial)
+            return
+        hbd.set_boost_level(roomnr, level, timeout)
+        return self.get_boost_level(external_id)
+
+    def _set_auto(self, external_id):
+        self.set_boost_level(external_id, 100, 2)
+        logger.info('Set ventilation to automatic')
 
     def _define_sensors_with_rooms(self, rooms, sensor_list):
-        # type: (list, list of dicts) -> list of dicts
+        # type: (list, list of dicts) -> list(dicts)
         # because we do not want to boilerplate the variable names for all availe rooms, we introduce this function
         new_sensor_list = []
         # loop over all the room numbers
