@@ -172,6 +172,7 @@ class HealthboxPlugin(OMPluginBase):
             logger.info('Successfully registered new ventilation device')
 
     def _split_external_id(self, external_id):
+            # type (string) -> (string, string)
             split = external_id.split(separator)
             if len(split) != 2:
                 logger.error("error splitting external_id")
