@@ -58,7 +58,7 @@ class HealthboxPlugin(OMPluginBase):
         self.connector.ventilation.attach_set_auto(self._set_auto, version=1)
         self.connector.ventilation.attach_set_manual(self.set_boost_level, version=1)
 
-        self.separator = "-+-"
+        self.separator = "/"
 
         # roomID is used as a placeholder for the room number, this is replaced through _define_sensors_with_rooms function
         self.sensorsGeneral =   [
