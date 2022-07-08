@@ -28,8 +28,8 @@ class HealthboxPlugin(OMPluginBase):
     A Healthbox 3 plugin, for reading and controlling your Renson Healthbox 3
     """
 
-    name = 'Healthbox3'
-    version = '1.1.0'
+    name = 'Healthbox'
+    version = '1.1.1'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
