@@ -144,12 +144,9 @@ class HealthboxPlugin(OMPluginBase):
         """ callback for when a new device has been discovered """
         serial_key = self.healtbox_manager.get_serial(ip)
         if serial_key is not None:
-            try:
-                self.discovered_devices[serial_key] = HealthBox3Driver(ip=ip)
-                logger.info('Found Healthbox3 device @ ip: {} with serial key: {}'.format(ip, serial_key))
-                self.register_ventilation_config(serial_key)
-            except Exception as ex:
-                logger.error("Discovered device @ {}, but could not connect to the device... {}".format(ip, ex))
+            self.discovered_devices[serial_key] = HealthBox3Driver(ip=ip)
+            logger.info('Found Healthbox3 device @ ip: {} with serial key: {}'.format(ip, serial_key))
+            self.register_ventilation_config(serial_key)
 
     def register_ventilation_config(self, serial_key):
         # type: (str) -> None
@@ -163,13 +160,19 @@ class HealthboxPlugin(OMPluginBase):
             return
         serial_key = hbd.get_variable('serial')
         for room in hbd.get_available_rooms():
-            self.connector.ventilation.register(external_id=serial_key + self.separator + str(room),
-                                                name=hbd.get_variable('device name'),
-                                                amount_of_levels=300,
-                                                device_type='HealthBox3',
-                                                device_vendor='Renson',
-                                                device_serial=serial_key)
-            logger.info('Successfully registered new ventilation device')
+            external_id = serial_key + self.separator + str(room)
+            name = hbd.get_variable('device name')
+            logger.info('Attempt to register new healthbox3 ventilation device with external_id = {} and name = {} '.format(external_id, name))
+            try:
+                self.connector.ventilation.register(external_id=external_id,
+                                                    name=name,
+                                                    amount_of_levels=300,
+                                                    device_type='HealthBox3',
+                                                    device_vendor='Renson',
+                                                    device_serial=serial_key)
+                logger.info('Successfully registered new healthbox3 ventilation device with external_id = {} and name = {} '.format(external_id, name))
+            except Exception as ex:
+                logger.error('Failed to register new healthbox3 ventilation device with external_id = {} and name = {} with error message = {} '.format(external_id, name, ex))
 
     def _split_external_id(self, external_id):
             # type (string) -> (string, string)
