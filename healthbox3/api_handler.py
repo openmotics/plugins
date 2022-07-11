@@ -1,9 +1,9 @@
 import json
 
+
 class ApiHandler:
-    def __init__(self, logger):
+    def __init__(self):
         self.requests_queue = {}
-        self.logger = logger
 
     def add_request(self, request, args, handler=None):
         if not hasattr(request, '__call__'):

@@ -13,23 +13,23 @@ local caching:
     dict with as key the reg_key of the device and value? (dict voor de variabele maar ook object voor status etc?)
 """
 
-import six
-import requests
 import simplejson as json
 import time
-from socket import *
-from threading import Thread
+import logging
 from plugins.base import om_expose, output_status, OMPluginBase, PluginConfigChecker, background_task, om_metric_data
 from .api_handler import ApiHandler
 from .healtbox3 import HealthBox3Manager, HealthBox3Driver
+
+logger = logging.getLogger(__name__)
+
 
 class HealthboxPlugin(OMPluginBase):
     """
     A Healthbox 3 plugin, for reading and controlling your Renson Healthbox 3
     """
 
-    name = 'Healthbox3'
-    version = '1.0.7'
+    name = 'Healthbox'
+    version = '1.1.1'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
@@ -38,22 +38,27 @@ class HealthboxPlugin(OMPluginBase):
     ]
     default_config = {'update_delay': 30}
 
-    def __init__(self, webinterface, logger):
-        super(HealthboxPlugin, self).__init__(webinterface, logger)
+    def __init__(self, webinterface, connector):
+        super(HealthboxPlugin, self).__init__(webinterface=webinterface,
+                                              connector=connector)
 
         self.__config = self.read_config(HealthboxPlugin.default_config)
         self.__config_checker = PluginConfigChecker(HealthboxPlugin.config_descr)
         self._enabled = True
 
-        self.api_handler = ApiHandler(self.logger)
+        self.api_handler = ApiHandler()
         self.discovered_devices = {}  # dict of all the Healthbox3 drivers mapped with register key as key
-        self.serial_key_to_gateway_id = {}  # mapping of register key to gateway id (for api calls)
 
-        self.logger("Started Healthbox 3 plugin")
+        logger.info("Started Healthbox 3 plugin")
 
         self.healtbox_manager = HealthBox3Manager()
         self.healtbox_manager.set_discovery_callback(self.discover_callback)
         self.healtbox_manager.start_discovery()
+
+        self.connector.ventilation.attach_set_auto(self._set_auto, version=1)
+        self.connector.ventilation.attach_set_manual(self.set_boost_level, version=1)
+
+        self.separator = "/"
 
         # roomID is used as a placeholder for the room number, this is replaced through _define_sensors_with_rooms function
         self.sensorsGeneral =   [
@@ -69,12 +74,13 @@ class HealthboxPlugin(OMPluginBase):
                     'physical_quantity':'humidity',
                     'unit'             :'percent',
                 },
-                {
-                    'sensor_id'        :'roomID - indoor air quality[roomID]_HealthBox 3[Healthbox3] - co2',
-                    'sensor_name'      :'CO2 Room roomID',
-                    'physical_quantity':'co2',
-                    'unit'             :'parts_per_million',
-                },
+                # deprecated way of co2
+                # {
+                #     'sensor_id'        :'roomID - indoor air quality[roomID]_HealthBox 3[Healthbox3] - co2',
+                #     'sensor_name'      :'CO2 Room roomID',
+                #     'physical_quantity':'co2',
+                #     'unit'             :'parts_per_million',
+                # },
                 {
                     'sensor_id'        :'roomID - indoor CO2[roomID]_HealthBox 3[Healthbox3] - concentration',
                     'sensor_name'      :'CO2 Room roomID',
@@ -104,13 +110,13 @@ class HealthboxPlugin(OMPluginBase):
         try:
             self._check_config(config)
         except Exception as ex:
-            self.logger("Could not set new config, config check failed: {}".format(ex))
+            logger.error("Could not set new config, config check failed: {}".format(ex))
             return json.dumps({'success': False})
 
         self.__config_checker.check_config(config)
         self.write_config(config)
         self.__config = config
-        self.logger("Succesfully saved new config")
+        logger.info("Succesfully saved new config")
 
         return json.dumps({'success': True})
 
@@ -138,42 +144,83 @@ class HealthboxPlugin(OMPluginBase):
         """ callback for when a new device has been discovered """
         serial_key = self.healtbox_manager.get_serial(ip)
         if serial_key is not None:
-            try:
-                self.discovered_devices[serial_key] = HealthBox3Driver(ip=ip)
-                self.logger('Found Healthbox3 device @ ip: {} with serial key: {}'.format(ip, serial_key))
-                self.register_ventilation_config(serial_key)
-            except Exception as ex:
-                self.logger("Discovered device @ {}, but could not connect to the device... {}".format(ip, ex))
+            self.discovered_devices[serial_key] = HealthBox3Driver(ip=ip)
+            logger.info('Found Healthbox3 device @ ip: {} with serial key: {}'.format(ip, serial_key))
+            self.register_ventilation_config(serial_key)
 
     def register_ventilation_config(self, serial_key):
         # type: (str) -> None
         """ Registers a new device to the gateway """
         if serial_key not in self.discovered_devices:
-            self.logger('Could not register new ventilation device, serial key is not known to the plugin')
+            logger.error('Could not register new ventilation device, serial key is not known to the plugin')
             return
         hbd = self.discovered_devices[serial_key]
         if hbd is None:
-            self.logger('Could not register new ventilation device, driver is not working properly to request data')
+            logger.error('Could not register new ventilation device, driver is not working properly to request data')
             return
         serial_key = hbd.get_variable('serial')
-        config = {
-            "name": hbd.get_variable('device name'),
-            "amount_of_levels": 2,
-            "device": {"type": "HealthBox3",
-                       "vendor": "Renson",
-                       "serial": serial_key
-            }
-        }
-        response = self.webinterface.ventilation.register(serial_key, config)
-        if not response:
-            self.logger('Could not register new ventilation device, registration failed trough API')
-        gateway_id = response.id
-        serial_key = response.external_id
-        self.serial_key_to_gateway_id[serial_key] = gateway_id
-        self.logger('Successfully registered new ventilation device @ gateway id: {}'.format(gateway_id))
+        for room in hbd.get_available_rooms():
+            external_id = serial_key + self.separator + str(room)
+            name = hbd.get_variable('device name')
+            logger.info('Attempt to register new healthbox3 ventilation device with external_id = {} and name = {} '.format(external_id, name))
+            try:
+                self.connector.ventilation.register(external_id=external_id,
+                                                    name=name,
+                                                    amount_of_levels=300,
+                                                    device_type='HealthBox3',
+                                                    device_vendor='Renson',
+                                                    device_serial=serial_key)
+                logger.info('Successfully registered new healthbox3 ventilation device with external_id = {} and name = {} '.format(external_id, name))
+            except Exception as ex:
+                logger.error('Failed to register new healthbox3 ventilation device with external_id = {} and name = {} with error message = {} '.format(external_id, name, ex))
+
+    def _split_external_id(self, external_id):
+            # type (string) -> (string, string)
+            split = external_id.split(separator)
+            if len(split) != 2:
+                logger.error("error splitting external_id")
+                return None, None
+            serial_key = split[0]
+            roomnr = split[1]
+            return serial_key, roomnr
+
+    def get_boost_level(self, external_id):
+        # type: (string, string) -> none
+        device_serial, roomnr = self._split_external_id(external_id)
+        if roomnr is None:
+            logger.error("invalid room nr")
+            return
+        hbd = self.discovered_devices[device_serial]
+        if hbd is None:
+            logger.error('No HealthBox3 with device_serial: ' + str(device_serial))
+            return
+        hbd.get_boost_level(roomnr)
+
+    def set_boost_level(self, external_id, level, timeout):
+        # type: (string, string, int, int) -> none
+        if level < 0:
+            logger.error('Invalid boost level: ' + str(level))
+            return
+        if timeout < 0:
+            logger.error('Invalid boost timeout: ' + str(timeout))
+            return
+        device_serial, roomnr = self._split_external_id(external_id)
+        if roomnr is None:
+            logger.error("invalid room nr")
+            return
+        hbd = self.discovered_devices[device_serial]
+        if hbd is None:
+            logger.error('No HealthBox3 with device_serial ' + device_serial)
+            return
+        hbd.set_boost_level(roomnr, level, timeout)
+        return self.get_boost_level(external_id)
+
+    def _set_auto(self, external_id):
+        self.set_boost_level(external_id, 100, 2)
+        logger.info('Set ventilation to automatic')
 
     def _define_sensors_with_rooms(self, rooms, sensor_list):
-        # type: (list, list of dicts) -> list of dicts
+        # type: (list, list of dicts) -> list(dicts)
         # because we do not want to boilerplate the variable names for all availe rooms, we introduce this function
         new_sensor_list = []
         # loop over all the room numbers
@@ -187,29 +234,9 @@ class HealthboxPlugin(OMPluginBase):
                 new_sensor_list.append(new_sensor)
         return new_sensor_list
 
-    def _register_sensor(self, serial_key, sensor_id, sensor_name, physical_quantity, unit_of_measure):
-        # Registering the sensor
-        external_id = str(serial_key)+ ' ' + str(sensor_id)
-        name        = str(serial_key)+ ' ' + str(sensor_name)
-        config = {
-            'name' : name,
-        }
-        response = self.webinterface.sensor.register(external_id = external_id, physical_quantity = physical_quantity, unit = unit_of_measure, config=config)
-        if not response:
-            return None
-        return response
-
-    def _update_sensor(self, serial_key, sensor_id, value, gateway_id):
-        data = {'id': gateway_id, 'value': value}
-        response = self.webinterface.sensor.set_status(sensor_id = gateway_id, value = value)
-        if response is None:
-            self.logger('Could not update sensor data for sensor {} for HealthBox3 with key {}'.format(sensor_id, serial_key))
-            return False
-        return True
-
     @background_task
     def _sensor_manager(self):
-        self.logger("Starting to register and update sensors on the gateway")
+        logger.info("Starting to register and update sensors on the gateway")
         while not self._enabled:
             time.sleep(2)
         while self._enabled:
@@ -218,7 +245,7 @@ class HealthboxPlugin(OMPluginBase):
             for serial_key in serial_keys:
                 hbd = self.discovered_devices[serial_key]  # type: HealthBox3Driver
                 if hbd is None:
-                    self.logger('Could not get Healthbox3 information, driver is not working properly to request data')
+                    logger.error('Could not get Healthbox3 information, driver is not working properly to request data')
                     continue
                 # get list of variables available to this device
                 variables = hbd.get_list_of_variables()
@@ -229,21 +256,21 @@ class HealthboxPlugin(OMPluginBase):
                 for sensor in sensors:
                     if sensor['sensor_id'] not in variables:
                         continue
-                    # Now we know that the sensor exists on the device, check if it is already registered on the cloud
-                    gateway_id = hbd.get_gateway_id(sensor['sensor_id'])
-                    if not gateway_id:
-                        # Register the sensor on the cloud
-                        response = self._register_sensor(serial_key, sensor['sensor_id'], sensor['sensor_name'], sensor['physical_quantity'], sensor['unit'])
-                        if response == None:
-                            self.logger('Failed to register sensor in gateway with sensor_id {} and serial_key {}'.format(sensor['sensor_id'], serial_key))
-                            continue
-                        # save the gateway_id on the gateway
-                        hbd.set_gateway_id(sensor['sensor_id'], response.id)
-                        gateway_id = hbd.get_gateway_id(sensor['sensor_id'])
+                    # Now we know that the sensor exists on the device, check if it is already registered on the gateway
+                    gateway_sensor = hbd.get_gateway_sensor(sensor['sensor_id'])
+                    if not gateway_sensor:
+                        # Register the sensor on the gateway
+                        external_id = '{0} {1}'.format(serial_key, sensor['sensor_id'])
+                        name = '{0} {1}'.format(serial_key, sensor['sensor_name'])
+                        gateway_sensor = self.connector.sensor.register(external_id=external_id,
+                                                                        physical_quantity=sensor['physical_quantity'],
+                                                                        unit=sensor['unit'],
+                                                                        name=name)
+                        hbd.set_gateway_sensor(sensor['sensor_id'], gateway_sensor)
                     # get sensor data
                     sensor_data = hbd.get_variable(sensor['sensor_id'])
-                    # update sensor data of known sensor in EDD
-                    self._update_sensor(serial_key, sensor['sensor_id'], sensor_data, gateway_id)
+                    self.connector.sensor.report_state(sensor=gateway_sensor,
+                                                       value=sensor_data)
             time.sleep(30)
             # test
 
