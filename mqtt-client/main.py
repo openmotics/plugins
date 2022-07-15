@@ -13,7 +13,9 @@ import simplejson as json
 from threading import Thread
 from plugins.base import om_expose, input_status, output_status, OMPluginBase, PluginConfigChecker, receive_events, om_metric_receive, background_task
 from serial_utils import CommunicationTimedOutException
+import logging
 
+logger = logging.getLogger(__name__)
 
 class MQTTClient(OMPluginBase):
     """
@@ -22,7 +24,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '3.0.1'
+    version = '3.0.2'
     interfaces = [('config', '1.0')]
 
     energy_module_config = {
@@ -174,12 +176,14 @@ class MQTTClient(OMPluginBase):
         'timezone': 'UTC'
     }
 
-    def __init__(self, webinterface, logger):
-        super(MQTTClient, self).__init__(webinterface, logger)
-        self.logger('Starting MQTTClient plugin...')
+    def __init__(self, webinterface, connector):
+        super(MQTTClient, self).__init__(webinterface=webinterface,
+                                            connector=connector)
+
+        logger.info('Starting MQTTClient plugin...')
 
         self._config = self.read_config(MQTTClient.default_config)
-        #self.logger("Default configuration '{0}'".format(self._config))
+        #logger.info("Default configuration '{0}'".format(self._config))
         self._config_checker = PluginConfigChecker(MQTTClient.config_description)
 
         paho_mqtt_wheel = '/opt/openmotics/python/plugins/MQTTClient/paho_mqtt-1.5.0-py2-none-any.whl'
@@ -198,7 +202,7 @@ class MQTTClient(OMPluginBase):
 
         self._load_configuration()
 
-        self.logger("Started MQTTClient plugin")
+        logger.info("Started MQTTClient plugin")
 
     def _read_config(self):
         # broker
@@ -254,7 +258,7 @@ class MQTTClient(OMPluginBase):
         # timezone
         self._timezone = self._config.get('timezone')
         self._enabled = self._hostname is not None and self._port is not None
-        self.logger('MQTTClient is {0}'.format('enabled' if self._enabled else 'disabled'))
+        logger.info('MQTTClient is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     def _load_configuration(self):
         inputs_loaded  = False
@@ -282,7 +286,7 @@ class MQTTClient(OMPluginBase):
             try:
                 result = json.loads(self.webinterface.get_input_configurations())
                 if result['success'] is False:
-                    self.logger('Failed to load input configurations')
+                    logger.error('Failed to load input configurations')
                     input_config_loaded = False
                 else:
                     ids = []
@@ -293,14 +297,14 @@ class MQTTClient(OMPluginBase):
                     for input_id in self._inputs.keys():
                         if input_id not in ids:
                             del self._inputs[input_id]
-                    self.logger('Configuring {0} inputs'.format(len(ids)))
+                    logger.info('Configuring {0} inputs'.format(len(ids)))
             except Exception as ex:
-                self.logger('Error while loading input configurations: {0}'.format(ex))
+                logger.exception('Error while loading input configurations: {0}'.format(ex))
                 input_config_loaded = False
             try:
                 result = json.loads(self.webinterface.get_input_status())
                 if result['success'] is False:
-                    self.logger('Failed to get input status')
+                    logger.error('Failed to get input status')
                     input_config_loaded = False
                 else:
                     for input_data in result['status']:
@@ -309,7 +313,7 @@ class MQTTClient(OMPluginBase):
                             continue
                         self._inputs[input_id]['status'] = input_data['status']
             except Exception as ex:
-                self.logger('Error getting input status: {0}'.format(ex))
+                logger.exception('Error getting input status: {0}'.format(ex))
                 input_config_loaded = False
         return input_config_loaded
 
@@ -320,7 +324,7 @@ class MQTTClient(OMPluginBase):
                 result = json.loads(self.webinterface.get_output_configurations())
                 if result['success'] is False:
                     output_config_loaded = False
-                    self.logger('Failed to load output configurations')
+                    logger.error('Failed to load output configurations')
                 else:
                     ids = []
                     for config in result['config']:
@@ -337,15 +341,15 @@ class MQTTClient(OMPluginBase):
                     for output_id in self._outputs.keys():
                         if output_id not in ids:
                             del self._outputs[output_id]
-                    self.logger('Configuring {0} outputs'.format(len(ids)))
+                    logger.info('Configuring {0} outputs'.format(len(ids)))
             except Exception as ex:
                 output_config_loaded = False
-                self.logger('Error while loading output configurations: {0}'.format(ex))
+                logger.error('Error while loading output configurations: {0}'.format(ex))
             try:
                 result = json.loads(self.webinterface.get_output_status())
                 if result['success'] is False:
                     output_config_loaded = False
-                    self.logger('Failed to get output status')
+                    logger.error('Failed to get output status')
                 else:
                     for output in result['status']:
                         output_id = output['id']
@@ -355,7 +359,7 @@ class MQTTClient(OMPluginBase):
                         self._outputs[output_id]['dimmer'] = output['dimmer']
             except Exception as ex:
                 output_config_loaded = False
-                self.logger('Error getting output status: {0}'.format(ex))
+                logger.exception('Error getting output status: {0}'.format(ex))
         return output_config_loaded
 
     def _load_sensor_configuration(self):
@@ -365,7 +369,7 @@ class MQTTClient(OMPluginBase):
                 result = json.loads(self.webinterface.get_sensor_configurations())
                 if result['success'] is False:
                     sensor_config_loaded = False
-                    self.logger('Failed to load sensor configurations: {0}'.format(result.get('msg')))
+                    logger.error('Failed to load sensor configurations: {0}'.format(result.get('msg')))
                 else:
                     ids = []
                     for config in result['config']:
@@ -379,10 +383,10 @@ class MQTTClient(OMPluginBase):
                     for sensor_id in self._sensors.keys():
                         if sensor_id not in ids:
                             del self._sensors[sensor_id]
-                    self.logger('Configuring {0} sensors'.format(len(ids)))
+                    logger.info('Configuring {0} sensors'.format(len(ids)))
             except Exception as ex:
                 sensor_config_loaded = False
-                self.logger('Error while loading sensor configurations: {0}'.format(ex))
+                logger.exception('Error while loading sensor configurations: {0}'.format(ex))
         return sensor_config_loaded
 
     def _load_power_configuration(self):
@@ -392,7 +396,7 @@ class MQTTClient(OMPluginBase):
                 result = json.loads(self.webinterface.get_power_modules())
                 if result['success'] is False:
                     power_config_loaded = False
-                    self.logger('Failed to load power configurations: {0}'.format(result.get('msg')))
+                    logger.error('Failed to load power configurations: {0}'.format(result.get('msg')))
                 else:
                     ids = []
                     for module in result['modules']:
@@ -402,13 +406,13 @@ class MQTTClient(OMPluginBase):
                         input_count = MQTTClient.energy_module_config.get(version, 0)
                         module_config = {}
                         if input_count == 0:
-                            self.logger('Warning: Skipping energy module {0}, version {1} is currently not supported by this plugin. Only versions: {2}'.format(
+                            logger.warning('Warning: Skipping energy module {0}, version {1} is currently not supported by this plugin. Only versions: {2}'.format(
                                 module_id,
                                 version,
                                 ', '.join(MQTTClient.energy_module_config.keys())))
                             continue
                         else:
-    	                    self.logger('Configuring energy module {0} (version {1}) with {2} inputs'.format(module_id, version, input_count))
+    	                    logger.info('Configuring energy module {0} (version {1}) with {2} inputs'.format(module_id, version, input_count))
                         for input_id in range(0, input_count):
                             module_config[input_id] = {'name':     module['input{0}'.format(input_id)],
                                                        'sensor':   module['sensor{0}'.format(input_id)],
@@ -420,7 +424,7 @@ class MQTTClient(OMPluginBase):
                             del self._power_modules[module_id]
             except Exception as ex:
                 power_config_loaded = False
-                self.logger('Error while loading power configurations: {0}'.format(ex))
+                logger.exception('Error while loading power configurations: {0}'.format(ex))
         return power_config_loaded
 
     def _try_connect(self):
@@ -429,14 +433,14 @@ class MQTTClient(OMPluginBase):
                 import paho.mqtt.client as client
                 self.client = client.Client()
                 if self._username is not None:
-                    self.logger("MQTTClient is using username '{0}' and password".format(self._username))
+                    logger.info("MQTTClient is using username '{0}' and password".format(self._username))
                     self.client.username_pw_set(self._username, self._password)
                 self.client.on_message = self.on_message
                 self.client.on_connect = self.on_connect
                 self.client.connect(self._hostname, self._port, 5)
                 self.client.loop_start()
             except Exception as ex:
-                self.logger('Error connecting to MQTT broker: {0}'.format(ex))
+                logger.exception('Error connecting to MQTT broker: {0}'.format(ex))
 
     def _log(self, info):
         # for log messages QoS = 0 and retain = False
@@ -447,7 +451,7 @@ class MQTTClient(OMPluginBase):
         try:
             self.client.publish(topic, payload=json.dumps(data), qos=qos, retain=retain)
         except Exception as ex:
-            self.logger('Error sending data to broker: {0}'.format(ex))
+            logger.exception('Error sending data to broker: {0}'.format(ex))
 
     def _timestamp2isoformat(self, timestamp=None):
         # start with UTC
@@ -470,7 +474,7 @@ class MQTTClient(OMPluginBase):
                 if input_id in self._inputs:
                     name = self._inputs[input_id].get('name')
                     self._log('Input {0} ({1}) switched {2}'.format(input_id, name, status))
-                    self.logger('Input {0} ({1}) switched {2}'.format(input_id, name,  status))
+                    logger.info('Input {0} ({1}) switched {2}'.format(input_id, name,  status))
                     data = {'id': input_id,
                             'name': name,
                             'status': status,
@@ -481,9 +485,9 @@ class MQTTClient(OMPluginBase):
                     )
                     thread.start()
                 else:
-                    self.logger('Got event for unknown input {0}'.format(input_id))
+                    logger.error('Got event for unknown input {0}'.format(input_id))
             except Exception as ex:
-                self.logger('Error processing input {0}: {1}'.format(input_id, ex))
+                logger.exception('Error processing input {0}: {1}'.format(input_id, ex))
 
     @output_status
     def output_status(self, status):
@@ -505,17 +509,17 @@ class MQTTClient(OMPluginBase):
                             changed = True
                             current_output_status[output_id]['status'] = 1
                             self._log('Output {0} ({1}) changed to ON'.format(output_id, name))
-                            self.logger('Output {0} ({1}) changed to ON'.format(output_id, name))
+                            logger.info('Output {0} ({1}) changed to ON'.format(output_id, name))
                         if dimmer != new_output_status[output_id]:
                             changed = True
                             current_output_status[output_id]['dimmer'] = new_output_status[output_id]
                             self._log('Output {0} ({1}) changed to level {2}'.format(output_id, name, new_output_status[output_id]))
-                            self.logger('Output {0} ({1}) changed to level {2}'.format(output_id, name, new_output_status[output_id]))
+                            logger.info('Output {0} ({1}) changed to level {2}'.format(output_id, name, new_output_status[output_id]))
                     elif status != 0:
                         changed = True
                         current_output_status[output_id]['status'] = 0
                         self._log('Output {0} ({1}) changed to OFF'.format(output_id, name))
-                        self.logger('Output {0} ({1}) changed to OFF'.format(output_id, name))
+                        logger.info('Output {0} ({1}) changed to OFF'.format(output_id, name))
                     if changed is True:
                         if current_output_status[output_id]['module_type'] == 'output':
                             level = 100
@@ -533,14 +537,14 @@ class MQTTClient(OMPluginBase):
                         )
                         thread.start()
             except Exception as ex:
-                self.logger('Error processing outputs: {0}'.format(ex))
+                logger.exception('Error processing outputs: {0}'.format(ex))
 
     @receive_events
     def receive_events(self, event_id):
         if self._enabled and self._event_enabled:
             try:
                 self._log('Got event {0}'.format(event_id))
-                self.logger('Got event {0}'.format(event_id))
+                logger.info('Got event {0}'.format(event_id))
                 data = {'id': event_id,
                         'timestamp': self._timestamp2isoformat()}
                 thread = Thread(
@@ -549,7 +553,7 @@ class MQTTClient(OMPluginBase):
                 )
                 thread.start()
             except Exception as ex:
-                self.logger('Error processing event: {0}'.format(ex))
+                logger.exception('Error processing event: {0}'.format(ex))
 
     @background_task
     def background_task_sensor_status(self):
@@ -639,7 +643,7 @@ class MQTTClient(OMPluginBase):
                 if self._enabled:
                     sensor_config = self._sensor_config.get(sensor_type)
                     frequency = sensor_config.get('poll_frequency')
-                    self.logger('Background task to retrieve {0} sensor data started, will run every {1} seconds.'.format(sensor_type, frequency))
+                    logger.info('Background task to retrieve {0} sensor data started, will run every {1} seconds.'.format(sensor_type, frequency))
                     # highest frequency is every 10s
                     while frequency >= 10:
                         start = time.time()
@@ -647,7 +651,7 @@ class MQTTClient(OMPluginBase):
                             if sensor_config.get('enabled'):
                                 result = json.loads(data_retriever())
                                 if result['success'] is False:
-                                    self.logger('Failed to load {0} sensor data: {1}'.format(sensor_type, result.get('msg')))
+                                    logger.error('Failed to load {0} sensor data: {1}'.format(sensor_type, result.get('msg')))
                                 else:
                                     mqtt_messages = data_processor(sensor_config, result)
                                     for mqtt_message in mqtt_messages:
@@ -658,7 +662,7 @@ class MQTTClient(OMPluginBase):
                                                               sensor_config.get('retain')))
                                         thread.start()
                         except Exception as ex:
-                            self.logger('Error processing {0} sensor status: {1}'.format(sensor_type, ex))
+                            logger.exception('Error processing {0} sensor status: {1}'.format(sensor_type, ex))
                         # This loop will run approx. every 'frequency' seconds
                         sleep = frequency - (time.time() - start)
                         if sleep < 0:
@@ -670,17 +674,17 @@ class MQTTClient(OMPluginBase):
 
     def on_connect(self, client, userdata, flags, rc):
         if rc != 0:
-            self.logger('Error connecting: rc={0}', rc)
+            logger.error('Error connecting: rc={0}', rc)
             return
 
-        self.logger('Connected to MQTT broker {0}:{1}'.format(self._hostname, self._port))
+        logger.info('Connected to MQTT broker {0}:{1}'.format(self._hostname, self._port))
         # subscribe to output command topic if provided
         if self._output_command_topic:
             try:
                 self.client.subscribe(self._output_command_topic)
-                self.logger('Subscribed to {0}'.format(self._output_command_topic))
+                logger.info('Subscribed to {0}'.format(self._output_command_topic))
             except Exception as ex:
-                self.logger('Could not subscribe: {0}'.format(ex))
+                logger.exception('Could not subscribe: {0}'.format(ex))
 
     def on_message(self, client, userdata, msg):
         if self._output_command_topic:
@@ -705,18 +709,18 @@ class MQTTClient(OMPluginBase):
                         if result['success'] is False:
                             log_message = 'Failed to set output {0} to {1}: {2}'.format(output_id, value, result.get('msg', 'Unknown error'))
                             self._log(log_message)
-                            self.logger(log_message)
+                            logger.error(log_message)
                         else:
                             log_message = 'Message for output {0} with payload {1}'.format(output_id, value)
                             self._log(log_message)
-                            self.logger(log_message)
+                            logger.info(log_message)
                     else:
                         self._log('Unknown output: {0}'.format(output_id))
                 except Exception as ex:
                     self._log('Failed to process message: {0}'.format(ex))
             else:
                 self._log('Message with topic {0} ignored'.format(msg.topic))
-                self.logger('Message with topic {0} ignored'.format(msg.topic))
+                logger.info('Message with topic {0} ignored'.format(msg.topic))
 
     @om_expose
     def get_config_description(self):
@@ -741,7 +745,7 @@ class MQTTClient(OMPluginBase):
                 thread = Thread(target=self._load_configuration)
                 thread.start()
         except Exception as ex:
-            self.logger('Error saving configuration: {0}'.format(ex))
+            logger.exception('Error saving configuration: {0}'.format(ex))
 
         self._try_connect()
         return json.dumps({'success': True})

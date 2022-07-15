@@ -10,42 +10,32 @@ import simplejson as json
 from threading import Thread, Lock
 from six.moves.queue import Queue, Empty
 from plugins.base import om_expose, output_status, OMPluginBase, PluginConfigChecker, background_task, PluginWebResponse
-from .plugin_logs import PluginLogHandler
+import logging
 
 if False:  # MYPY
     from typing import Dict, List, Optional, Callable
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class SensorDotCommunity(OMPluginBase):
 
     name = 'SensorDotCommunity'
-    version = '1.0.1'
+    version = '1.0.2'
     interfaces = [('config', '1.0')]
 
     config_description = []
     default_config = []
 
-    def __init__(self, webinterface, gateway_logger):
-        self.setup_logging(log_function=gateway_logger)
-        super(SensorDotCommunity, self).__init__(webinterface, logger)
+    def __init__(self, webinterface, connector):
+        super(SensorDotCommunity, self).__init__(webinterface=webinterface,
+                                             connector=connector)
         logger.info('Starting %s plugin %s ...', self.name, self.version)
 
         self._config = self.default_config
         self._config_checker = PluginConfigChecker(SensorDotCommunity.config_description)
 
         logger.info("%s plugin started", self.name)
-
-    @staticmethod
-    def setup_logging(log_function):  # type: (Callable) -> None
-        logger.setLevel(logging.INFO)
-        log_handler = PluginLogHandler(log_function=log_function)
-        # some elements like time and name are added by the plugin runtime already
-        # formatter = logging.Formatter('%(asctime)s - %(name)s - %(threadName)s - %(levelname)s - %(message)s')
-        formatter = logging.Formatter('%(threadName)s - %(levelname)s - %(message)s')
-        log_handler.setFormatter(formatter)
-        logger.addHandler(log_handler)
 
     @om_expose(version=2, auth=False)
     def api(self, plugin_web_request):

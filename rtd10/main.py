@@ -21,8 +21,10 @@ from threading import Thread
 import simplejson as json
 import six
 import time
-
 from plugins.base import om_expose, background_task, thermostat_status, OMPluginBase, PluginConfigChecker
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class RTD10(OMPluginBase):
@@ -31,7 +33,7 @@ class RTD10(OMPluginBase):
     """
 
     name = 'RTD10'
-    version = '0.1.4'
+    version = '0.1.5'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'thermostats',
@@ -68,9 +70,11 @@ class RTD10(OMPluginBase):
                                         'description': 'Output connected to the S5 port (state)'}]}]
     default_config = {}
 
-    def __init__(self, webinterface, logger):
-        super(RTD10, self).__init__(webinterface, logger)
-        self.logger('Starting RTD10 plugin...')
+    def __init__(self, webinterface, connector):
+        super(RTD10, self).__init__(webinterface=webinterface,
+                                    connector=connector)
+
+        logger.info('Starting RTD10 plugin...')
 
         self._config = self.read_config(RTD10.default_config)
         self._config_checker = PluginConfigChecker(RTD10.config_description)
@@ -82,7 +86,7 @@ class RTD10(OMPluginBase):
 
         self._read_config()
 
-        self.logger("Started RTD10 plugin")
+        logger.info("Started RTD10 plugin")
 
     def _read_config(self):
         self._enabled = False
@@ -105,9 +109,9 @@ class RTD10(OMPluginBase):
                     self._thermostats.pop(thermostat_id, None)
             self._enabled = True
         except Exception as ex:
-            self.logger('Could not read/process configuration: {0}'.format(ex))
+            logger.exception('Could not read/process configuration: {0}'.format(ex))
 
-        self.logger('RTD10 is {0}'.format('enabled' if self._enabled else 'disabled'))
+        logger.info('RTD10 is {0}'.format('enabled' if self._enabled else 'disabled'))
         if self._enabled:
             thread = Thread(target=self._sync)
             thread.start()
@@ -115,7 +119,7 @@ class RTD10(OMPluginBase):
     def _sync(self):
         if self._syncing:
             return
-        self.logger('Performing initial sync...')
+        logger.info('Performing initial sync...')
         try:
             self._syncing = True
             while True:
@@ -135,10 +139,10 @@ class RTD10(OMPluginBase):
                                                setpoint=setpoint)
                     return
                 except Exception as ex:
-                    self.logger('Could not load thermostat group states: {0}'.format(ex))
+                    logger.exception('Could not load thermostat group states: {0}'.format(ex))
                     time.sleep(30)
         finally:
-            self.logger('Performing initial sync... Done')
+            logger.info('Performing initial sync... Done')
             self._syncing = False
 
     @thermostat_status(version=1)
@@ -188,7 +192,7 @@ class RTD10(OMPluginBase):
 
         new_s_values = [s1_value, s2_value, s3_value, s4_value, s5_value]
         if new_s_values != self._s_values.get(thermostat_id):
-            self.logger('New S-values for thermostat {0}: {1}'.format(
+            logger.info('New S-values for thermostat {0}: {1}'.format(
                 thermostat_id,
                 ', '.join(['S{0}={1:.1f}V'.format(i + 1, float(new_s_values[i]) / 10.0)
                            for i in range(5)])
@@ -203,7 +207,7 @@ class RTD10(OMPluginBase):
             if result.get('success', False) is False:
                 raise RuntimeError(result.get('msg', 'Unknown error'))
         except Exception as ex:
-            self.logger('Could not set output {0} (S{1} for thermostat {2}) to {3}: {4}'.format(
+            logger.exception('Could not set output {0} (S{1} for thermostat {2}) to {3}: {4}'.format(
                 output_id, s_number, thermostat_id, output_value, ex
             ))
 

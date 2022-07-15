@@ -10,6 +10,9 @@ import simplejson as json
 from threading import Thread
 from collections import deque
 from plugins.base import om_expose, OMPluginBase, PluginConfigChecker, om_metric_receive
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Statful(OMPluginBase):
@@ -18,7 +21,7 @@ class Statful(OMPluginBase):
     """
 
     name = 'Statful'
-    version = '1.0.1'
+    version = '1.0.2'
     url = 'https://api.statful.com/tel/v2.0/metrics'
     interfaces = [('config', '1.0')]
 
@@ -34,9 +37,11 @@ class Statful(OMPluginBase):
 
     default_config = {}
 
-    def __init__(self, webinterface, logger):
-        super(Statful, self).__init__(webinterface, logger)
-        self.logger('Starting Statful plugin...')
+    def __init__(self, webinterface, connector):
+        super(Statful, self).__init__(webinterface=webinterface,
+                                    connector=connector)
+
+        logger.info('Starting Statful plugin...')
 
         self._config = self.read_config(Statful.default_config)
         self._config_checker = PluginConfigChecker(Statful.config_description)
@@ -49,7 +54,7 @@ class Statful(OMPluginBase):
         self._send_thread.start()
 
         self._read_config()
-        self.logger("Started Statful plugin")
+        logger.info("Started Statful plugin")
 
     def _read_config(self):
         self._batch_size = self._config.get('batch_size', 10)
@@ -59,7 +64,7 @@ class Statful(OMPluginBase):
         self._headers = {'M-Api-Token': token, 'X-Requested-With': 'OpenMotics plugin: Statful'}
 
         self._enabled = token != ''
-        self.logger('Statful is {0}'.format('enabled' if self._enabled else 'disabled'))
+        logger.info('Statful is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     @om_metric_receive(interval=30)
     def _receive_metric_data(self, metric):
@@ -104,7 +109,7 @@ class Statful(OMPluginBase):
                 self._send_queue.appendleft(entry)
 
         except Exception as ex:
-            self.logger('Error receiving metrics: {0}'.format(ex))
+            logger.exception('Error receiving metrics: {0}'.format(ex))
 
     @staticmethod
     def _build_entries(key, tags, value, timestamp):
@@ -150,26 +155,26 @@ class Statful(OMPluginBase):
                                             headers=self._headers,
                                             verify=False)
                     if response.status_code != 201:
-                        self.logger('Send failed, received: {0} ({1})'.format(response.text, response.status_code))
+                        logger.error('Send failed, received: {0} ({1})'.format(response.text, response.status_code))
                     if _stats_time < time.time() - 1800:
                         _stats_time = time.time()
-                        self.logger('Queue size stats: {0:.2f} min, {1:.2f} avg, {2:.2f} max'.format(
+                        logger.info('Queue size stats: {0:.2f} min, {1:.2f} avg, {2:.2f} max'.format(
                             min(_queue_sizes),
                             sum(_queue_sizes) / float(len(_queue_sizes)),
                             max(_queue_sizes)
                         ))
-                        self.logger('Batch size stats: {0:.2f} min, {1:.2f} avg, {2:.2f} max'.format(
+                        logger.info('Batch size stats: {0:.2f} min, {1:.2f} avg, {2:.2f} max'.format(
                             min(_batch_sizes),
                             sum(_batch_sizes) / float(len(_batch_sizes)),
                             max(_batch_sizes)
                         ))
-                        self.logger('Total {0} metric(s) over {1} batche(s)'.format(_run_amount, _batch_amount))
+                        logger.info('Total {0} metric(s) over {1} batche(s)'.format(_run_amount, _batch_amount))
                         _batch_sizes = []
                         _queue_sizes = []
                         _run_amount = 0
                         _batch_amount = 0
             except Exception as ex:
-                self.logger('Error sending from queue: {0}'.format(ex))
+                logger.exception('Error sending from queue: {0}'.format(ex))
             time.sleep(0.1)
 
     @om_expose

@@ -9,6 +9,9 @@ import requests
 import simplejson as json
 from threading import Thread
 from plugins.base import om_expose, input_status, OMPluginBase, PluginConfigChecker
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Pushsafer(OMPluginBase):
@@ -17,7 +20,7 @@ class Pushsafer(OMPluginBase):
     """
 
     name = 'Pushsafer'
-    version = '2.1.1'
+    version = '2.1.2'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'privatekey',
@@ -62,9 +65,11 @@ class Pushsafer(OMPluginBase):
     default_config = {'privatekey': '', 'input_id': -1, 'message': '', 'title': 'OpenMotics', 'device': '', 'icon': '1', 'sound': '', 'vibration': '',
                       'url': '', 'urltitle': '', 'time2live': ''}
 
-    def __init__(self, webinterface, logger):
-        super(Pushsafer, self).__init__(webinterface, logger)
-        self.logger('Starting Pushsafer plugin...')
+    def __init__(self, webinterface, connector):
+        super(Pushsafer, self).__init__(webinterface=webinterface,
+                                    connector=connector)
+
+        logger.info('Starting Pushsafer plugin...')
 
         self._config = self.read_config(Pushsafer.default_config)
         self._config_checker = PluginConfigChecker(Pushsafer.config_description)
@@ -72,7 +77,7 @@ class Pushsafer(OMPluginBase):
         self._cooldown = {}
         self._read_config()
 
-        self.logger("Started Pushsafer plugin")
+        logger.info("Started Pushsafer plugin")
 
     def _read_config(self):
         self._privatekey = self._config['privatekey']
@@ -83,7 +88,7 @@ class Pushsafer(OMPluginBase):
                          'X-Requested-With': 'OpenMotics plugin: Pushsafer'}
 
         self._enabled = self._privatekey != '' and len(self._mapping) > 0
-        self.logger('Pushsafer is {0}'.format('enabled' if self._enabled else 'disabled'))
+        logger.info('Pushsafer is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     def convert(self, data):
         if isinstance(data, six.string_types):
@@ -101,7 +106,7 @@ class Pushsafer(OMPluginBase):
         if self._enabled is True:
             input_id = status[0]
             if self._cooldown.get(input_id, 0) > now - 10:
-                self.logger('Ignored duplicate Input in 10 seconds.')
+                logger.warning('Ignored duplicate Input in 10 seconds.')
                 return
             data_send = False
             for mapping in self._mapping:
@@ -124,26 +129,26 @@ class Pushsafer(OMPluginBase):
 
     def _send_data(self, data):
         try:
-            self.logger('Sending data')
+            logger.info('Sending data')
             response = requests.post(url=self._endpoint,
                                      data=data,
                                      headers=self._headers,
                                      verify=False)
             if response.status_code != 200:
-                self.logger('Got error response: {0} ({1})'.format(response.text, response.status_code))
+                logger.error('Got error response: {0} ({1})'.format(response.text, response.status_code))
             else:
                 result = json.loads(response.text)
                 if result['status'] != 1:
-                    self.logger('Got error response: {0}'.format(result['error']))
+                    logger.error('Got error response: {0}'.format(result['error']))
                 else:
-                    self.logger('Got reply: {0}'.format(result['success']))
+                    logger.info('Got reply: {0}'.format(result['success']))
                     quotas = []
                     for data in result['available'].values():
                         device = data.keys()[0]
                         quotas.append('{0}: {1}'.format(device, data[device]))
-                    self.logger('Remaining quotas: {0}'.format(', '.join(quotas)))
+                    logger.info('Remaining quotas: {0}'.format(', '.join(quotas)))
         except Exception as ex:
-            self.logger('Error sending: {0}'.format(ex))
+            logger.exception('Error sending: {0}'.format(ex))
 
     @om_expose
     def get_config_description(self):

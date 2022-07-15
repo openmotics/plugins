@@ -22,7 +22,9 @@ import time
 import simplejson as json
 from collections import deque
 from plugins.base import om_expose, OMPluginBase, PluginConfigChecker, shutter_status, background_task, input_status
+import logging
 
+logger = logging.getLogger(__name__)
 
 class Polysun(OMPluginBase):
     """
@@ -38,7 +40,7 @@ class Polysun(OMPluginBase):
         DOWN = 'down'
 
     name = 'Polysun'
-    version = '0.1.6'
+    version = '0.1.7'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'mapping',
@@ -56,9 +58,11 @@ class Polysun(OMPluginBase):
 
     default_config = {}
 
-    def __init__(self, webinterface, logger):
-        super(Polysun, self).__init__(webinterface, logger)
-        self.logger('Starting Polysun plugin...')
+    def __init__(self, webinterface, connector):
+        super(Polysun, self).__init__(webinterface=webinterface,
+                                    connector=connector)
+
+        logger.info('Starting Polysun plugin...')
 
         self._config = self.read_config(Polysun.default_config)
         self._config_checker = PluginConfigChecker(Polysun.config_description)
@@ -71,7 +75,7 @@ class Polysun(OMPluginBase):
         self._input_enabled = None
 
         self._read_config()
-        self.logger("Started Polysun plugin")
+        logger.info("Started Polysun plugin")
 
     def _read_config(self):
         new_mapping = {}
@@ -90,11 +94,11 @@ class Polysun(OMPluginBase):
                     input_id = int(input_entry['input_id'])
                     new_input_mapping.setdefault(input_id, set()).add(shutter_id)
             except ValueError:
-                self.logger('Skipped entry with shutter_id {0}'.format(shutter_id))
+                logger.exception('Skipped entry with shutter_id {0}'.format(shutter_id))
         self._mapping = new_mapping
         self._input_shutter_mapping = new_input_mapping
         self._enabled = len(self._mapping) > 0
-        self.logger('Polysun is {0}'.format('enabled' if self._enabled else 'disabled'))
+        logger.info('Polysun is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     @shutter_status
     def shutter_status(self, status, detail):
@@ -108,7 +112,7 @@ class Polysun(OMPluginBase):
             if new_state != old_state:
                 self._states[shutter_id] = new_state
                 self._action_queue.appendleft([shutter_id, new_state, old_state])
-                self.logger('Shutter {0}: Received state transition from {1} to {2}'.format(shutter_id, old_state, new_state))
+                logger.info('Shutter {0}: Received state transition from {1} to {2}'.format(shutter_id, old_state, new_state))
 
     @input_status(version=2)
     def input_status(self, data):
@@ -116,7 +120,7 @@ class Polysun(OMPluginBase):
             input_id = data.get('input_id')
             shutter_ids = self._input_shutter_mapping.get(input_id, set())
             for shutter_id in shutter_ids:
-                self.logger('Shutter {0}: Lost position due to Input {1}'.format(shutter_id, input_id))
+                logger.warning('Shutter {0}: Lost position due to Input {1}'.format(shutter_id, input_id))
                 self._lost_shutters[shutter_id] = time.time()
                 self.webinterface.shutter_report_lost_position(id=shutter_id)
 
@@ -127,13 +131,13 @@ class Polysun(OMPluginBase):
                 if len(self._input_shutter_mapping) > 0 and self._input_enabled is None:
                     result = json.loads(self.webinterface.get_features())
                     if not result.get('success', False):
-                        self.logger('Could not load features: {0}'.format(result.get('msg', 'Unknown')))
+                        logger.error('Could not load features: {0}'.format(result.get('msg', 'Unknown')))
                     else:
                         features = result.get('features', [])
                         self._input_enabled = 'shutter_positions' in features
-                        self.logger('Gateway {0} support reporting lost positions'.format('does' if self._input_enabled else 'does not'))
+                        logger.info('Gateway {0} support reporting lost positions'.format('does' if self._input_enabled else 'does not'))
             except Exception as ex:
-                self.logger('Unexpected exception loading Gateway features: {0}'.format(ex))
+                logger.exception('Unexpected exception loading Gateway features: {0}'.format(ex))
             try:
                 shutter_id, new_state, old_state = self._action_queue.pop()
                 mapping = self._mapping.get(shutter_id)
@@ -143,7 +147,7 @@ class Polysun(OMPluginBase):
                 if new_state == Polysun.State.STOPPED:
                     lost_time = self._lost_shutters.get(shutter_id, 0)
                     if lost_time > (time.time() - 5):  # Ignore STOPPED state within `x` seconds of lost position
-                        self.logger('Shutter {0}: Ignore stopped state due to lost position'.format(shutter_id))
+                        logger.error('Shutter {0}: Ignore stopped state due to lost position'.format(shutter_id))
                         continue
 
                 output_id_up = mapping['up']
@@ -152,32 +156,32 @@ class Polysun(OMPluginBase):
                 # If there's an immediate direction change (the shutter is going up and is suddenly going down or vice versa,
                 # the "button" are first released and the shutter considered to be stopped for further logic
                 if old_state in [Polysun.State.GOING_DOWN, Polysun.State.GOING_UP] and new_state in [Polysun.State.GOING_DOWN, Polysun.State.GOING_UP]:
-                    self.logger('Shutter {0}: Immediate direction change'.format(shutter_id))
+                    logger.info('Shutter {0}: Immediate direction change'.format(shutter_id))
                     self._turn_output(output_id_up, False)
                     self._turn_output(output_id_down, False)
                     old_state = Polysun.State.STOPPED
-                    self.logger('Shutter {0}: Connected outputs {1} (up) and {2} (down) are turned off'.format(shutter_id, output_id_up, output_id_down))
+                    logger.info('Shutter {0}: Connected outputs {1} (up) and {2} (down) are turned off'.format(shutter_id, output_id_up, output_id_down))
 
                 # If the old state was in some stopped state (either stopped, up or down) a movement is started. This means one of the
                 # "buttons" needs to be pressed until the shutter timeout is elapsed.
                 if old_state in [Polysun.State.DOWN, Polysun.State.UP, Polysun.State.STOPPED]:
-                    self.logger('Shutter {0}: Started moving'.format(shutter_id))
+                    logger.info('Shutter {0}: Started moving'.format(shutter_id))
                     if new_state == Polysun.State.GOING_DOWN:
                         self._turn_output(output_id_up, False)  # Make sure only one "button" is pressed at a time
                         self._turn_output(output_id_down, True)
-                        self.logger('Shutter {0}: Connected output {1} (down) is turned on'.format(shutter_id, output_id_down))
+                        logger.info('Shutter {0}: Connected output {1} (down) is turned on'.format(shutter_id, output_id_down))
                     if new_state == Polysun.State.GOING_UP:
                         self._turn_output(output_id_down, False)  # Make sure only one "button" is pressed at a time
                         self._turn_output(output_id_up, True)
-                        self.logger('Shutter {0}: Connected output {1} (up) is turned on'.format(shutter_id, output_id_up))
+                        logger.info('Shutter {0}: Connected output {1} (up) is turned on'.format(shutter_id, output_id_up))
 
                 # If the shutter is currently moving and reached the UP/DOWN position, it means the configured timeout is elapsed
                 # and the the blinds are assumed to be moving to the correct location. The "buttons" can be released
                 if old_state in [Polysun.State.GOING_UP, Polysun.State.GOING_DOWN] and new_state in [Polysun.State.UP, Polysun.State.DOWN]:
-                    self.logger('Shutter {0}: Shutter is now up/down'.format(shutter_id))
+                    logger.info('Shutter {0}: Shutter is now up/down'.format(shutter_id))
                     self._turn_output(output_id_up, False)
                     self._turn_output(output_id_down, False)
-                    self.logger('Shutter {0}: Connected outputs {1} (up) and {2} (down) are turned off'.format(shutter_id, output_id_up, output_id_down))
+                    logger.info('Shutter {0}: Connected outputs {1} (up) and {2} (down) are turned off'.format(shutter_id, output_id_up, output_id_down))
 
                 # If the new state is STOPPED, it (should) mean that an explicit stop action was executed. This is emulated by
                 # briefly pressing the "button" again.
@@ -187,29 +191,29 @@ class Polysun(OMPluginBase):
                     if old_state == Polysun.State.GOING_UP:
                         output_id = output_id_up
                         direction = 'up'
-                    self.logger('Shutter {0}: Shutter is stopped'.format(shutter_id))
+                    logger.info('Shutter {0}: Shutter is stopped'.format(shutter_id))
                     self._turn_output(output_id_down, False)
                     self._turn_output(output_id_up, False)
-                    self.logger('Shutter {0}: Connected outputs {1} (up) and {2} (down) are turned off'.format(shutter_id, output_id_up, output_id_down))
+                    logger.info('Shutter {0}: Connected outputs {1} (up) and {2} (down) are turned off'.format(shutter_id, output_id_up, output_id_down))
                     self._turn_output(output_id, True)
                     self._turn_output(output_id, False)
-                    self.logger('Shutter {0}: Connected output {1} ({2}) turned on & off'.format(shutter_id, output_id, direction))
+                    logger.info('Shutter {0}: Connected output {1} ({2}) turned on & off'.format(shutter_id, output_id, direction))
 
             except IndexError:
                 time.sleep(1)
             except Exception as ex:
-                self.logger('Unexpected exception processing workload: {0}'.format(ex))
+                logger.exception('Unexpected exception processing workload: {0}'.format(ex))
                 time.sleep(1)
 
     def _turn_output(self, output_id, on):
         try:
             result = json.loads(self.webinterface.set_output(id=output_id, is_on=on))
             if not result.get('success', False):
-                self.logger('Could not turn {0} output {1}: {2}'.format('on' if on else 'off',
+                logger.error('Could not turn {0} output {1}: {2}'.format('on' if on else 'off',
                                                                         output_id,
                                                                         result.get('msg', 'Unknown')))
         except Exception as ex:
-            self.logger('Unexpected exception turning {0} output {1}: {2}'.format('on' if on else 'off',
+            logger.exception('Unexpected exception turning {0} output {1}: {2}'.format('on' if on else 'off',
                                                                                   output_id,
                                                                                   ex))
 

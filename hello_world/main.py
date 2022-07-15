@@ -6,12 +6,11 @@ import logging
 from time import sleep
 
 from plugin_runtime.decorators import background_task, om_metric_data
-from .plugin_logs import PluginLogHandler
 from plugin_runtime.base import OMPluginBase, PluginConfigChecker, om_expose
 if False:  # MYPY
     pass
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class HelloWorldPlugin(OMPluginBase):
@@ -19,7 +18,7 @@ class HelloWorldPlugin(OMPluginBase):
     Hello world plugin to demonstrate minimal requirements of a plugin
     """
     name = 'HelloWorldPlugin'
-    version = '1.0.3'
+    version = '1.0.4'
     interfaces = [('config', '1.0')]
 
     # configuration
@@ -28,9 +27,9 @@ class HelloWorldPlugin(OMPluginBase):
                            'name': 'first_name'}]
     default_config = {'first_name': "my_test_name"} # optional default arguments
 
-    def __init__(self, webinterface, gateway_logger):
-        self.setup_logging(log_function=gateway_logger)
-        super(HelloWorldPlugin, self).__init__(webinterface, logger)
+    def __init__(self, webinterface, connector):
+        super(HelloWorldPlugin, self).__init__(webinterface=webinterface,
+                                                connector=connector)
         logger.info('Starting %s plugin %s ...', self.name, self.version)
 
         # set config on default config and instantiate a validator
@@ -39,15 +38,6 @@ class HelloWorldPlugin(OMPluginBase):
 
         logger.info("%s plugin started", self.name)
 
-
-    @staticmethod
-    def setup_logging(log_function):  # type: (Callable) -> None
-        logger.setLevel(logging.INFO)
-        log_handler = PluginLogHandler(log_function=log_function)
-
-        formatter = logging.Formatter('%(threadName)s - %(levelname)s - %(message)s')
-        log_handler.setFormatter(formatter)
-        logger.addHandler(log_handler)
 
     @om_expose
     def get_config_description(self):

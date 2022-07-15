@@ -7,7 +7,9 @@ import time
 import requests
 import simplejson as json
 from plugins.base import om_expose, output_status, OMPluginBase, PluginConfigChecker, background_task
+import logging
 
+logger = logging.getLogger(__name__)
 
 class OpenWeatherMap(OMPluginBase):
     """
@@ -15,7 +17,7 @@ class OpenWeatherMap(OMPluginBase):
     """
 
     name = 'OpenWeatherMap'
-    version = '1.0.1'
+    version = '1.0.2'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_key',
@@ -40,9 +42,11 @@ class OpenWeatherMap(OMPluginBase):
 
     default_config = {'api_key': ''}
 
-    def __init__(self, webinterface, logger):
-        super(OpenWeatherMap, self).__init__(webinterface, logger)
-        self.logger('Starting OpenWeatherMap plugin...')
+    def __init__(self, webinterface, connector):
+        super(OpenWeatherMap, self).__init__(webinterface=webinterface,
+                                                connector=connector)
+
+        logger.info('Starting OpenWeatherMap plugin...')
 
         self._config = self.read_config(OpenWeatherMap.default_config)
         self._config_checker = PluginConfigChecker(OpenWeatherMap.config_description)
@@ -51,7 +55,7 @@ class OpenWeatherMap(OMPluginBase):
 
         self._previous_output_state = {}
 
-        self.logger("Started OpenWeatherMap plugin")
+        logger.info("Started OpenWeatherMap plugin")
 
     def _read_config(self):
         self._api_key = self._config.get('api_key', '')
@@ -71,11 +75,11 @@ class OpenWeatherMap(OMPluginBase):
         if (self._config.get('lat', '') != '') and (self._config.get('lng', '') != ''):
             self._latitude = self._config.get('lat')
             self._longitude = self._config.get('lng')
-            self.logger('Latitude: {0} - Longitude: {1}'.format(self._latitude, self._longitude))
+            logger.info('Latitude: {0} - Longitude: {1}'.format(self._latitude, self._longitude))
             self._enabled = True
 
         self._enabled = self._enabled and self._api_key != ''
-        self.logger('OpenWeatherMap is {0}'.format('enabled' if self._enabled else 'disabled'))
+        logger.info('OpenWeatherMap is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     @background_task
     def run(self):
@@ -94,7 +98,7 @@ class OpenWeatherMap(OMPluginBase):
                                                                                    api_key=self._api_key),
                                                 headers=self._headers)
                         if response.status_code != 200:
-                            self.logger('Forecast call failed: {0}'.format(response.json()['message']))
+                            logger.error('Forecast call failed: {0}'.format(response.json()['message']))
                         else:
                             result = response.json()['list']
                             for sensor in self._forecast_mapping:
@@ -105,11 +109,11 @@ class OpenWeatherMap(OMPluginBase):
                                     if selected_entry is None or abs(entry['dt'] - wanted_time) < abs(selected_entry['dt'] - wanted_time):
                                         selected_entry = entry
                                 if selected_entry is None:
-                                    self.logger('Could not find forecast for virtual sensor {0}'.format(sensor_id))
+                                    logger.error('Could not find forecast for virtual sensor {0}'.format(sensor_id))
                                     continue
                                 sensor_values[sensor_id] = [selected_entry['main']['temp'], selected_entry['main']['humidity'], None]
                     except Exception as ex:
-                        self.logger('Error while fetching forecast temperatures: {0}'.format(ex))
+                        logger.exception('Error while fetching forecast temperatures: {0}'.format(ex))
                 if len(self._current_mapping) > 0:
                     try:
                         calls += 1
@@ -118,14 +122,14 @@ class OpenWeatherMap(OMPluginBase):
                                                                                   api_key=self._api_key),
                                                 headers=self._headers)
                         if response.status_code != 200:
-                            self.logger('Current weather call failed: {0}'.format(response.json()['message']))
+                            logger.error('Current weather call failed: {0}'.format(response.json()['message']))
                         else:
                             result = response.json()
                             for sensor in self._current_mapping:
                                 sensor_id = sensor['sensor_id']
                                 sensor_values[sensor_id] = [result['main']['temp'], result['main']['humidity'], None]
                     except Exception as ex:
-                        self.logger('Error while fetching current temperatures: {0}'.format(ex))
+                        logger.exception('Error while fetching current temperatures: {0}'.format(ex))
                 if 0 <= self._uv_sensor_id <= 31:
                     try:
                         execute = True
@@ -140,7 +144,7 @@ class OpenWeatherMap(OMPluginBase):
                                                     headers=self._headers)
                             result = response.json()
                             if response.status_code != 200:
-                                self.logger('UV index call failed: {0}'.format(result['message']))
+                                logger.error('UV index call failed: {0}'.format(result['message']))
                                 if result['message'] == 'not found':
                                     if accuracy > 0:
                                         accuracy = accuracy - 1
@@ -153,20 +157,20 @@ class OpenWeatherMap(OMPluginBase):
                                 sensor_values[self._uv_sensor_id] = [result['data'], None, None]
                                 execute = False
                     except Exception as ex:
-                        self.logger('Error while fetching UV index: {0}'.format(ex))
+                        logger.exception('Error while fetching UV index: {0}'.format(ex))
                 # Push all sensor data
                 try:
                     for sensor_id, values in sensor_values.items():
                         if values != previous_values.get(sensor_id, []):
-                            self.logger('Updating sensor {0} to temp: {1}, humidity: {2}'.format(sensor_id,
+                            logger.info('Updating sensor {0} to temp: {1}, humidity: {2}'.format(sensor_id,
                                                                                                  values[0] if values[0] is not None else '-',
                                                                                                  values[1] if values[1] is not None else '-'))
                         previous_values[sensor_id] = values
                         result = json.loads(self.webinterface.set_virtual_sensor(None, sensor_id, *values))
                         if result['success'] is False:
-                            self.logger('Error when updating virtual sensor {0}: {1}'.format(sensor_id, result['msg']))
+                            logger.error('Error when updating virtual sensor {0}: {1}'.format(sensor_id, result['msg']))
                 except Exception as ex:
-                    self.logger('Error while setting virtual sensors: {0}'.format(ex))
+                    logger.exception('Error while setting virtual sensors: {0}'.format(ex))
                 # Wait a given amount of seconds
                 sleep = 60 * calls - (time.time() - start) + 1
                 if sleep < 0:
