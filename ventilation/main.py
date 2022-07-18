@@ -372,7 +372,7 @@ class Ventilation(OMPluginBase):
         except CommunicationTimedOutException:
             logger.exception('Error getting sensor status: CommunicationTimedOutException')
         except Exception as ex:
-            logger.exception('Error calculating ventilation: {0}'.format(ex))
+            logger.exception('Error calculating ventilation')
 
     def _set_ventilation(self, level):
         success = True

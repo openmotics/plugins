@@ -71,9 +71,9 @@ class RTI(OMPluginBase):
                                              int(self._config.get('serial_baud_rate', 115200)))
             except Exception as ex:
                 self._serial = None
-                logger.exception('Could not connect to serial port: {0}'.format(ex))
+                logger.exception('Could not connect to serial port')
         except Exception as ex:
-            logger.exception('Could not read/process configuration: {0}'.format(ex))
+            logger.exception('Could not read/process configuration')
 
         self._enabled = self._serial is not None
         logger.info('RTI is {0}'.format('enabled' if self._enabled else 'disabled'))
@@ -197,7 +197,7 @@ class RTI(OMPluginBase):
                         continue
                 logger.warning('Unprocessed command: {0}'.format(command))
             except Exception as main_exception:
-                logger.exception('Unexpected exception while processing command {0}: {1}'.format(command, main_exception))
+                logger.exception('Unexpected exception while processing command {0}'.format(command))
 
     @contextmanager
     def _process_message(self, command, identifier, regex):
@@ -219,7 +219,7 @@ class RTI(OMPluginBase):
             self._write_serial('thermostat_group.{0}.mode={1}'.format(thermostat_group_id,
                                                                       status['status']['mode'].lower()))
         except Exception as ex:
-            logger.exception('Could not process thermostat group event {0}: {1}'.format(status, ex))
+            logger.exception('Could not process thermostat group event {0}'.format(status))
 
     @thermostat_status(version=1)
     def thermostat_status(self, status):
@@ -232,7 +232,7 @@ class RTI(OMPluginBase):
             self._write_serial('thermostat.{0}.state={1}'.format(thermostat_id, status['status']['state'].lower()))
             self._write_serial('thermostat.{0}.temperature={1}'.format(thermostat_id, status['status']['actual_temperature']))
         except Exception as ex:
-            logger.exception('Could not process thermostat event {0}: {1}'.format(status, ex))
+            logger.exception('Could not process thermostat event {0}'.format(status))
 
     @output_status(version=2)
     def output_status(self, output_event):
@@ -246,7 +246,7 @@ class RTI(OMPluginBase):
             if dimmer_level is not None:
                 self._write_serial('output.{0}.dimmer={1}'.format(output_id, dimmer_level))
         except Exception as ex:
-            logger.exception('Could not process output event {0}: {1}'.format(output_event, ex))
+            logger.exception('Could not process output event {0}'.format(output_event))
 
     def _write_serial(self, message):
         if self._serial is not None:
@@ -264,7 +264,7 @@ class RTI(OMPluginBase):
                 logger.info('Received command over serial: {0}'.format(command))
                 self._command_queue.put(command)
             except Exception as ex:
-                logger.exception('Unexpected error while reading from serial device: {0}'.format(ex))
+                logger.exception('Unexpected error while reading from serial device')
 
     @om_expose
     def command(self, command):

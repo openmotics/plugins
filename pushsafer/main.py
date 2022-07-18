@@ -148,7 +148,7 @@ class Pushsafer(OMPluginBase):
                         quotas.append('{0}: {1}'.format(device, data[device]))
                     logger.info('Remaining quotas: {0}'.format(', '.join(quotas)))
         except Exception as ex:
-            logger.exception('Error sending: {0}'.format(ex))
+            logger.exception('Error sending')
 
     @om_expose
     def get_config_description(self):

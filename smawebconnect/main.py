@@ -226,7 +226,7 @@ class SMAWebConnect(OMPluginBase):
                 try:
                     self._read_data(sma_device)
                 except Exception as ex:
-                    logger.exception('Could not read SMA device values: {0}'.format(ex))
+                    logger.exception('Could not read SMA device values')
             time.sleep(self._sample_rate)
 
     def _read_data(self, sma_device):
@@ -330,7 +330,7 @@ class SMAWebConnect(OMPluginBase):
                                             'tags': {'device': device_id},
                                             'values': values})
         except Exception as ex:
-            logger.exception('Got unexpected error while enqueueing metrics: {0}'.format(ex))
+            logger.exception('Got unexpected error while enqueueing metrics')
 
     @om_metric_data(interval=15)
     def collect_metrics(self):

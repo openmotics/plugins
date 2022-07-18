@@ -113,7 +113,7 @@ class OpenWeatherMap(OMPluginBase):
                                     continue
                                 sensor_values[sensor_id] = [selected_entry['main']['temp'], selected_entry['main']['humidity'], None]
                     except Exception as ex:
-                        logger.exception('Error while fetching forecast temperatures: {0}'.format(ex))
+                        logger.exception('Error while fetching forecast temperatures')
                 if len(self._current_mapping) > 0:
                     try:
                         calls += 1
@@ -129,7 +129,7 @@ class OpenWeatherMap(OMPluginBase):
                                 sensor_id = sensor['sensor_id']
                                 sensor_values[sensor_id] = [result['main']['temp'], result['main']['humidity'], None]
                     except Exception as ex:
-                        logger.exception('Error while fetching current temperatures: {0}'.format(ex))
+                        logger.exception('Error while fetching current temperatures')
                 if 0 <= self._uv_sensor_id <= 31:
                     try:
                         execute = True
@@ -157,7 +157,7 @@ class OpenWeatherMap(OMPluginBase):
                                 sensor_values[self._uv_sensor_id] = [result['data'], None, None]
                                 execute = False
                     except Exception as ex:
-                        logger.exception('Error while fetching UV index: {0}'.format(ex))
+                        logger.exception('Error while fetching UV index')
                 # Push all sensor data
                 try:
                     for sensor_id, values in sensor_values.items():
@@ -170,7 +170,7 @@ class OpenWeatherMap(OMPluginBase):
                         if result['success'] is False:
                             logger.error('Error when updating virtual sensor {0}: {1}'.format(sensor_id, result['msg']))
                 except Exception as ex:
-                    logger.exception('Error while setting virtual sensors: {0}'.format(ex))
+                    logger.exception('Error while setting virtual sensors')
                 # Wait a given amount of seconds
                 sleep = 60 * calls - (time.time() - start) + 1
                 if sleep < 0:

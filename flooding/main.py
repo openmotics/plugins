@@ -93,7 +93,7 @@ class Pumpy(OMPluginBase):
                           'Your pump was shut down because of high power '
                           'usage !')
         except smtplib.SMTPException as exc:
-            logger.exception("Failed to send email: %s" % exc)
+            logger.exception("Failed to send email")
 
     def __get_total_energy(self):
         """ Get the total energy consumed by the pump. """

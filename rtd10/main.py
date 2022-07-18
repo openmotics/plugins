@@ -109,7 +109,7 @@ class RTD10(OMPluginBase):
                     self._thermostats.pop(thermostat_id, None)
             self._enabled = True
         except Exception as ex:
-            logger.exception('Could not read/process configuration: {0}'.format(ex))
+            logger.exception('Could not read/process configuration')
 
         logger.info('RTD10 is {0}'.format('enabled' if self._enabled else 'disabled'))
         if self._enabled:
@@ -139,7 +139,7 @@ class RTD10(OMPluginBase):
                                                setpoint=setpoint)
                     return
                 except Exception as ex:
-                    logger.exception('Could not load thermostat group states: {0}'.format(ex))
+                    logger.exception('Could not load thermostat group states')
                     time.sleep(30)
         finally:
             logger.info('Performing initial sync... Done')
@@ -207,8 +207,8 @@ class RTD10(OMPluginBase):
             if result.get('success', False) is False:
                 raise RuntimeError(result.get('msg', 'Unknown error'))
         except Exception as ex:
-            logger.exception('Could not set output {0} (S{1} for thermostat {2}) to {3}: {4}'.format(
-                output_id, s_number, thermostat_id, output_value, ex
+            logger.exception('Could not set output {0} (S{1} for thermostat {2}) to {3}'.format(
+                output_id, s_number, thermostat_id, output_value
             ))
 
     @om_expose

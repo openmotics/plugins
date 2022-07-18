@@ -137,7 +137,7 @@ class Polysun(OMPluginBase):
                         self._input_enabled = 'shutter_positions' in features
                         logger.info('Gateway {0} support reporting lost positions'.format('does' if self._input_enabled else 'does not'))
             except Exception as ex:
-                logger.exception('Unexpected exception loading Gateway features: {0}'.format(ex))
+                logger.exception('Unexpected exception loading Gateway features')
             try:
                 shutter_id, new_state, old_state = self._action_queue.pop()
                 mapping = self._mapping.get(shutter_id)
@@ -202,7 +202,7 @@ class Polysun(OMPluginBase):
             except IndexError:
                 time.sleep(1)
             except Exception as ex:
-                logger.exception('Unexpected exception processing workload: {0}'.format(ex))
+                logger.exception('Unexpected exception processing workload')
                 time.sleep(1)
 
     def _turn_output(self, output_id, on):
@@ -213,9 +213,8 @@ class Polysun(OMPluginBase):
                                                                         output_id,
                                                                         result.get('msg', 'Unknown')))
         except Exception as ex:
-            logger.exception('Unexpected exception turning {0} output {1}: {2}'.format('on' if on else 'off',
-                                                                                  output_id,
-                                                                                  ex))
+            logger.exception('Unexpected exception turning {0} output {1}'.format('on' if on else 'off',
+                                                                                  output_id))
 
     @om_expose
     def get_config_description(self):

@@ -74,14 +74,14 @@ class Syncer(OMPluginBase):
             try:
                 self._sensor_mapping[int(entry['local_sensor_id'])] = int(entry['remote_sensor_id'])
             except Exception as ex:
-                logger.exception('Could not load temperature mapping: {0}'.format(ex))
+                logger.exception('Could not load temperature mapping')
 
         self._output_mapping = {}
         for entry in self._config.get('outputs', []):
             try:
                 self._output_mapping[int(entry['local_output_id'])] = int(entry['remote_output_id'])
             except Exception as ex:
-                logger.exception('Could not load output mapping: {0}'.format(ex))
+                logger.exception('Could not load output mapping')
 
         self._headers = {'X-Requested-With': 'OpenMotics plugin: Syncer'}
         self._endpoint = 'https://{0}/{{0}}'.format(self._ip)
@@ -118,7 +118,7 @@ class Syncer(OMPluginBase):
                             previous_values[sensor_id] = data
                             self._call_remote('set_virtual_sensor', params=data)
             except Exception as ex:
-                logger.exception('Error while syncing sensors: {0}'.format(ex))
+                logger.exception('Error while syncing sensors')
             time.sleep(60)
 
     @output_status
@@ -140,7 +140,7 @@ class Syncer(OMPluginBase):
                     thread.start()
                 self._previous_outputs = on_outputs
             except Exception as ex:
-                logger.exception('Error processing outputs: {0}'.format(ex))
+                logger.exception('Error processing outputs')
 
     def _call_remote(self, api_call, params):
         # TODO: If there's an invalid_token error, call self._login() and try this call again
@@ -154,7 +154,7 @@ class Syncer(OMPluginBase):
             if response_data.get('success', False) is False:
                 logger.error('Could not execute API call {0}: {1}'.format(api_call, response_data.get('msg', 'Unknown error')))
         except Exception as ex:
-            logger.exception('Unexpected error during API call {0}: {1}'.format(api_call, ex))
+            logger.exception('Unexpected error during API call {0}'.format(api_call))
 
     def _login(self):
         try:
@@ -171,7 +171,7 @@ class Syncer(OMPluginBase):
                 self._token = response_data.get('token')
                 self._headers['Authorization'] = 'Bearer {0}'.format(self._token)
         except Exception as ex:
-            logger.exception('Unexpected error during login: {0}'.format(ex))
+            logger.exception('Unexpected error during login')
             self._token = None
 
     @om_expose

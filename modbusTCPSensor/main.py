@@ -98,7 +98,7 @@ class ModbusTCPSensor(OMPluginBase):
             self._client.open()
             self._enabled = self._enabled & True
         except Exception as ex:
-            logger.exception('Error connecting to Modbus server: {0}'.format(ex))
+            logger.exception('Error connecting to Modbus server')
 
         logger.info('ModbusTCPSensor is {0}'.format('enabled' if self._enabled else 'disabled'))
 
@@ -116,7 +116,7 @@ class ModbusTCPSensor(OMPluginBase):
 
                 time.sleep(self._sample_rate)
             except Exception as ex:
-                logger.exception('Could not process sensor values: {0}'.format(ex))
+                logger.exception('Could not process sensor values')
                 time.sleep(15)
 
     def clamp_sensor(self, value, sensor_type):

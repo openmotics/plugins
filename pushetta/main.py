@@ -93,7 +93,7 @@ class Pushetta(OMPluginBase):
                                      verify=False)
             logger.info('Received: {0} ({1})'.format(response.text, response.status_code))
         except Exception as ex:
-            logger.exception('Error sending: {0}'.format(ex))
+            logger.exception('Error sending')
 
     @om_expose
     def get_config_description(self):

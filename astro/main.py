@@ -266,7 +266,7 @@ class Astro(OMPluginBase):
                 return None
             return date
         except Exception as ex:
-            logger.exception('Could not parse date {0}: {1}'.format(dt_string, ex))
+            logger.exception('Could not parse date {0}'.format(dt_string))
             return None
 
     @background_task
@@ -390,7 +390,7 @@ class Astro(OMPluginBase):
                                                'bit_id': entry['bit_id']}})
             self._execution_plan = execution_plan
         except Exception as ex:
-            logger.exception('Could not load data: {0}'.format(ex))
+            logger.exception('Could not load data')
             self._execution_plan = {}
 
     @om_expose

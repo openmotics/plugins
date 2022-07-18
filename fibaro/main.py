@@ -112,7 +112,7 @@ class Fibaro(OMPluginBase):
                         thread.start()
                     self._previous_output_state[key] = is_on
             except Exception as ex:
-                logger.exception('Error processing output_status event: {0}'.format(ex))
+                logger.exception('Error processing output_status event')
 
     def _send(self, action, data):
         try:
@@ -131,7 +131,7 @@ class Fibaro(OMPluginBase):
                 logger.error('Call failed, received: {0} ({1})'.format(response.text, response.status_code))
                 return
         except Exception as ex:
-            logger.exception('Error during call: {0}'.format(ex))
+            logger.exception('Error during call')
 
     @background_task
     def run(self):
@@ -166,7 +166,7 @@ class Fibaro(OMPluginBase):
                             if result['success'] is False:
                                 logger.error('Error when updating virtual sensor {0}: {1}'.format(sensor_id, result['msg']))
                 except Exception as ex:
-                    logger.exception('Error while setting virtual sensors: {0}'.format(ex))
+                    logger.exception('Error while setting virtual sensors')
                 # This loop should run approx. every 5 seconds
                 sleep = 5 - (time.time() - start)
                 if sleep < 0:

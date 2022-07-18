@@ -109,7 +109,7 @@ class Statful(OMPluginBase):
                 self._send_queue.appendleft(entry)
 
         except Exception as ex:
-            logger.exception('Error receiving metrics: {0}'.format(ex))
+            logger.exception('Error receiving metrics')
 
     @staticmethod
     def _build_entries(key, tags, value, timestamp):
@@ -174,7 +174,7 @@ class Statful(OMPluginBase):
                         _run_amount = 0
                         _batch_amount = 0
             except Exception as ex:
-                logger.exception('Error sending from queue: {0}'.format(ex))
+                logger.exception('Error sending from queue')
             time.sleep(0.1)
 
     @om_expose

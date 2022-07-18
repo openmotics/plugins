@@ -103,7 +103,7 @@ class Hue(OMPluginBase):
                 else:
                     logger.debug('Ignoring output %s, because it is not Hue'.format(output_id))
             except Exception as ex:
-                logger.exception('Error processing output_status event: {0}'.format(ex))
+                logger.exception('Error processing output_status event')
 
     def _send(self, hue_light_id, state, dimmer_level):
         try:
