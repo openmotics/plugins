@@ -7,6 +7,9 @@ import time
 import requests
 import simplejson as json
 from plugins.base import om_expose, OMPluginBase, PluginConfigChecker, background_task
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class TasmotaHTTP(OMPluginBase):
@@ -15,7 +18,7 @@ class TasmotaHTTP(OMPluginBase):
     """
 
     name = 'tasmotaHTTP'
-    version = '1.0.1'
+    version = '1.0.2'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'refresh_interval',
@@ -45,9 +48,10 @@ class TasmotaHTTP(OMPluginBase):
     default_config = {'refresh_interval': 2}
     tasmota_http_endpoint = 'http://{ip_address}/cm?user={user}&password={password}&cmnd=Power%20{action}'
 
-    def __init__(self, webinterface, logger):
-        super(TasmotaHTTP, self).__init__(webinterface, logger)
-        self.logger('Starting Tasmota HTTP plugin...')
+    def __init__(self, webinterface, connector):
+        super(TasmotaHTTP, self).__init__(webinterface=webinterface,
+                                            connector=connector)
+        logger.info('Starting Tasmota HTTP plugin...')
 
         self._config = self.read_config(TasmotaHTTP.default_config)
         self._config_checker = PluginConfigChecker(TasmotaHTTP.config_description)
@@ -56,7 +60,7 @@ class TasmotaHTTP(OMPluginBase):
 
         self._previous_output_state = {}
 
-        self.logger("Started Tasmota HTTP plugin")
+        logger.info("Started Tasmota HTTP plugin")
 
     def _read_config(self):
         self._refresh_interval = self._config.get('refresh_interval', 5)
@@ -66,7 +70,7 @@ class TasmotaHTTP(OMPluginBase):
         self._headers = {'X-Requested-With': 'OpenMotics plugin: Tasmota HTTP'}
         self._enabled = bool(self._tasmota_mapping)
 
-        self.logger('Tasmota HTTP is {0}'.format('enabled' if self._enabled else 'disabled'))
+        logger.info('Tasmota HTTP is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     @background_task
     def run(self):
@@ -88,9 +92,9 @@ class TasmotaHTTP(OMPluginBase):
                                 if device['label'] in previous_values and previous_values[device['label']] == output['status']:
                                     continue
                                 previous_values[device['label']] = self.update_tasmota(device, output)
-                                self.logger('Tasmota device {0} is {1}'.format(device['label'], 'on' if output['status'] == 1 else 'off'))
+                                logger.info('Tasmota device {0} is {1}'.format(device['label'], 'on' if output['status'] == 1 else 'off'))
                 except Exception as ex:
-                    self.logger('Failed to get output status: {0}'.format(ex))
+                    logger.exception('Failed to get output status: {0}'.format(ex))
 
                 # Wait a given amount of seconds
                 time.sleep(self._refresh_interval)
@@ -127,6 +131,6 @@ class TasmotaHTTP(OMPluginBase):
             if response.json()['POWER'] == 'ON':
                 return 1
         else:
-            self.logger('Failed to update Tasmota device {0}: {1}'.format(device['ip_address'], response.status_code))
+            logger.error('Failed to update Tasmota device {0}: {1}'.format(device['ip_address'], response.status_code))
 
         return 0

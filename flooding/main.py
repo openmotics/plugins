@@ -7,12 +7,16 @@ from plugins.base import om_expose, background_task, OMPluginBase, \
 import simplejson as json
 import smtplib
 import time
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 class Pumpy(OMPluginBase):
     """ Plugin to prevent flooding. """
 
     name = 'Pumpy'
-    version = '1.0.1'
+    version = '1.0.2'
     interfaces = [('config', '1.0')]
 
     config_descr = [
@@ -28,20 +32,18 @@ class Pumpy(OMPluginBase):
                        'to.'}
     ]
 
-    def __init__(self, webinterface, logger):
+    def __init__(self, webinterface, connector):
         """ Default constructor, called by the plugin manager. """
-        OMPluginBase.__init__(self, webinterface, logger)
-
+        OMPluginBase.__init__(self, webinterface, connector)
         self.__last_energy = None
 
         # The list containing whether the pump was on the last 10 minutes
         self.__window = []
-
         self.__config = self.read_config()
-
         self.__config_checker = PluginConfigChecker(Pumpy.config_descr)
 
-        self.logger("Started Pumpy plugin")
+        logger.info("Started Pumpy plugin")
+
 
     @background_task
     def run(self):
@@ -64,7 +66,7 @@ class Pumpy(OMPluginBase):
             pump_energy_in_one_minute = self.__config['watts'] / 60.0
             pump_on = (diff >= pump_energy_in_one_minute)
             if pump_on:
-                self.logger("Pump was running during the last minute")
+                logger.debug("Pump was running during the last minute")
 
             self.__window = self.__window[-9:] # Keep the last 9 'on' values
             self.__window.append(pump_on)           # Add the last 'on' value
@@ -74,7 +76,7 @@ class Pumpy(OMPluginBase):
                 running_for_10_mintues = running_for_10_mintues and pump_on
 
             if running_for_10_mintues:
-                self.logger("Pump was running for 10 minutes")
+                logger.debug("Pump was running for 10 minutes")
                 self.__pump_alert_triggered()
 
             self.__last_energy = watts
@@ -91,7 +93,7 @@ class Pumpy(OMPluginBase):
                           'Your pump was shut down because of high power '
                           'usage !')
         except smtplib.SMTPException as exc:
-            self.logger("Failed to send email: %s" % exc)
+            logger.exception("Failed to send email")
 
     def __get_total_energy(self):
         """ Get the total energy consumed by the pump. """

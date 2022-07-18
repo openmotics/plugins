@@ -7,10 +7,14 @@ import re
 import sys
 import time
 import requests
+import logging
 import simplejson as json
 from threading import Thread, Event
 from datetime import datetime, timedelta
 from plugins.base import om_expose, background_task, OMPluginBase, PluginConfigChecker
+
+
+logger = logging.getLogger(__name__)
 
 
 class Astro(OMPluginBase):
@@ -19,7 +23,7 @@ class Astro(OMPluginBase):
     """
 
     name = 'Astro'
-    version = '1.0.2'
+    version = '1.0.3'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'coordinates',
@@ -65,9 +69,9 @@ class Astro(OMPluginBase):
 
     default_config = {}
 
-    def __init__(self, webinterface, logger):
-        super(Astro, self).__init__(webinterface, logger)
-        self.logger('Starting Astro plugin...')
+    def __init__(self, webinterface, connector):
+        super(Astro, self).__init__(webinterface, connector)
+        logger.info('Starting Astro plugin...')
 
         self._config = self.read_config(Astro.default_config)
         self._config_checker = PluginConfigChecker(Astro.config_description)
@@ -93,7 +97,7 @@ class Astro(OMPluginBase):
 
         self._read_config()
 
-        self.logger("Started Astro plugin")
+        logger.info("Started Astro plugin")
 
     def _read_config(self):
         try:
@@ -101,7 +105,7 @@ class Astro(OMPluginBase):
             from pytz import reference
             enabled = True
         except ImportError:
-            self.logger('Could not import pytz')
+            logger.error('Could not import pytz')
             enabled = False
 
         if enabled:
@@ -120,10 +124,10 @@ class Astro(OMPluginBase):
                     self._longitude = float(longitude)
                     self._print_coordinate_time()
                 except ValueError as ex:
-                    self.logger('Could not parse coordinates: {0}'.format(ex))
+                    logger.error('Could not parse coordinates: {0}'.format(ex))
                     enabled = False
             else:
-                self.logger('Could not parse coordinates')
+                logger.error('Could not parse coordinates')
                 enabled = False
 
         if enabled:
@@ -170,7 +174,7 @@ class Astro(OMPluginBase):
         self._print_actions()
         self._enabled = enabled and (self._group_actions or self._bits)
         self._last_request_date = None
-        self.logger('Astro is {0}abled'.format('en' if self._enabled else 'dis'))
+        logger.info('Astro is {0}abled'.format('en' if self._enabled else 'dis'))
         self._sleeper.set()
 
     @staticmethod
@@ -193,26 +197,26 @@ class Astro(OMPluginBase):
         import pytz
 
         now = datetime.now()
-        self.logger('Location:')
-        self.logger('* Latitude: {0} - Longitude: {1}'.format(self._latitude, self._longitude))
-        self.logger('* Time: {0} local time, {1} UTC'.format(Astro._format_date(now),
+        logger.info('Location:')
+        logger.info('* Latitude: {0} - Longitude: {1}'.format(self._latitude, self._longitude))
+        logger.info('* Time: {0} local time, {1} UTC'.format(Astro._format_date(now),
                                                              Astro._format_date(now, timezone=pytz.UTC)))
 
     def _print_actions(self):
         sun_locations = set(self._group_actions.keys()) | set(self._bits.keys())
         if sun_locations:
-            self.logger('Configured actions:')
+            logger.info('Configured actions:')
         for sun_location in sun_locations:
             group_actions = self._group_actions.get(sun_location, [])
             bits = self._bits.get(sun_location, [])
             for entry in group_actions:
-                self.logger('* At {0}{1}: Execute Automation {2}'.format(
+                logger.info('* At {0}{1}: Execute Automation {2}'.format(
                     sun_location,
                     Astro._format_offset(entry['offset']),
                     entry['group_action_id']
                 ))
             for entry in bits:
-                self.logger('* At {0}{1}: {2} Validation Bit {3}'.format(
+                logger.info('* At {0}{1}: {2} Validation Bit {3}'.format(
                     sun_location,
                     Astro._format_offset(entry['offset']),
                     entry['action'].capitalize(),
@@ -221,20 +225,20 @@ class Astro(OMPluginBase):
 
     def _print_execution_plan(self):
         if not self._execution_plan:
-            self.logger('Empty execution plan for {0}'.format(self._last_request_date.strftime('%Y-%m-%d')))
+            logger.info('Empty execution plan for {0}'.format(self._last_request_date.strftime('%Y-%m-%d')))
             return
-        self.logger('Execution plan for {0}:'.format(self._last_request_date.strftime('%Y-%m-%d')))
+        logger.info('Execution plan for {0}:'.format(self._last_request_date.strftime('%Y-%m-%d')))
         for date in sorted(self._execution_plan.keys()):
             date_plan = self._execution_plan.get(date, [])
             if not date_plan:
                 continue
             for action in date_plan:
                 if action['task'] == 'group_action':
-                    self.logger('* {0}: Execute Automation {1} ({2})'.format(Astro._format_date(date),
+                    logger.info('* {0}: Execute Automation {1} ({2})'.format(Astro._format_date(date),
                                                                              action['data']['group_action_id'],
                                                                              action['source']))
                 elif action['task'] == 'bit':
-                    self.logger('* {0}: {1} Validation Bit {2} ({3})'.format(Astro._format_date(date),
+                    logger.info('* {0}: {1} Validation Bit {2} ({3})'.format(Astro._format_date(date),
                                                                              action['data']['action'].capitalize(),
                                                                              action['data']['bit_id'],
                                                                              action['source']))
@@ -262,7 +266,7 @@ class Astro(OMPluginBase):
                 return None
             return date
         except Exception as ex:
-            self.logger('Could not parse date {0}: {1}'.format(dt_string, ex))
+            logger.exception('Could not parse date {0}'.format(dt_string))
             return None
 
     @background_task
@@ -285,7 +289,7 @@ class Astro(OMPluginBase):
                     self._print_execution_plan()
 
                 if not self._execution_plan:
-                    self.logger('Suspending. Wakeup scheduled at {0}...'.format(Astro._format_date(tomorrow)))
+                    logger.info('Suspending. Wakeup scheduled at {0}...'.format(Astro._format_date(tomorrow)))
                     sleep = (tomorrow - now).total_seconds()
                     self._sleep(time.time() + sleep + 5)
                     continue
@@ -301,7 +305,7 @@ class Astro(OMPluginBase):
                         continue
                     plan = self._execution_plan.get(date, [])
                     if plan:
-                        self.logger('Executing plan...')
+                        logger.info('Executing plan...')
                     for entry in plan:
                         if entry['task'] == 'group_action':
                             group_action_id = entry['data']['group_action_id']
@@ -310,9 +314,9 @@ class Astro(OMPluginBase):
                                                                                       action_number=group_action_id))
                                 if not result.get('success'):
                                     raise RuntimeError(result.get('msg', 'Unknown error'))
-                                self.logger('* Executing Automation {0}: Done'.format(group_action_id))
+                                logger.info('* Executing Automation {0}: Done'.format(group_action_id))
                             except Exception as ex:
-                                self.logger('* Executing Automation {0} failed: {1}'.format(group_action_id, ex))
+                                logger.error('* Executing Automation {0} failed: {1}'.format(group_action_id, ex))
                         elif entry['task'] == 'bit':
                             bit_id = entry['data']['bit_id']
                             action_words = 'Setting' if entry['data']['action'] == 'set' else 'Clearing'
@@ -322,17 +326,17 @@ class Astro(OMPluginBase):
                                                                                       action_number=bit_id))
                                 if not result.get('success'):
                                     raise RuntimeError(result.get('msg', 'Unknown error'))
-                                self.logger('* {0} Validation Bit {1}: Done'.format(action_words, bit_id))
+                                logger.info('* {0} Validation Bit {1}: Done'.format(action_words, bit_id))
                             except Exception as ex:
-                                self.logger('* {0} Validation Bit {1} failed: {2}'.format(action_words, bit_id, ex))
+                                logger.error('* {0} Validation Bit {1} failed: {2}'.format(action_words, bit_id, ex))
                     self._execution_plan.pop(date, None)
-                self.logger('Processing complete')
-                self.logger('Suspending. Wakeup scheduled at {0}...'.format(Astro._format_date(next_action_date)))
+                logger.info('Processing complete')
+                logger.info('Suspending. Wakeup scheduled at {0}...'.format(Astro._format_date(next_action_date)))
                 sleep = (next_action_date - now).total_seconds()
                 self._sleep(time.time() + sleep + 5)
             except Exception as ex:
-                self.logger('Unexpected error while processing: {0}'.format(ex))
-                self.logger('Suspending. Wakeup scheduled at {0}...'.format(Astro._format_date(tomorrow)))
+                logger.info('Unexpected error while processing: {0}'.format(ex))
+                logger.info('Suspending. Wakeup scheduled at {0}...'.format(Astro._format_date(tomorrow)))
                 sleep = (tomorrow - now).total_seconds()
                 self._sleep(time.time() + sleep + 5)
 
@@ -386,7 +390,7 @@ class Astro(OMPluginBase):
                                                'bit_id': entry['bit_id']}})
             self._execution_plan = execution_plan
         except Exception as ex:
-            self.logger('Could not load data: {0}'.format(ex))
+            logger.exception('Could not load data')
             self._execution_plan = {}
 
     @om_expose

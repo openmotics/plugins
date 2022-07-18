@@ -11,6 +11,9 @@ from math import sqrt
 from collections import deque
 from plugins.base import om_expose, background_task, OMPluginBase, PluginConfigChecker, om_metric_data
 from serial_utils import CommunicationTimedOutException
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Ventilation(OMPluginBase):
@@ -19,7 +22,7 @@ class Ventilation(OMPluginBase):
     """
 
     name = 'Ventilation'
-    version = '2.0.16'
+    version = '2.0.17'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
@@ -96,9 +99,11 @@ class Ventilation(OMPluginBase):
 
     default_config = {}
 
-    def __init__(self, webinterface, logger):
-        super(Ventilation, self).__init__(webinterface, logger)
-        self.logger('Starting Ventilation plugin...')
+    def __init__(self, webinterface, connector):
+        super(Ventilation, self).__init__(webinterface=webinterface,
+                                            connector=connector)
+
+        logger.info('Starting Ventilation plugin...')
 
         self._config = self.read_config(Ventilation.default_config)
         self._config_checker = PluginConfigChecker(Ventilation.config_description)
@@ -113,7 +118,7 @@ class Ventilation(OMPluginBase):
 
         self._read_config()
 
-        self.logger("Started Ventilation plugin")
+        logger.info("Started Ventilation plugin")
 
     def _read_config(self):
         self._outputs = {1: self._config.get('low', []),
@@ -122,13 +127,13 @@ class Ventilation(OMPluginBase):
         self._used_sensors = [sensor['sensor_id'] for sensor in self._config.get('sensors', [])]
         self._mode, self._settings = self._config.get('mode', ['disabled', {}])
         self._enabled = len(self._used_sensors) > 0 and self._mode in ['dew_point', 'statistical']
-        self.logger('Ventilation is {0}'.format('enabled' if self._enabled else 'disabled'))
+        logger.info('Ventilation is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     def _load_sensors(self):
         try:
             configs = json.loads(self.webinterface.get_sensor_configurations())
             if configs['success'] is False:
-                self.logger('Failed to get sensor configurations: {0}'.format(configs.get('msg', 'Unknown error')))
+                logger.error('Failed to get sensor configurations: {0}'.format(configs.get('msg', 'Unknown error')))
             else:
                 sensor_ids = []
                 for sensor in configs['config']:
@@ -142,9 +147,9 @@ class Ventilation(OMPluginBase):
                         self._sensors.pop(sensor_id, None)
                         self._samples.pop(sensor_id, None)
         except CommunicationTimedOutException:
-            self.logger('Error getting sensor status: CommunicationTimedOutException')
+            logger.exception('Error getting sensor status: CommunicationTimedOutException')
         except Exception as ex:
-            self.logger('Error getting sensor status: {0}'.format(ex))
+            logger.exception('Error getting sensor status: {0}'.format(ex))
 
     @background_task
     def run(self):
@@ -177,11 +182,11 @@ class Ventilation(OMPluginBase):
             # Fetch data
             data_humidities = json.loads(self.webinterface.get_sensor_humidity_status())
             if data_humidities['success'] is False:
-                self.logger('Failed to read humidities: {0}'.format(data_humidities.get('msg', 'Unknown error')))
+                logger.error('Failed to read humidities: {0}'.format(data_humidities.get('msg', 'Unknown error')))
                 return
             data_temperatures = json.loads(self.webinterface.get_sensor_temperature_status())
             if data_temperatures['success'] is False:
-                self.logger('Failed to read temperatures: {0}'.format(data_temperatures.get('msg', 'Unknown error')))
+                logger.error('Failed to read temperatures: {0}'.format(data_temperatures.get('msg', 'Unknown error')))
                 return
             for sensor_id in range(len(data_humidities['status'])):
                 if sensor_id not in self._used_sensors + [outdoor_sensor_id]:
@@ -201,7 +206,7 @@ class Ventilation(OMPluginBase):
                     dew_points[sensor_id] = Ventilation._dew_point(temperature, humidity)
                     abs_humidities[sensor_id] = Ventilation._abs_humidity(temperature, humidity)
             if outdoor_abs_humidity is None or outdoor_dew_point is None:
-                self.logger('Could not load outdoor humidity or temperature')
+                logger.error('Could not load outdoor humidity or temperature')
                 return
             # Calculate required ventilation based on sensor information
             target_lower = self._settings['target_lower']
@@ -270,9 +275,9 @@ class Ventilation(OMPluginBase):
                                           'level': 0})
             if ventilation != self._last_ventilation:
                 if self._last_ventilation is None:
-                    self.logger('Updating ventilation to 1 (startup)')
+                    logger.info('Updating ventilation to 1 (startup)')
                 else:
-                    self.logger('Updating ventilation to {0} because of sensors: {1}'.format(
+                    logger.info('Updating ventilation to {0} because of sensors: {1}'.format(
                         ventilation,
                         ', '.join(['{0} ({1})'.format(self._sensors[sensor_id],
                                                       self._runtime_data[sensor_id]['reason'])
@@ -281,10 +286,10 @@ class Ventilation(OMPluginBase):
                 self._set_ventilation(ventilation)
                 self._last_ventilation = ventilation
         except CommunicationTimedOutException:
-            self.logger('Error getting sensor status: CommunicationTimedOutException')
+            logger.exception('Error getting sensor status: CommunicationTimedOutException')
         except Exception as ex:
-            self.logger('Error calculating ventilation: {0}'.format(ex))
-            self.logger('Stacktrace: {0}'.format(traceback.format_exc()))
+            logger.exception('Error calculating ventilation: {0}'.format(ex))
+            # logger.exception('Stacktrace: {0}'.format(traceback.format_exc()))
 
     def _process_statistics(self):
         try:
@@ -354,9 +359,9 @@ class Ventilation(OMPluginBase):
                                               'level': int(current_ventilation)})
             if ventilation != self._last_ventilation:
                 if self._last_ventilation is None:
-                    self.logger('Updating ventilation to 1 (startup)')
+                    logger.info('Updating ventilation to 1 (startup)')
                 else:
-                    self.logger('Updating ventilation to {0} because of sensors: {1}'.format(
+                    logger.info('Updating ventilation to {0} because of sensors: {1}'.format(
                         ventilation,
                         ', '.join(['{0} ({1})'.format(self._sensors[sensor_id],
                                                       self._runtime_data[sensor_id]['difference'])
@@ -365,9 +370,9 @@ class Ventilation(OMPluginBase):
                 self._set_ventilation(ventilation)
                 self._last_ventilation = ventilation
         except CommunicationTimedOutException:
-            self.logger('Error getting sensor status: CommunicationTimedOutException')
+            logger.exception('Error getting sensor status: CommunicationTimedOutException')
         except Exception as ex:
-            self.logger('Error calculating ventilation: {0}'.format(ex))
+            logger.exception('Error calculating ventilation')
 
     def _set_ventilation(self, level):
         success = True
@@ -379,12 +384,12 @@ class Ventilation(OMPluginBase):
                 value = None
             result = json.loads(self.webinterface.set_output(id=output_id, is_on=str(on), dimmer=value, timer=None))
             if result['success'] is False:
-                self.logger('Error setting output {0} to {1}: {2}'.format(output_id, 'OFF' if value is None else value, result['msg']))
+                logger.error('Error setting output {0} to {1}: {2}'.format(output_id, 'OFF' if value is None else value, result['msg']))
                 success = False
         if success is True:
-            self.logger('Ventilation set to {0}'.format(level))
+            logger.info('Ventilation set to {0}'.format(level))
         else:
-            self.logger('Could not set ventilation to {0}'.format(level))
+            logger.error('Could not set ventilation to {0}'.format(level))
             success = False
         return success
 
@@ -396,7 +401,7 @@ class Ventilation(OMPluginBase):
                                             'tags': tags,
                                             'values': values})
         except Exception as ex:
-            self.logger('Got unexpected error while enqueing metrics: {0}'.format(ex))
+            logger.exception('Got unexpected error while enqueing metrics: {0}'.format(ex))
 
     @om_metric_data(interval=5)
     def collect_metrics(self):

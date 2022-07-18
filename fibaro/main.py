@@ -5,10 +5,12 @@ A Fibaro plugin, for controlling devices in your Fibaro Home Center (lite)
 import six
 import time
 import requests
+import logging
 import simplejson as json
 from threading import Thread
 from plugins.base import om_expose, output_status, OMPluginBase, PluginConfigChecker, background_task, om_metric_data
 
+logger = logging.getLogger(__name__)
 
 class Fibaro(OMPluginBase):
     """
@@ -16,7 +18,7 @@ class Fibaro(OMPluginBase):
     """
 
     name = 'Fibaro'
-    version = '2.0.18'
+    version = '2.0.19'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
@@ -58,9 +60,9 @@ class Fibaro(OMPluginBase):
 
     default_config = {'ip': '', 'username': '', 'password': ''}
 
-    def __init__(self, webinterface, logger):
-        super(Fibaro, self).__init__(webinterface, logger)
-        self.logger('Starting Fibaro plugin...')
+    def __init__(self, webinterface, connector):
+        super(Fibaro, self).__init__(webinterface, connector)
+        logger.info('Starting Fibaro plugin...')
 
         self._config = self.read_config(Fibaro.default_config)
         self._config_checker = PluginConfigChecker(Fibaro.config_description)
@@ -69,7 +71,7 @@ class Fibaro(OMPluginBase):
 
         self._previous_output_state = {}
 
-        self.logger("Started Fibaro plugin")
+        logger.info("Started Fibaro plugin")
 
     def _read_config(self):
         self._ip = self._config['ip']
@@ -83,7 +85,7 @@ class Fibaro(OMPluginBase):
                          'X-Fibaro-Version': '2'}
 
         self._enabled = self._ip != '' and self._username != '' and self._password != ''
-        self.logger('Fibaro is {0}'.format('enabled' if self._enabled else 'disabled'))
+        logger.info('Fibaro is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     @output_status
     def output_status(self, status):
@@ -110,26 +112,26 @@ class Fibaro(OMPluginBase):
                         thread.start()
                     self._previous_output_state[key] = is_on
             except Exception as ex:
-                self.logger('Error processing output_status event: {0}'.format(ex))
+                logger.exception('Error processing output_status event')
 
     def _send(self, action, data):
         try:
             url = self._endpoint.format(action)
             params = '&'.join(['{0}={1}'.format(key, value) for key, value in data.iteritems()])
-            self.logger('Calling {0}?{1}'.format(url, params))
+            logger.info('Calling {0}?{1}'.format(url, params))
             response = requests.get(url=url,
                                     params=data,
                                     headers=self._headers,
                                     auth=(self._username, self._password))
             if response.status_code != 202:
-                self.logger('Call failed, received: {0} ({1})'.format(response.text, response.status_code))
+                logger.error('Call failed, received: {0} ({1})'.format(response.text, response.status_code))
                 return
             result = response.json()
             if result['result']['result'] not in [0, 1]:
-                self.logger('Call failed, received: {0} ({1})'.format(response.text, response.status_code))
+                logger.error('Call failed, received: {0} ({1})'.format(response.text, response.status_code))
                 return
         except Exception as ex:
-            self.logger('Error during call: {0}'.format(ex))
+            logger.exception('Error during call')
 
     @background_task
     def run(self):
@@ -141,7 +143,7 @@ class Fibaro(OMPluginBase):
                                             headers=self._headers,
                                             auth=(self._username, self._password))
                     if response.status_code != 200:
-                        self.logger('Failed to load power devices')
+                        logger.error('Failed to load power devices')
                     else:
                         sensor_values = {}
                         result = response.json()
@@ -162,9 +164,9 @@ class Fibaro(OMPluginBase):
                         for sensor_id, values in sensor_values.iteritems():
                             result = json.loads(self.webinterface.set_virtual_sensor(None, sensor_id, *values))
                             if result['success'] is False:
-                                self.logger('Error when updating virtual sensor {0}: {1}'.format(sensor_id, result['msg']))
+                                logger.error('Error when updating virtual sensor {0}: {1}'.format(sensor_id, result['msg']))
                 except Exception as ex:
-                    self.logger('Error while setting virtual sensors: {0}'.format(ex))
+                    logger.exception('Error while setting virtual sensors')
                 # This loop should run approx. every 5 seconds
                 sleep = 5 - (time.time() - start)
                 if sleep < 0:
@@ -181,7 +183,7 @@ class Fibaro(OMPluginBase):
                                     headers=self._headers,
                                     auth=(self._username, self._password))
             if response.status_code != 200:
-                self.logger('Failed to load power devices')
+                logger.error('Failed to load power devices')
                 return
             result = response.json()
             for device in result:

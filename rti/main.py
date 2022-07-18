@@ -24,8 +24,10 @@ import six
 import time
 from contextlib import contextmanager
 from six.moves.queue import Queue
-
 from plugins.base import om_expose, background_task, output_status, thermostat_status, thermostat_group_status, OMPluginBase, PluginConfigChecker
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class RTI(OMPluginBase):
@@ -34,7 +36,7 @@ class RTI(OMPluginBase):
     """
 
     name = 'RTI'
-    version = '0.0.1'
+    version = '0.0.2'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'serial_device',
@@ -45,9 +47,11 @@ class RTI(OMPluginBase):
                            'description': 'The baud rate of the RTI device. Defaults to 115200'}]
     default_config = {}
 
-    def __init__(self, webinterface, logger):
-        super(RTI, self).__init__(webinterface, logger)
-        self.logger('Starting RTI plugin...')
+    def __init__(self, webinterface, connector):
+        super(RTI, self).__init__(webinterface=webinterface,
+                                    connector=connector)
+
+        logger.info('Starting RTI plugin...')
 
         self._config = self.read_config(RTI.default_config)
         self._config_checker = PluginConfigChecker(RTI.config_description)
@@ -57,7 +61,7 @@ class RTI(OMPluginBase):
         self._serial = None
         self._read_config()
 
-        self.logger("Started RTI plugin")
+        logger.info("Started RTI plugin")
 
     def _read_config(self):
         self._serial = None
@@ -67,12 +71,12 @@ class RTI(OMPluginBase):
                                              int(self._config.get('serial_baud_rate', 115200)))
             except Exception as ex:
                 self._serial = None
-                self.logger('Could not connect to serial port: {0}'.format(ex))
+                logger.exception('Could not connect to serial port')
         except Exception as ex:
-            self.logger('Could not read/process configuration: {0}'.format(ex))
+            logger.exception('Could not read/process configuration')
 
         self._enabled = self._serial is not None
-        self.logger('RTI is {0}'.format('enabled' if self._enabled else 'disabled'))
+        logger.info('RTI is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     @staticmethod
     def _execute_api(function, **kwargs):
@@ -94,7 +98,7 @@ class RTI(OMPluginBase):
             try:
                 command = self._command_queue.get()
                 if '=' not in command:
-                    self.logger('Invalid command: {0}'.format(command))
+                    logger.error('Invalid command: {0}'.format(command))
                     continue
                 identifier = command.split('=')[0]
                 with self._process_message(command=command, identifier=identifier,
@@ -191,9 +195,9 @@ class RTI(OMPluginBase):
                             self.thermostat_group_status({'id': group_entry['id'],
                                                           'status': {'mode': group_entry['mode']}})
                         continue
-                self.logger('Unprocessed command: {0}'.format(command))
+                logger.warning('Unprocessed command: {0}'.format(command))
             except Exception as main_exception:
-                self.logger('Unexpected exception while processing command {0}: {1}'.format(command, main_exception))
+                logger.exception('Unexpected exception while processing command {0}'.format(command))
 
     @contextmanager
     def _process_message(self, command, identifier, regex):
@@ -215,7 +219,7 @@ class RTI(OMPluginBase):
             self._write_serial('thermostat_group.{0}.mode={1}'.format(thermostat_group_id,
                                                                       status['status']['mode'].lower()))
         except Exception as ex:
-            self.logger('Could not process thermostat group event {0}: {1}'.format(status, ex))
+            logger.exception('Could not process thermostat group event {0}'.format(status))
 
     @thermostat_status(version=1)
     def thermostat_status(self, status):
@@ -228,7 +232,7 @@ class RTI(OMPluginBase):
             self._write_serial('thermostat.{0}.state={1}'.format(thermostat_id, status['status']['state'].lower()))
             self._write_serial('thermostat.{0}.temperature={1}'.format(thermostat_id, status['status']['actual_temperature']))
         except Exception as ex:
-            self.logger('Could not process thermostat event {0}: {1}'.format(status, ex))
+            logger.exception('Could not process thermostat event {0}'.format(status))
 
     @output_status(version=2)
     def output_status(self, output_event):
@@ -242,12 +246,12 @@ class RTI(OMPluginBase):
             if dimmer_level is not None:
                 self._write_serial('output.{0}.dimmer={1}'.format(output_id, dimmer_level))
         except Exception as ex:
-            self.logger('Could not process output event {0}: {1}'.format(output_event, ex))
+            logger.exception('Could not process output event {0}'.format(output_event))
 
     def _write_serial(self, message):
         if self._serial is not None:
             self._serial.write('{0}\n'.format(message))
-        self.logger('Write to serial: {0}'.format(message))
+        logger.info('Write to serial: {0}'.format(message))
 
     @background_task
     def _read_serial(self):
@@ -257,14 +261,14 @@ class RTI(OMPluginBase):
                 continue
             try:
                 command = self._serial.readline().strip()
-                self.logger('Received command over serial: {0}'.format(command))
+                logger.info('Received command over serial: {0}'.format(command))
                 self._command_queue.put(command)
             except Exception as ex:
-                self.logger('Unexpected error while reading from serial device: {0}'.format(ex))
+                logger.exception('Unexpected error while reading from serial device')
 
     @om_expose
     def command(self, command):
-        self.logger('Received command over API: {0}'.format(command))
+        logger.info('Received command over API: {0}'.format(command))
         self._command_queue.put(command)
 
     @om_expose

@@ -20,6 +20,9 @@ import simplejson as json
 from plugins.base import om_expose, OMPluginBase, PluginConfigChecker, background_task, om_metric_data
 from collections import deque
 from threading import Thread
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SMAWebConnect(OMPluginBase):
@@ -28,7 +31,7 @@ class SMAWebConnect(OMPluginBase):
     """
 
     name = 'SMAWebConnect'
-    version = '0.0.36'
+    version = '0.0.37'
     interfaces = [('config', '1.0'), ('metrics', '1.0')]
 
     counter_device_types = ['gas', 'heat', 'water', 'electricity']
@@ -127,9 +130,11 @@ class SMAWebConnect(OMPluginBase):
                                         'unit': entry['unit'], 'type': entry['type']}
                                         for entry in FIELD_MAPPING.values()]}]
 
-    def __init__(self, webinterface, logger):
-        super(SMAWebConnect, self).__init__(webinterface, logger)
-        self.logger('Starting SMAWebConnect plugin...')
+    def __init__(self, webinterface, connector):
+        super(SMAWebConnect, self).__init__(webinterface=webinterface,
+                                    connector=connector)
+
+        logger.info('Starting SMAWebConnect plugin...')
         self.config_description = self._create_config_description()
         self._config = self.read_config(SMAWebConnect.default_config)
         self._config_checker = PluginConfigChecker(self.config_description)
@@ -145,7 +150,7 @@ class SMAWebConnect(OMPluginBase):
         from requests.packages.urllib3.exceptions import InsecureRequestWarning
         requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
-        self.logger("Started SMAWebConnect plugin")
+        logger.info("Started SMAWebConnect plugin")
 
     def _create_config_description(self):
         self.pc_config = json.loads(self.webinterface.get_pulse_counter_configurations())
@@ -205,11 +210,11 @@ class SMAWebConnect(OMPluginBase):
         self._debug = bool(self._config.get('debug', False))
 
         self._enabled = len(self._sma_devices) > 0 and self._sample_rate > 5
-        self.logger('SMAWebConnect is {0}'.format('enabled' if self._enabled else 'disabled'))
+        logger.info('SMAWebConnect is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     def _log_debug(self, message):
         if self._debug:
-            self.logger(message)
+            logger.debug(message)
 
     @background_task
     def run(self):
@@ -221,7 +226,7 @@ class SMAWebConnect(OMPluginBase):
                 try:
                     self._read_data(sma_device)
                 except Exception as ex:
-                    self.logger('Could not read SMA device values: {0}'.format(ex))
+                    logger.exception('Could not read SMA device values')
             time.sleep(self._sample_rate)
 
     def _read_data(self, sma_device):
@@ -279,7 +284,7 @@ class SMAWebConnect(OMPluginBase):
 
     def _extract_values(self, key, values, factor):
         if len(values) != 1 or '1' not in values:
-            self.logger('* Unexpected structure for {0}: {1}'.format(key, values))
+            logger.error('* Unexpected structure for {0}: {1}'.format(key, values))
             return []
         values = values['1']
         if len(values) == 0:
@@ -295,7 +300,7 @@ class SMAWebConnect(OMPluginBase):
 
     def _clean_value(self, key, value_container, factor):
         if 'val' not in value_container:
-            self.logger('* Unexpected structure for {0}: {1}'.format(key, value_container))
+            logger.error('* Unexpected structure for {0}: {1}'.format(key, value_container))
             return None
         value = value_container['val']
         if value is None:
@@ -325,7 +330,7 @@ class SMAWebConnect(OMPluginBase):
                                             'tags': {'device': device_id},
                                             'values': values})
         except Exception as ex:
-            self.logger('Got unexpected error while enqueueing metrics: {0}'.format(ex))
+            logger.exception('Got unexpected error while enqueueing metrics')
 
     @om_metric_data(interval=15)
     def collect_metrics(self):
@@ -346,7 +351,7 @@ class SMAWebConnect(OMPluginBase):
             self.pc_config = json.loads(self.webinterface.get_pulse_counter_configurations())
             pc_id = [pc_config['id'] for pc_config in self.pc_config['config'] if pc_config['name'] == pc_name]
             if len(pc_id) == 0 or len(pc_id) > 1:
-                self.logger("No or multiple pulsecounters found for name {0}. Skipping this pulsecounter".format(pc_name))
+                logger.warning("No or multiple pulsecounters found for name {0}. Skipping this pulsecounter".format(pc_name))
                 continue
             pc_id = pc_id[0]
 

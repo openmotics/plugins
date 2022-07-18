@@ -6,22 +6,22 @@ import six
 import logging
 import time
 import requests
+import logging
 import simplejson as json
 from six.moves.queue import Queue, Empty
 from threading import Thread, Lock
 from plugins.base import om_expose, output_status, OMPluginBase, PluginConfigChecker, background_task
-from .plugin_logs import PluginLogHandler
 
 if False:  # MYPY
     from typing import Dict, List, Optional, Callable
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class Hue(OMPluginBase):
 
     name = 'Hue'
-    version = '1.1.2'
+    version = '1.1.3'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_url',
@@ -42,9 +42,10 @@ class Hue(OMPluginBase):
 
     default_config = {'api_url': 'http://hue/api', 'username': '', 'poll_frequency': 60}
 
-    def __init__(self, webinterface, gateway_logger):
-        self.setup_logging(log_function=gateway_logger)
-        super(Hue, self).__init__(webinterface, logger)
+    def __init__(self, webinterface, connector):
+        super(Hue, self).__init__(webinterface=webinterface,
+                                    connector=connector)
+        
         logger.info('Starting Hue plugin %s ...', self.version)
 
         self.discover_hue_bridges()
@@ -59,15 +60,6 @@ class Hue(OMPluginBase):
 
         logger.info("Hue plugin started")
 
-    @staticmethod
-    def setup_logging(log_function):  # type: (Callable) -> None
-        logger.setLevel(logging.INFO)
-        log_handler = PluginLogHandler(log_function=log_function)
-        # some elements like time and name are added by the plugin runtime already
-        # formatter = logging.Formatter('%(asctime)s - %(name)s - %(threadName)s - %(levelname)s - %(message)s')
-        formatter = logging.Formatter('%(threadName)s - %(levelname)s - %(message)s')
-        log_handler.setFormatter(formatter)
-        logger.addHandler(log_handler)
 
     def _read_config(self):
         self._api_url = self._config['api_url']
@@ -111,7 +103,7 @@ class Hue(OMPluginBase):
                 else:
                     logger.debug('Ignoring output %s, because it is not Hue'.format(output_id))
             except Exception as ex:
-                logger.exception('Error processing output_status event: {0}'.format(ex))
+                logger.exception('Error processing output_status event')
 
     def _send(self, hue_light_id, state, dimmer_level):
         try:

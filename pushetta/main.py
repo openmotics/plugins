@@ -8,6 +8,9 @@ import collections
 import simplejson as json
 from threading import Thread
 from plugins.base import om_expose, input_status, output_status, OMPluginBase, PluginConfigChecker
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Pushetta(OMPluginBase):
@@ -16,7 +19,7 @@ class Pushetta(OMPluginBase):
     """
 
     name = 'Pushetta'
-    version = '1.0.13'
+    version = '1.0.14'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_key',
@@ -34,16 +37,18 @@ class Pushetta(OMPluginBase):
 
     default_config = {'api_key': '', 'input_id': -1, 'channel': '', 'message': ''}
 
-    def __init__(self, webinterface, logger):
-        super(Pushetta, self).__init__(webinterface, logger)
-        self.logger('Starting Pushetta plugin...')
+    def __init__(self, webinterface, connector):
+        super(Pushetta, self).__init__(webinterface=webinterface,
+                                    connector=connector)
+
+        logger.info('Starting Pushetta plugin...')
 
         self._config = self.read_config(Pushetta.default_config)
         self._config_checker = PluginConfigChecker(Pushetta.config_description)
 
         self._read_config()
 
-        self.logger("Started Pushetta plugin")
+        logger.info("Started Pushetta plugin")
 
     def _read_config(self):
         self._api_key = self._config['api_key']
@@ -81,14 +86,14 @@ class Pushetta(OMPluginBase):
         try:
             data = json.dumps({'body': self._message,
                                'message_type': 'text/plain'})
-            self.logger('Sending: {0}'.format(data))
+            logger.info('Sending: {0}'.format(data))
             response = requests.post(url=self._endpoint,
                                      data=data,
                                      headers=self._headers,
                                      verify=False)
-            self.logger('Received: {0} ({1})'.format(response.text, response.status_code))
+            logger.info('Received: {0} ({1})'.format(response.text, response.status_code))
         except Exception as ex:
-            self.logger('Error sending: {0}'.format(ex))
+            logger.exception('Error sending')
 
     @om_expose
     def get_config_description(self):
