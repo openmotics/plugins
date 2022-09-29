@@ -5,7 +5,7 @@ An OpenWeatherMap plugin
 import six
 import time
 import requests
-import simplejson as json
+import json
 from plugins.base import om_expose, output_status, OMPluginBase, PluginConfigChecker, background_task
 import logging
 
@@ -53,7 +53,6 @@ class OpenWeatherMap(OMPluginBase):
 
         self._previous_output_state = {}
 
-        self.connector.sensor.subscribe_status_event(OpenWeatherMap.handle_sensor_status, version=2)
         self._sensor_dto = None
 
         logger.info("Started OpenWeatherMap plugin")
@@ -84,7 +83,9 @@ class OpenWeatherMap(OMPluginBase):
     def run(self):
         previous_values = {}
         accuracy = 5
+        logger.info("Statring background task")
         if self._sensor_dto == None:
+            logger.info("Registering the sensor - you should only see this log line once\n except for a race condition.")
             self._register_sensor()
         while True:
             if self._enabled:
@@ -165,6 +166,7 @@ class OpenWeatherMap(OMPluginBase):
                     previous_values[0] = values[0]  # Only temperature
                     try:
                         if self._sensor_dto:
+                            logger.info(f"Setting virtual sensor to: {values[0]}")
                             self.connector.sensor.report_state(sensor=self._sensor_dto,
                                                             value=values[0])
                     except Exception:
@@ -197,12 +199,6 @@ class OpenWeatherMap(OMPluginBase):
         self._read_config()
         self.write_config(config)
         return json.dumps({'success': True})
-
-    @staticmethod
-    def handle_sensor_status(event):
-        logger.info('Received sensor status from gateway: {0} {1}'.format(
-            event.data['id'], event.data['value']
-        ))
 
     def _register_sensor(self):
         logger.info('Registering Temperature sensor...')
