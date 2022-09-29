@@ -1,0 +1,7 @@
+{
+    "version" : "2.0.0",
+    "description" : "OpenWeatherMap",
+    "metric_source"  : "openweathermap",
+    "metric_type" : "openweathermap",
+    "python_version": 3
+}
