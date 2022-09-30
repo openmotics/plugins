@@ -38,7 +38,7 @@ class OpenWeatherMap(OMPluginBase):
                            'type': 'int',
                            'description': 'Not yet implemented, set to -1\nSensor ID for storing the UV index (the UV index will be set as temperature). -1 if not needed.'}]
 
-    default_config = {'api_key': ''}
+    default_config = {'api_key': '', 'uv_sensor_id': -1}
 
     def __init__(self, webinterface, connector):
         super(OpenWeatherMap, self).__init__(webinterface=webinterface,
@@ -83,9 +83,7 @@ class OpenWeatherMap(OMPluginBase):
     def run(self):
         previous_values = {}
         accuracy = 5
-        logger.info("Statring background task")
         if self._sensor_dto == None:
-            logger.info("Registering the sensor - you should only see this log line once\n except for a race condition.")
             self._register_sensor()
         while True:
             if self._enabled:
@@ -205,19 +203,8 @@ class OpenWeatherMap(OMPluginBase):
         try:
             sensor = self.connector.sensor.register_temperature_celcius(external_id='222222',
                                                                         name='OWM-temp-sensor')
-            logger.info('Registered %s' % sensor)
+            logger.info('Registered {sensor}')
             self._sensor_dto = sensor
         except Exception:
             logger.exception('Error registering sensor')
             self._sensor_dto = None
-
-    # TODO: also register a humidity sensor and set it's value
-        # logger.info('Registering Humidity sensor...')
-        # try:
-        #     sensor = self.connector.sensor.register_humidity_percent(external_id='333333',
-        #                                                                 name='OWM-humidity-sensor')
-        #     logger.info('Registered %s' % sensor)
-        #     self._sensor_dto = sensor
-        # except Exception:
-        #     logger.exception('Error registering sensor')
-        #     self._sensor_dto = None
