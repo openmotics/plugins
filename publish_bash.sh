@@ -20,7 +20,7 @@ else
   if [ "$success" = "true" ]
   then
     token=`echo $login | $sedcmd 's/(.+)"token": *"([a-z,0-9]+)"(.+)/\2/'`
-    result=`curl -vvsk --form "package_data=@$1" --form md5=$checksum --form token=$token -X POST "https://$2/install_plugin"`
+    result=`curl -sk --form "package_data=@$1" --form md5=$checksum --form token=$token -X POST "https://$2/install_plugin"`
     success=`echo $result | $sedcmd 's/(.+)"success": *([a-z]+)(.+)/\2/'`
     if [ "$success" = "true" ]
     then
