@@ -17,7 +17,7 @@ class OpenWeatherMap(OMPluginBase):
     """
 
     name = 'OpenWeatherMap'
-    version = '2.0.0'
+    version = '2.0.1'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_key',
@@ -29,16 +29,15 @@ class OpenWeatherMap(OMPluginBase):
                           {'name': 'lng',
                            'type': 'str',
                            'description': 'A location longitude which will be passed to OpenWeatherMap.'},
-                          {'name': 'time_offset',
-                           'type': 'int',
-                           'description': 'Time offset for forecast in minutes (only positive int values)'
-                           },
-                            # Not implemented yet, set to -1 in the meanwhile
-                          {'name': 'uv_sensor_id',
-                           'type': 'int',
-                           'description': 'Not yet implemented, set to -1\nSensor ID for storing the UV index (the UV index will be set as temperature). -1 if not needed.'}]
+                           {'name': 'Virtual sensors and forecast time offset',
+                           'type': 'section',
+                           'description': 'Sensor registration and time_offset configuration (in minutes and only positive int values)',
+                           'repeat': True,
+                           'min': 0,
+                           'content': [{'name': 'sensor_name', 'type': 'str'},
+                                       {'name': 'time_offset', 'type': 'int'}]}]
 
-    default_config = {'api_key': '', 'uv_sensor_id': -1}
+    default_config = {'api_key': ''}
 
     def __init__(self, webinterface, connector):
         super(OpenWeatherMap, self).__init__(webinterface=webinterface,
@@ -51,19 +50,24 @@ class OpenWeatherMap(OMPluginBase):
 
         self._read_config()
 
-        self._previous_output_state = {}
+        self._registered = False
+        self._sensor_dtos = {}
 
-        self._sensor_dto = None
+        self._previous_output_state = {}
 
         logger.info("Started OpenWeatherMap plugin")
 
     def _read_config(self):
         self._api_key = self._config.get('api_key', '')
 
-        self._time_offset = self._config.get('time_offset')
-        self._uv_sensor_id = int(self._config.get('uv_sensor_id', -1))
+        sensors_config = self._config.get('Virtual sensors and forecast time offset', [])
+        self._sensor_time_dict = {}
+        for i in range(len(sensors_config['time_offset'])):
+            self._sensor_time_dict[sensors_config['sensor_name'][i]] = sensors_config['time_offset'][i]
 
-        self._uv_endpoint = 'http://api.openweathermap.org/v3/uvi/{lat},{lon}/{date}Z.json?appid={api_key}'
+        self._time_offsets = [entry for entry in sensors_config['time_offset']]
+        self._sensors_names = [entry for entry in sensors_config['sensor_name']]
+        
         self._forecast_endpoint = 'http://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&units=metric&appid={api_key}'
         self._current_endpoint = 'http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&units=metric&appid={api_key}'
 
@@ -83,89 +87,61 @@ class OpenWeatherMap(OMPluginBase):
     def run(self):
         previous_values = {}
         accuracy = 5
-        if self._sensor_dto == None:
-            self._register_sensor()
+        if not self._registered:
+            self._register_sensors()
         while True:
             if self._enabled:
                 start = time.time()
                 sensor_values = {}
                 calls = 0
-                if self._time_offset > 0:
-                    try:
-                        calls += 1
-                        response = requests.get(url=self._forecast_endpoint.format(lat=self._latitude,
+                for s, t in self._sensor_time_dict.items():
+                    if t > 0:
+                        try:
+                            calls += 1
+                            response = requests.get(url=self._forecast_endpoint.format(lat=self._latitude,
+                                                                                        lon=self._longitude,
+                                                                                        api_key=self._api_key),
+                                                    headers=self._headers)
+                            if response.status_code != 200:
+                                logger.error('Forecast call failed: {0}'.format(response.json()['message']))
+                            else:
+                                result = response.json()['list']
+                                wanted_time = start + (t * 60)
+                                selected_entry = None
+                                for entry in result:
+                                    if selected_entry is None or abs(entry['dt'] - wanted_time) < abs(selected_entry['dt'] - wanted_time):
+                                        selected_entry = entry
+                                if selected_entry is None:
+                                    logger.error(f'Could not find forecast for virtual sensor {s}')
+                                    continue
+                                sensor_values[s] = [selected_entry['main']['temp'], selected_entry['main']['humidity'], None]
+                        except Exception as ex:
+                            logger.exception('Error while fetching forecast temperatures')
+                    elif t == 0:
+                        try:
+                            calls += 1
+                            response = requests.get(url=self._current_endpoint.format(lat=self._latitude,
                                                                                     lon=self._longitude,
                                                                                     api_key=self._api_key),
-                                                headers=self._headers)
-                        if response.status_code != 200:
-                            logger.error('Forecast call failed: {0}'.format(response.json()['message']))
-                        else:
-                            result = response.json()['list']
-                            wanted_time = start + (self._time_offset * 60)
-                            selected_entry = None
-                            for entry in result:
-                                if selected_entry is None or abs(entry['dt'] - wanted_time) < abs(selected_entry['dt'] - wanted_time):
-                                    selected_entry = entry
-                            if selected_entry is None:
-                                logger.error('Could not find forecast for virtual sensor {0}'.format(sensor_id))
-                                continue
-                            sensor_values[0] = [selected_entry['main']['temp'], selected_entry['main']['humidity'], None]
-                    except Exception as ex:
-                        logger.exception('Error while fetching forecast temperatures')
-                elif self._time_offset == 0:
-                    try:
-                        calls += 1
-                        response = requests.get(url=self._current_endpoint.format(lat=self._latitude,
-                                                                                  lon=self._longitude,
-                                                                                  api_key=self._api_key),
-                                                headers=self._headers)
-                        if response.status_code != 200:
-                            logger.error('Current weather call failed: {0}'.format(response.json()['message']))
-                        else:
-                            result = response.json()
-                            sensor_values[0] = [result['main']['temp'], result['main']['humidity'], None]
-                    except Exception as ex:
-                        logger.exception('Error while fetching current temperatures')
-                # Currently there is no register_brightness_... in the sensor connector
-                if 0 <= self._uv_sensor_id <= 31:
-                    try:
-                        execute = True
-                        while execute is True:
-                            calls += 1
-                            lat, lon = round(self._latitude, accuracy), round(self._longitude, accuracy)
-                            if accuracy == 0:
-                                lat, lon = int(self._latitude), int(self._longitude)
-                            response = requests.get(url=self._uv_endpoint.format(lat=lat, lon=lon,
-                                                                                 date=time.strftime('%Y-%m-%d'),
-                                                                                 api_key=self._api_key),
                                                     headers=self._headers)
-                            result = response.json()
                             if response.status_code != 200:
-                                logger.error('UV index call failed: {0}'.format(result['message']))
-                                if result['message'] == 'not found':
-                                    if accuracy > 0:
-                                        accuracy = accuracy - 1
-                                        execute = True
-                                    else:
-                                        execute = False
-                                else:
-                                    execute = False
+                                logger.error('Current weather call failed: {0}'.format(response.json()['message']))
                             else:
-                                sensor_values[self._uv_sensor_id] = [result['data'], None, None]
-                                execute = False
-                    except Exception as ex:
-                        logger.exception('Error while fetching UV index')
+                                result = response.json()
+                                sensor_values[0] = [result['main']['temp'], result['main']['humidity'], None]
+                        except Exception as ex:
+                            logger.exception('Error while fetching current temperatures')
 
-                # Push all sensor data                
-                for _, values in sensor_values.items():
+                # Push all sensor data        
+                for sname, values in sensor_values.items():
                     if values[0] != previous_values.get(0):
-                        logger.info('Updating sensor {0} to temp: {1}'.format(self._sensor_dto.name,
+                        logger.info('Updating sensor {0} to temp: {1}'.format(sname,
                                                                                                 values[0] if values[0] is not None else '-'))
                     previous_values[0] = values[0]  # Only temperature
                     try:
-                        if self._sensor_dto:
-                            logger.info(f"Setting virtual sensor to: {values[0]}")
-                            self.connector.sensor.report_state(sensor=self._sensor_dto,
+                        if self._registered:
+                            logger.info(f"Setting virtual sensor {sname} to: {values[0]}")
+                            self.connector.sensor.report_state(sensor=self._sensor_dtos[sname],
                                                             value=values[0])
                     except Exception:
                         logger.exception('Error while reporting sensor state')
@@ -198,13 +174,17 @@ class OpenWeatherMap(OMPluginBase):
         self.write_config(config)
         return json.dumps({'success': True})
 
-    def _register_sensor(self):
-        logger.info('Registering Temperature sensor...')
-        try:
-            sensor = self.connector.sensor.register_temperature_celcius(external_id='222222',
-                                                                        name='OWM-temp-sensor')
-            logger.info('Registered {sensor}')
-            self._sensor_dto = sensor
-        except Exception:
-            logger.exception('Error registering sensor')
-            self._sensor_dto = None
+    def _register_sensors(self):
+        for s in self._sensors_names:
+            logger.info(f'Registering Temperature sensor with name {s}')
+            ext_id = 111111
+            try:
+                sensor = self.connector.sensor.register_temperature_celcius(external_id=str(ext_id),
+                                                                            name=s)
+                logger.info('Registered {s} with id {ext_id}')
+                ext_id += 1
+                self._sensor_dtos[s]=sensor
+            except Exception:
+                logger.exception('Error registering sensor')
+                self._registered = False
+        self._registered = True
