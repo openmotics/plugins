@@ -65,8 +65,8 @@ class OpenWeatherMap(OMPluginBase):
         for i in range(len(sensors_config)):
             self._sensor_time_dict[sensors_config[i]['sensor_name']] = sensors_config[i]['time_offset']
 
-        self._time_offsets = self._sensor_time_dict.values()
-        self._sensors_names = self._sensor_time_dict.keys()
+        self._time_offsets = list(self._sensor_time_dict.values())
+        self._sensors_names = list(self._sensor_time_dict.keys())
         logger.info(f"Time offsets: {self._time_offsets} and sensor_names: {self._sensors_names}")
         
         self._forecast_endpoint = 'http://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&units=metric&appid={api_key}'
@@ -116,6 +116,7 @@ class OpenWeatherMap(OMPluginBase):
                                     logger.error(f'Could not find forecast for virtual sensor {s}')
                                     continue
                                 sensor_values[s] = [selected_entry['main']['temp'], selected_entry['main']['humidity'], None]
+                                logger.info(f'FORECAST: {sensor_values[s]}')
                         except Exception as ex:
                             logger.exception('Error while fetching forecast temperatures')
                     elif t == 0:
@@ -130,15 +131,16 @@ class OpenWeatherMap(OMPluginBase):
                             else:
                                 result = response.json()
                                 sensor_values[s] = [result['main']['temp'], result['main']['humidity'], None]
+                                logger.info(f'Current fetched temp: {sensor_values[s]}')
                         except Exception as ex:
                             logger.exception('Error while fetching current temperatures')
 
                 # Push all sensor data        
                 for sname, values in sensor_values.items():
-                    if values[0] != previous_values.get(0):
+                    if values[0] != previous_values[sname]:
                         logger.info('Updating sensor {0} to temp: {1}'.format(sname,
                                                                                                 values[0] if values[0] is not None else '-'))
-                    previous_values[0] = values[0]  # Only temperature
+                    previous_values[sname] = values[0]  # Only temperature
                     try:
                         if self._registered:
                             logger.info(f"Setting virtual sensor {sname} to: {values[0]}")
