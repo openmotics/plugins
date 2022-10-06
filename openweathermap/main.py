@@ -137,7 +137,7 @@ class OpenWeatherMap(OMPluginBase):
 
                 # Push all sensor data        
                 for sname, values in sensor_values.items():
-                    if values[0] != previous_values[sname]:
+                    if values[0] != previous_values.get(sname, []):
                         logger.info('Updating sensor {0} to temp: {1}'.format(sname,
                                                                                                 values[0] if values[0] is not None else '-'))
                     previous_values[sname] = values[0]  # Only temperature
