@@ -62,11 +62,12 @@ class OpenWeatherMap(OMPluginBase):
 
         sensors_config = self._config.get('Virtual sensors and forecast time offset', [])
         self._sensor_time_dict = {}
-        for i in range(len(sensors_config['time_offset'])):
-            self._sensor_time_dict[sensors_config['sensor_name'][i]] = sensors_config['time_offset'][i]
+        for i in range(len(sensors_config)):
+            self._sensor_time_dict[sensors_config[i]['sensor_name']] = sensors_config[i]['time_offset']
 
-        self._time_offsets = [entry for entry in sensors_config['time_offset']]
-        self._sensors_names = [entry for entry in sensors_config['sensor_name']]
+        self._time_offsets = self._sensor_time_dict.values()
+        self._sensors_names = self._sensor_time_dict.keys()
+        logger.info(f"Time offsets: {self._time_offsets} and sensor_names: {self._sensors_names}")
         
         self._forecast_endpoint = 'http://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&units=metric&appid={api_key}'
         self._current_endpoint = 'http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&units=metric&appid={api_key}'
@@ -90,7 +91,7 @@ class OpenWeatherMap(OMPluginBase):
         if not self._registered:
             self._register_sensors()
         while True:
-            if self._enabled:
+            if self._enabled and self._registered:
                 start = time.time()
                 sensor_values = {}
                 calls = 0
@@ -128,7 +129,7 @@ class OpenWeatherMap(OMPluginBase):
                                 logger.error('Current weather call failed: {0}'.format(response.json()['message']))
                             else:
                                 result = response.json()
-                                sensor_values[0] = [result['main']['temp'], result['main']['humidity'], None]
+                                sensor_values[s] = [result['main']['temp'], result['main']['humidity'], None]
                         except Exception as ex:
                             logger.exception('Error while fetching current temperatures')
 
@@ -175,16 +176,17 @@ class OpenWeatherMap(OMPluginBase):
         return json.dumps({'success': True})
 
     def _register_sensors(self):
+        ext_id = 111111
         for s in self._sensors_names:
-            logger.info(f'Registering Temperature sensor with name {s}')
-            ext_id = 111111
+            logger.info(f'Registering Temperature sensor with name {s}')            
             try:
                 sensor = self.connector.sensor.register_temperature_celcius(external_id=str(ext_id),
                                                                             name=s)
-                logger.info('Registered {s} with id {ext_id}')
-                ext_id += 1
+                logger.info(f'Registered {s} with id {ext_id}')
                 self._sensor_dtos[s]=sensor
             except Exception:
                 logger.exception('Error registering sensor')
                 self._registered = False
+            finally:
+                ext_id += 1
         self._registered = True
