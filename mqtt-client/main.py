@@ -24,7 +24,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '3.0.3'
+    version = '3.1.0'
     interfaces = [('config', '1.0')]
 
     energy_module_config = {
@@ -46,6 +46,19 @@ class MQTTClient(OMPluginBase):
         {'name': 'password',
          'type': 'password',
          'description': 'MQTT broker password'},
+        # home assistant support
+        {
+         'name': 'homeassistant_discovery_enabled',
+         'type': 'bool',
+         'description': 'Enable HomeAssistant Components Discovery.'
+        },
+        {'name': 'homeassistant_qos',
+         'type': 'enum',
+         'choices': ['0', '1', '2'],
+         'description': 'Home Assistant message quality of service. Default: 0'},
+        {'name': 'homeassistant_retain',
+         'type': 'bool',
+         'description': 'Home Assistant message retain.'},
         # input status
         {'name': 'input_status_enabled',
          'type': 'bool',
@@ -156,6 +169,7 @@ class MQTTClient(OMPluginBase):
     default_config = {
         'port': 1883,
         'username': 'openmotics',
+        'homeassistant_qos': 0,
         'input_status_topic_format': 'openmotics/input/{id}/state',
         'input_status_qos': 0,
         'output_status_topic_format': 'openmotics/output/{id}/state',
@@ -210,6 +224,10 @@ class MQTTClient(OMPluginBase):
         self._port     = self._config.get('port')
         self._username = self._config.get('username')
         self._password = self._config.get('password')
+        # home assistant support
+        self._homeassistant_discovery_enabled = self._config.get('homeassistant_discovery_enabled')
+        self._homeassistant_qos     = int(self._config.get('homeassistant_qos'))
+        self._homeassistant_retain  = self._config.get('homeassistant_retain')
         # inputs
         self._input_enabled = self._config.get('input_status_enabled')
         self._input_topic   = self._config.get('input_status_topic_format')
@@ -279,6 +297,188 @@ class MQTTClient(OMPluginBase):
             should_load = not all([inputs_loaded, outputs_loaded, sensors_loaded, power_loaded])
             if should_load:
                 time.sleep(15)
+
+        self._load_homeassistant_discovery()
+
+    def _load_homeassistant_discovery(self):
+        if self._homeassistant_discovery_enabled:
+            try:
+                self.logger('HomeAssistant Discovery started...')
+                
+                self._load_homeassistant_energy_discovery()
+                self._load_homeassistant_power_discovery()
+                self._load_homeassistant_sensor_discovery()
+
+                self.logger('HomeAssistant Discovery finished.')
+            except Exception as ex:
+                self.logger('Error while loading HomeAssistant components discovery: {0}'.format(ex))
+
+    def _load_homeassistant_energy_discovery(self):
+        if self._config.get('energy_status_enabled'):
+            for module_id in self._power_modules.keys():
+                module_config = self._power_modules[module_id]
+
+                for sensor_id in module_config.keys():
+                    if module_config[sensor_id].get('name'):
+                        thread = Thread(
+                            target=self._send,
+                            args=(
+                                'homeassistant/sensor/{0}_energy/{1}/config'.format(module_id, sensor_id), 
+                                self._dump_energy_discovery_json(module_id, sensor_id, module_config[sensor_id]), 
+                                self._homeassistant_qos, 
+                                self._homeassistant_retain
+                            )
+                        )
+                        thread.start()
+
+    def _dump_energy_discovery_json(self, module_id, sensor_id, sensor):
+        return {
+            "name": "OpenMotics {0} Energy".format(sensor.get('name')),
+            "unique_id": "openmotics {0} energy".format(sensor.get('name').lower()),
+            "state_topic": self._config.get('energy_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
+            "value_template": "{{ value_json.night / 1000 | float | round(2) }}",
+            "unit_of_measurement": "kWh",
+            "device_class": "energy",
+            "state_class": "total_increasing"
+        }
+
+    def _load_homeassistant_power_discovery(self):
+        if self._config.get('power_status_enabled'):
+            for module_id in self._power_modules.keys():
+                module_config = self._power_modules[module_id]
+
+                for sensor_id in module_config.keys():
+                    if module_config[sensor_id].get('name'):
+                        self._send_power_discovery(module_id, sensor_id, module_config[sensor_id])
+                        self._send_power_voltage_discovery(module_id, sensor_id, module_config[sensor_id])
+                        self._send_power_current_discovery(module_id, sensor_id, module_config[sensor_id])
+                        self._send_power_frequency_discovery(module_id, sensor_id, module_config[sensor_id])
+
+    def _send_power_discovery(self, module_id, sensor_id, sensor):
+        thread = Thread(
+            target=self._send,
+            args=(
+                'homeassistant/sensor/{0}_power/{1}/config'.format(module_id, sensor_id), 
+                self._dump_power_discovery_json(module_id, sensor_id, sensor), 
+                self._homeassistant_qos, 
+                self._homeassistant_retain
+            )
+        )
+        thread.start()
+
+    def _dump_power_discovery_json(self, module_id, sensor_id, sensor):
+        return {
+            "name": "OpenMotics {0} Power".format(sensor.get('name')),
+            "unique_id": "openmotics {0} power".format(sensor.get('name').lower()),
+            "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
+            "value_template": "{{ value_json.power | float | round(2) }}",
+            "unit_of_measurement": "W",
+            "device_class": "power",
+            "state_class": "measurement"
+        }
+
+    def _send_power_voltage_discovery(self, module_id, sensor_id, sensor):
+        thread = Thread(
+            target=self._send,
+            args=(
+                'homeassistant/sensor/{0}_power_voltage/{1}/config'.format(module_id, sensor_id), 
+                self._dump_power_voltage_discovery_json(module_id, sensor_id, sensor), 
+                self._homeassistant_qos, 
+                self._homeassistant_retain
+            )
+        )
+        thread.start()
+
+    def _dump_power_voltage_discovery_json(self, module_id, sensor_id, sensor):
+        return {
+            "name": "OpenMotics {0} Voltage".format(sensor.get('name')),
+            "unique_id": "openmotics {0} voltage".format(sensor.get('name').lower()),
+            "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
+            "value_template": "{{ value_json.voltage | float | round(2) }}",
+            "unit_of_measurement": "V",
+            "device_class": "voltage",
+            "state_class": "total_increasing"
+        }
+
+    def _send_power_current_discovery(self, module_id, sensor_id, sensor):
+        thread = Thread(
+            target=self._send,
+            args=(
+                'homeassistant/sensor/{0}_power_current/{1}/config'.format(module_id, sensor_id), 
+                self._dump_power_current_discovery_json(module_id, sensor_id, sensor), 
+                self._homeassistant_qos, 
+                self._homeassistant_retain
+            )
+        )
+        thread.start()
+
+    def _dump_power_current_discovery_json(self, module_id, sensor_id, sensor):
+        return {
+            "name": "OpenMotics {0} Current".format(sensor.get('name')),
+            "unique_id": "openmotics {0} current".format(sensor.get('name').lower()),
+            "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
+            "value_template": "{{ value_json.current | float | round(3) }}",
+            "unit_of_measurement": "A",
+            "device_class": "current",
+            "state_class": "total_increasing"
+        }
+
+    def _send_power_frequency_discovery(self, module_id, sensor_id, sensor):
+        thread = Thread(
+            target=self._send,
+            args=(
+                'homeassistant/sensor/{0}_power_frequency/{1}/config'.format(module_id, sensor_id), 
+                self._dump_power_frequency_discovery_json(module_id, sensor_id, sensor), 
+                self._homeassistant_qos, 
+                self._homeassistant_retain
+            )
+        )
+        thread.start()
+
+    def _dump_power_frequency_discovery_json(self, module_id, sensor_id, sensor):
+        return {
+            "name": "OpenMotics {0} Frequency".format(sensor.get('name')),
+            "unique_id": "openmotics {0} frequency".format(sensor.get('name').lower()),
+            "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
+            "value_template": "{{ value_json.frequency | float | round(2) }}",
+            "unit_of_measurement": "Hz",
+            "device_class": "frequency",
+            "state_class": "total_increasing"
+        }
+
+    def _load_homeassistant_sensor_discovery(self):
+        if self._config.get('sensor_status_enabled'):
+            for sensor_id in self._sensors.keys():
+                sensor = self._sensors[sensor_id]
+
+                thread = Thread(
+                    target=self._send,
+                    args=(
+                        'homeassistant/sensor/openmotics_{0}/{1}/config'.format(sensor.get('physical_quantity'), sensor_id), 
+                        self._dump_sensor_discovery_json(sensor_id, sensor), 
+                        self._homeassistant_qos, 
+                        self._homeassistant_retain
+                    )
+                )
+                thread.start()
+
+    def _dump_sensor_discovery_json(self, sensor_id, sensor):
+        unit_of_measurement = ''
+        if sensor.get('physical_quantity').lower() == 'temperature':
+            # default temperature is celsius
+            unit_of_measurement = 'ºC'
+        else:
+            unit_of_measurement = '%'
+
+        return {
+            "name": "OpenMotics Sensor {0} {1}".format(sensor.get('name'), sensor.get('physical_quantity').capitalize()),
+            "unique_id": "openmotics {0} {1}".format(sensor.get('name').lower(), sensor.get('physical_quantity').lower()),
+            "state_topic": self._config.get('sensor_status_topic_format').format(id=sensor_id),
+            "value_template": "{{ value_json.value | float | round(2) }}",
+            "unit_of_measurement": unit_of_measurement,
+            "device_class": sensor.get('physical_quantity').lower(),
+            "state_class": "measurement"
+        }
 
     def _load_input_configuration(self):
         input_config_loaded = True
@@ -378,6 +578,7 @@ class MQTTClient(OMPluginBase):
                         self._sensors[sensor_id] = {'name': config['name'],
                                                     'external_id': str(config['external_id']),
                                                     'physical_quantity': str(config['physical_quantity']),
+                                                    'offset': config['offset'],
                                                     'source': config.get('source'),
                                                     'unit': config.get('unit')}
                     for sensor_id in self._sensors.keys():
@@ -386,7 +587,7 @@ class MQTTClient(OMPluginBase):
                     logger.info('Configuring {0} sensors'.format(len(ids)))
             except Exception as ex:
                 sensor_config_loaded = False
-                logger.exception('Error while loading sensor configurations')
+                logger.exception('Error while loading sensor configurations: {0}'.format(ex))
         return sensor_config_loaded
 
     def _load_power_configuration(self):
@@ -579,19 +780,26 @@ class MQTTClient(OMPluginBase):
             self._process_total_energy
         )()
 
+    def _parse_sensor_value(self, value):
+        if type(value) == float:
+            return value
+        return float(value)
+
     def _process_sensor_status(self, sensor_config, json_data):
         mqtt_messages = []
         data_list = list(filter(None, json_data.get('status', [])))
-        for sensor_id, sensor_value in enumerate(data_list):
+        for sensor_data in data_list:
+            sensor_id, sensor_value = sensor_data.values()
             sensor = self._sensors.get(sensor_id)
             if sensor:
                 sensor_data = {'id': sensor_id,
                                'source': sensor.get('source'),
                                'external_id': sensor.get('external_id'),
                                'physical_quantity': sensor.get('physical_quantity'),
+                               'offset': sensor.get('offset'),
                                'unit': sensor.get('unit'),
                                'name': sensor.get('name'),
-                               'value': float(sensor_value),
+                               'value': self._parse_sensor_value(sensor_value),
                                'timestamp': self._timestamp2isoformat()}
                 mqtt_messages.append({'topic': sensor_config.get('topic').format(id=sensor_id),
                                       'message': sensor_data})
@@ -662,7 +870,7 @@ class MQTTClient(OMPluginBase):
                                                               sensor_config.get('retain')))
                                         thread.start()
                         except Exception as ex:
-                            logger.exception('Error processing {0} sensor status'.format(sensor_type))
+                            logger.exception('Error processing {0} sensor status {1}'.format(sensor_type, ex))
                         # This loop will run approx. every 'frequency' seconds
                         sleep = frequency - (time.time() - start)
                         if sleep < 0:
