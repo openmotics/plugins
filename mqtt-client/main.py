@@ -1,3 +1,4 @@
+# coding=utf-8
 """
 An MQTT client plugin for sending/receiving data to/from an MQTT broker.
 For more info: https://github.com/openmotics/plugins/blob/master/mqtt-client/README.md
@@ -11,7 +12,7 @@ from datetime import datetime
 import pytz
 import json
 from threading import Thread
-from plugins.base import om_expose, input_status, output_status, OMPluginBase, PluginConfigChecker, receive_events, om_metric_receive, background_task
+from plugins.base import om_expose, input_status, output_status, shutter_status, OMPluginBase, PluginConfigChecker, receive_events, om_metric_receive, background_task
 from serial_utils import CommunicationTimedOutException
 import logging
 
@@ -87,6 +88,23 @@ class MQTTClient(OMPluginBase):
         {'name': 'output_status_retain',
          'type': 'bool',
          'description': 'Output status message retain.'},
+        # shutter status
+        {'name': 'shutter_status_enabled',
+         'type': 'bool',
+         'description': 'Enable shutter status publishing of messages.'},
+        {'name': 'shutter_state_topic_format',
+         'type': 'str',
+         'description': 'Shutter state topic format. Default: openmotics/shutter/{id}/state'},
+        {'name': 'shutter_position_topic_format',
+         'type': 'str',
+         'description': 'Shutter position topic format. Default: openmotics/shutter/{id}/position'},
+        {'name': 'shutter_status_qos',
+         'type': 'enum',
+         'choices': ['0', '1', '2'],
+         'description': 'Shutter status message quality of service. Default: 0'},
+        {'name': 'shutter_status_retain',
+         'type': 'bool',
+         'description': 'Shutter status message retain.'},
         # event status
         {'name': 'event_status_enabled',
          'type': 'bool',
@@ -156,6 +174,14 @@ class MQTTClient(OMPluginBase):
         {'name': 'output_command_topic',
          'type': 'str',
          'description': 'Topic to subscribe to for output command messages. Leave empty to turn off.'},
+        # shutter command
+        {'name': 'shutter_command_topic',
+         'type': 'str',
+         'description': 'Topic to subscribe to for shutter command messages. Leave empty to turn off.'},
+        # shutter position command
+        {'name': 'shutter_position_command_topic',
+         'type': 'str',
+         'description': 'Topic to subscribe to for shutter position command messages. Leave empty to turn off.'},
         # logging
         {'name': 'logging_topic',
          'type': 'str',
@@ -174,6 +200,9 @@ class MQTTClient(OMPluginBase):
         'input_status_qos': 0,
         'output_status_topic_format': 'openmotics/output/{id}/state',
         'output_status_qos': 0,
+        'shutter_state_topic_format': 'openmotics/shutter/{id}/state',
+        'shutter_position_topic_format': 'openmotics/shutter/{id}/position',
+        'shutter_status_qos': 0,
         'event_status_topic_format': 'openmotics/event/{id}/state',
         'event_status_qos': 0,
         'sensor_status_topic_format': 'openmotics/sensor/{id}/state',
@@ -186,6 +215,8 @@ class MQTTClient(OMPluginBase):
         'energy_status_qos': 0,
         'energy_status_poll_frequency': 3600,
         'output_command_topic': 'openmotics/output/+/set',
+        'shutter_command_topic': 'openmotics/shutter/+/set',
+        'shutter_position_command_topic': 'openmotics/shutter/+/position/set',
         'logging_topic': 'openmotics/logging',
         'timezone': 'UTC'
     }
@@ -208,6 +239,7 @@ class MQTTClient(OMPluginBase):
         self._sensor_config = {}
         self._inputs = {}
         self._outputs = {}
+        self._shutters = {}
         self._sensors = {}
         self._power_modules = {}
 
@@ -238,6 +270,12 @@ class MQTTClient(OMPluginBase):
         self._output_topic   = self._config.get('output_status_topic_format')
         self._output_qos     = int(self._config.get('output_status_qos'))
         self._output_retain  = self._config.get('output_status_retain')
+        # shutters
+        self._shutter_enabled          = self._config.get('shutter_status_enabled')
+        self._shutter_topic            = self._config.get('shutter_state_topic_format')
+        self._shutter_position_topic   = self._config.get('shutter_position_topic_format')
+        self._shutter_qos              = int(self._config.get('shutter_status_qos'))
+        self._shutter_retain           = self._config.get('shutter_status_retain')
         # events
         self._event_enabled = self._config.get('event_status_enabled')
         self._event_topic   = self._config.get('event_status_topic_format')
@@ -271,6 +309,10 @@ class MQTTClient(OMPluginBase):
         self._power_enabled = (self._sensor_config.get('power').get('enabled') or self._sensor_config.get('energy').get('enabled'))
         # output command
         self._output_command_topic = self._config.get('output_command_topic')
+        # shutter command
+        self._shutter_command_topic = self._config.get('shutter_command_topic')
+        # shutter position command
+        self._shutter_position_command_topic = self._config.get('shutter_position_command_topic')
         # logging topic
         self._logging_topic = self._config.get('logging_topic')
         # timezone
@@ -279,10 +321,11 @@ class MQTTClient(OMPluginBase):
         logger.info('MQTTClient is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     def _load_configuration(self):
-        inputs_loaded  = False
+        inputs_loaded = False
         outputs_loaded = False
+        shutters_loaded = False
         sensors_loaded = False
-        power_loaded   = False
+        power_loaded = False
         should_load = True
 
         while should_load:
@@ -290,11 +333,13 @@ class MQTTClient(OMPluginBase):
                 inputs_loaded = self._load_input_configuration()
             if not outputs_loaded:
                 outputs_loaded = self._load_output_configuration()
+            if not shutters_loaded:
+                shutters_loaded = self._load_shutter_configuration()
             if not sensors_loaded:
                 sensors_loaded = self._load_sensor_configuration()
             if not power_loaded:
                 power_loaded = self._load_power_configuration()
-            should_load = not all([inputs_loaded, outputs_loaded, sensors_loaded, power_loaded])
+            should_load = not all([inputs_loaded, outputs_loaded, shutters_loaded, sensors_loaded, power_loaded])
             if should_load:
                 time.sleep(15)
 
@@ -305,6 +350,7 @@ class MQTTClient(OMPluginBase):
             try:
                 self.logger('HomeAssistant Discovery started...')
                 
+                self._load_homeassistant_shutter_discovery()
                 self._load_homeassistant_energy_discovery()
                 self._load_homeassistant_power_discovery()
                 self._load_homeassistant_sensor_discovery()
@@ -312,6 +358,46 @@ class MQTTClient(OMPluginBase):
                 self.logger('HomeAssistant Discovery finished.')
             except Exception as ex:
                 self.logger('Error while loading HomeAssistant components discovery: {0}'.format(ex))
+
+    def _load_homeassistant_shutter_discovery(self):
+        if self._config.get('shutter_status_enabled'):
+            for shutter_id in self._shutters.keys():
+                shutter = self._shutters[shutter_id]
+                thread = Thread(
+                    target=self._send,
+                    args=(
+                        'homeassistant/cover/openmotics/{0}/config'.format(shutter_id), 
+                        self._dump_shutter_discovery_json(shutter_id, shutter), 
+                        self._homeassistant_qos, 
+                        self._homeassistant_retain
+                    )
+                )
+                thread.start()
+
+    def _dump_shutter_discovery_json(self, shutter_id, shutter):
+        return {
+            "name": "OpenMotics {0} Shutter".format(shutter.get('name')),
+            "unique_id": "openmotics {0} shutter".format(shutter.get('name').lower()),
+            "state_topic": self._config.get('shutter_state_topic_format').format(id=shutter_id),
+            "set_position_topic": self._config.get('shutter_position_command_topic').replace('+', str(shutter_id)),
+            "position_topic": self._config.get('shutter_position_topic_format').format(id=shutter_id),
+            "command_topic": self._config.get('shutter_command_topic').replace('+', str(shutter_id)),
+            "retain": "true",
+            "payload_open": "up",
+            "payload_close": "down",
+            "payload_stop": "stop",
+            "state_open": "up",
+            "state_opening": "going_up",
+            "state_closed": "down",
+            "state_closing": "going_down",
+            "state_stopped": "stopped",
+            "position_open": 0,
+            "position_closed": 99,
+            "optimistic": "false",
+            "device_class": "shutter",
+            "value_template": "{{ value }}",
+            "position_template": "{{ value }}"
+        }
 
     def _load_homeassistant_energy_discovery(self):
         if self._config.get('energy_status_enabled'):
@@ -451,24 +537,29 @@ class MQTTClient(OMPluginBase):
             for sensor_id in self._sensors.keys():
                 sensor = self._sensors[sensor_id]
 
-                thread = Thread(
-                    target=self._send,
-                    args=(
-                        'homeassistant/sensor/openmotics_{0}/{1}/config'.format(sensor.get('physical_quantity'), sensor_id), 
-                        self._dump_sensor_discovery_json(sensor_id, sensor), 
-                        self._homeassistant_qos, 
-                        self._homeassistant_retain
+                sensor_data = self._dump_sensor_discovery_json(sensor_id, sensor)
+                if sensor_data is not None:
+                    thread = Thread(
+                        target=self._send,
+                        args=(
+                            'homeassistant/sensor/openmotics_{0}/{1}/config'.format(sensor.get('physical_quantity'), sensor_id), 
+                            sensor_data, 
+                            self._homeassistant_qos, 
+                            self._homeassistant_retain
+                        )
                     )
-                )
-                thread.start()
+                    thread.start()
 
     def _dump_sensor_discovery_json(self, sensor_id, sensor):
-        unit_of_measurement = ''
         if sensor.get('physical_quantity').lower() == 'temperature':
             # default temperature is celsius
             unit_of_measurement = 'ºC'
-        else:
+            device_class = 'temperature'
+        elif sensor.get('physical_quantity').lower() == 'humidity':
             unit_of_measurement = '%'
+            device_class = 'humidity'
+        else:
+            return None
 
         return {
             "name": "OpenMotics Sensor {0} {1}".format(sensor.get('name'), sensor.get('physical_quantity').capitalize()),
@@ -476,7 +567,7 @@ class MQTTClient(OMPluginBase):
             "state_topic": self._config.get('sensor_status_topic_format').format(id=sensor_id),
             "value_template": "{{ value_json.value | float | round(2) }}",
             "unit_of_measurement": unit_of_measurement,
-            "device_class": sensor.get('physical_quantity').lower(),
+            "device_class": device_class,
             "state_class": "measurement"
         }
 
@@ -561,6 +652,59 @@ class MQTTClient(OMPluginBase):
                 output_config_loaded = False
                 logger.exception('Error getting output status')
         return output_config_loaded
+
+    def _load_shutter_configuration(self):
+        shutter_config_loaded = True
+        if self._shutter_enabled:
+            try:
+                result = json.loads(self.webinterface.get_shutter_configurations())
+                if result['success'] is False:
+                    shutter_config_loaded = False
+                    self.logger('Failed to load shutter configurations')
+                else:
+                    ids = []
+                    for config in result['config']:
+                        if not config['in_use']:
+                            continue
+                        if not config['module']['hardware_type'] == "physical":
+                            continue
+                        shutter_id = config['id']
+                        ids.append(shutter_id)
+                        self._shutters[shutter_id] = {'name': config['name'],
+                                                     'module_id': config['module']['module_id'],
+                                                     'type': config['module']['hardware_module'],
+                                                     'timer_up': config['timer_up'],
+                                                     'timer_down': config['timer_down'],
+                                                     'steps': config['steps'],
+                                                     'up_down_config': config['up_down_config']
+                                                    }
+                    for shutter_id in self._shutters.keys():
+                        if shutter_id not in ids:
+                            del self._shutters[shutter_id]
+                    self.logger('Configuring {0} shutters'.format(len(ids)))
+            except Exception as ex:
+                shutter_config_loaded = False
+                self.logger('Error while loading shutter configurations')
+            try:
+                result = json.loads(self.webinterface.get_shutter_status())
+                if result['success'] is False:
+                    shutter_config_loaded = False
+                    self.logger('Failed to get shutter status')
+                else:
+                    for id in sorted(result['detail']):
+                        shutter_id = int(id)
+                        if shutter_id not in self._shutters:
+                            continue
+                        state = result['detail'][id]['state']
+                        position = result['detail'][id]['actual_position']
+                        self.logger('Shutter {0} state {1}'.format(shutter_id, state))
+                        self._shutters[shutter_id]['state'] = state
+                        if position is not None:
+                            self._shutters[shutter_id]['position'] = position
+            except Exception as ex:
+                shutter_config_loaded = False
+                self.logger('Error getting shutter status: {0}'.format(ex))
+        return shutter_config_loaded
 
     def _load_sensor_configuration(self):
         sensor_config_loaded = True
@@ -652,7 +796,7 @@ class MQTTClient(OMPluginBase):
         try:
             self.client.publish(topic, payload=json.dumps(data), qos=qos, retain=retain)
         except Exception as ex:
-            logger.exception('Error sending data to broker')
+            logger.exception('Error sending data to topic {0}'.format(topic))
 
     def _timestamp2isoformat(self, timestamp=None):
         # start with UTC
@@ -739,6 +883,43 @@ class MQTTClient(OMPluginBase):
                         thread.start()
             except Exception as ex:
                 logger.exception('Error processing outputs')
+
+    @shutter_status
+    def shutter_status(self, status):
+        if self._enabled and self._shutter_enabled:
+            try:
+                new_shutter_status = {}
+                for id, state in enumerate(status):
+                    new_shutter_status[id] = state
+                current_shutter_status = self._shutters
+                for shutter_id in current_shutter_status:
+                    name = current_shutter_status[shutter_id].get('name')
+                    state = current_shutter_status[shutter_id].get('state')
+                    position = current_shutter_status[shutter_id].get('position', None)
+                    if shutter_id in new_shutter_status:
+                        if state != new_shutter_status[shutter_id]:
+                            current_shutter_status[shutter_id]['state'] = new_shutter_status[shutter_id]
+                            self._log('Shutter {0} ({1}) changed to {2}'.format(shutter_id, name, state))
+                            self.logger('Shutter {0} ({1}) changed to {2}'.format(shutter_id, name, state))
+                    data = {'id': shutter_id,
+                            'name': name,
+                            'state': state,
+                            'position': position,
+                            'timestamp': self._timestamp2isoformat()}
+                    thread = Thread(
+                        target=self._send,
+                        args=(self._shutter_topic.format(id=shutter_id), state, self._shutter_qos, self._shutter_retain)
+                    )
+                    thread.start()
+
+                    if position is not None:
+                        thread = Thread(
+                            target=self._send,
+                            args=(self._shutter_position_topic.format(id=shutter_id), position, self._shutter_qos, self._shutter_retain)
+                        )
+                        thread.start()
+            except Exception as ex:
+                self.logger('Error processing shutters: {0}'.format(ex))
 
     @receive_events
     def receive_events(self, event_id):
@@ -892,43 +1073,161 @@ class MQTTClient(OMPluginBase):
                 self.client.subscribe(self._output_command_topic)
                 logger.info('Subscribed to {0}'.format(self._output_command_topic))
             except Exception as ex:
-                logger.exception('Could not subscribe')
+                self.logger('Could not subscribe to {0}: {1}'.format(self._output_command_topic, ex))
+
+        # subscribe to shutter command topic if provided
+        if self._shutter_command_topic:
+            try:
+                self.client.subscribe(self._shutter_command_topic)
+                self.logger('Subscribed to {0}'.format(self._shutter_command_topic))
+            except Exception as ex:
+                self.logger('Could not subscribe to {0}: {1}'.format(self._shutter_command_topic, ex))
+
+        # subscribe to shutter position command topic if provided
+        if self._shutter_position_command_topic:
+            try:
+                self.client.subscribe(self._shutter_position_command_topic)
+                self.logger('Subscribed to {0}'.format(self._shutter_position_command_topic))
+            except Exception as ex:
+                self.logger('Could not subscribe to {0}: {1}'.format(self._shutter_position_command_topic, ex))
 
     def on_message(self, client, userdata, msg):
-        if self._output_command_topic:
-            regexp = self._output_command_topic.replace('+', '(\d+)')
-            if re.search(regexp, msg.topic) is not None:
-                try:
-                    # the output_id is the first match of the regular expression
-                    output_id = int(re.findall(regexp, msg.topic)[0])
-                    if output_id in self._outputs:
-                        output = self._outputs[output_id]
-                        value = int(msg.payload)
-                        if value > 0:
-                            is_on = 'true'
-                        else:
-                            is_on = 'false'
-                        dimmer = None
-                        if output['module_type'] == 'dimmer':
-                            dimmer = None if value == 0 else max(0, min(100, value))
-                            if value > 0:
-                                log_value = 'ON ({0}%)'.format(value)
-                        result = json.loads(self.webinterface.set_output(id=output_id, is_on=is_on, dimmer=dimmer))
-                        if result['success'] is False:
-                            log_message = 'Failed to set output {0} to {1}: {2}'.format(output_id, value, result.get('msg', 'Unknown error'))
-                            self._log(log_message)
-                            logger.error(log_message)
-                        else:
-                            log_message = 'Message for output {0} with payload {1}'.format(output_id, value)
-                            self._log(log_message)
-                            logger.info(log_message)
-                    else:
-                        self._log('Unknown output: {0}'.format(output_id))
-                except Exception as ex:
-                    self._log('Failed to process message')
+        output_regexp = self._output_command_topic.replace('+', '(\d+)')
+        shutter_regexp = self._shutter_command_topic.replace('+', '(\d+)')
+        shutter_position_regexp = self._shutter_position_command_topic.replace('+', '(\d+)')
+
+        if re.search(output_regexp, msg.topic) is not None:
+            # the output_id is the first match of the regular expression
+            output_id = int(re.findall(output_regexp, msg.topic)[0])
+            self._output_command(output_id, msg)
+        elif re.search(shutter_regexp, msg.topic) is not None:
+            # the shutter_id is the first match of the regular expression
+            shutter_id = int(re.findall(shutter_regexp, msg.topic)[0])
+            self._shutter_command(shutter_id, msg)
+        elif re.search(shutter_position_regexp, msg.topic) is not None:
+            # the shutter_id is the first match of the regular expression
+            shutter_id = int(re.findall(shutter_position_regexp, msg.topic)[0])
+            self._shutter_position_command(shutter_id, msg)
+        else:
+            self._log('Message with topic {0} ignored'.format(msg.topic))
+            self.logger('Message with topic {0} ignored'.format(msg.topic))
+
+    def _output_command(self, output_id, msg):
+        try:
+            if output_id in self._outputs:
+                output = self._outputs[output_id]
+                value = int(msg.payload)
+                if value > 0:
+                    is_on = 'true'
+                else:
+                    is_on = 'false'
+                dimmer = None
+                if output['module_type'] == 'dimmer':
+                    dimmer = None if value == 0 else max(0, min(100, value))
+                    if value > 0:
+                        log_value = 'ON ({0}%)'.format(value)
+                result = json.loads(self.webinterface.set_output(id=output_id, is_on=is_on, dimmer=dimmer))
+                if result['success'] is False:
+                    log_message = 'Failed to set output {0} to {1}: {2}'.format(output_id, value, result.get('msg', 'Unknown error'))
+                    self._log(log_message)
+                    self.logger(log_message)
+                else:
+                    log_message = 'Message for output {0} with payload {1}'.format(output_id, value)
+                    self._log(log_message)
+                    self.logger(log_message)
             else:
-                self._log('Message with topic {0} ignored'.format(msg.topic))
-                logger.info('Message with topic {0} ignored'.format(msg.topic))
+                self._log('Unknown output: {0}'.format(output_id))
+        except Exception as ex:
+            self._log('Failed to process message')
+
+    def _shutter_command(self, shutter_id, msg):
+        try:
+            log_message = 'Execute shutter command on shutter {0}'.format(shutter_id)
+            self._log(log_message)
+            self.logger(log_message)
+
+            if shutter_id in self._shutters:
+                shutter = self._shutters[shutter_id]
+                value = msg.payload
+                if value.lower() in ['up', 'down', 'stop']:
+                    thread = Thread(
+                        target=self._execute_shutter_command,
+                        args=(
+                            shutter_id,
+                            value.lower()
+                        )
+                    )
+                    thread.start()
+                else:
+                    log_message = 'Failed to set shutter {0} to {1}'.format(shutter_id, value)
+                    self._log(log_message)
+                    self.logger(log_message)
+            else:
+                self._log('Unknown shutter: {0}'.format(shutter_id))
+        except Exception as ex:
+            self._log('Failed to process message: {0}'.format(ex))
+
+    def _execute_shutter_command(self, shutter_id, command):
+        try:
+            if command == 'up':
+                result = json.loads(self.webinterface.do_shutter_up(id=shutter_id))
+            elif command == 'down':
+                result = json.loads(self.webinterface.do_shutter_down(id=shutter_id))
+            else:
+                result = json.loads(self.webinterface.do_shutter_stop(id=shutter_id))
+
+            if result['success'] is False:
+                log_message = 'Failed to set shutter {0} to up: {1}'.format(shutter_id, result.get('msg', 'Unknown error'))
+                self._log(log_message)
+                self.logger(log_message)
+            else:
+                log_message = 'Message for shutter {0} with payload up'.format(shutter_id)
+                self._log(log_message)
+                self.logger(log_message)
+        except Exception as ex:
+            self.logger('Error calling shutter up web service: {0}'.format(ex))
+
+    def _shutter_position_command(self, shutter_id, msg):
+        try:
+            log_message = 'Execute shutter position command on shutter {0}'.format(shutter_id)
+            self._log(log_message)
+            self.logger(log_message)
+
+            if shutter_id in self._shutters:
+                shutter = self._shutters[shutter_id]
+                value = int(msg.payload)
+                if value >= 0 and value <=99:
+                    thread = Thread(
+                        target=self._execute_shutter_position_command,
+                        args=(
+                            shutter_id,
+                            value.lower()
+                        )
+                    )
+                    thread.start()
+                else:
+                    log_message = 'Failed to set shutter {0} to {1}'.format(shutter_id, value)
+                    self._log(log_message)
+                    self.logger(log_message)
+            else:
+                self._log('Unknown shutter: {0}'.format(shutter_id))
+        except Exception as ex:
+            self._log('Failed to process message: {0}'.format(ex))
+
+    def _execute_shutter_position_command(self, shutter_id, position):
+        try:
+            result = json.loads(self.webinterface.do_shutter_goto(id=shutter_id, position=position))
+
+            if result['success'] is False:
+                log_message = 'Failed to set shutter {0} to position {1}: {2}'.format(shutter_id, position, result.get('msg', 'Unknown error'))
+                self._log(log_message)
+                self.logger(log_message)
+            else:
+                log_message = 'Message for shutter {0} with payload {1}'.format(shutter_id, position)
+                self._log(log_message)
+                self.logger(log_message)
+        except Exception as ex:
+            self.logger('Error calling shutter position web service: {0}'.format(ex))
 
     @om_expose
     def get_config_description(self):
