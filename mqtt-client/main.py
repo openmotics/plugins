@@ -242,6 +242,7 @@ class MQTTClient(OMPluginBase):
         self._shutters = {}
         self._sensors = {}
         self._power_modules = {}
+        self._rooms = {}
 
         self._read_config()
         self._try_connect()
@@ -326,6 +327,7 @@ class MQTTClient(OMPluginBase):
         shutters_loaded = False
         sensors_loaded = False
         power_loaded = False
+        rooms_loaded = False
         should_load = True
 
         while should_load:
@@ -339,7 +341,9 @@ class MQTTClient(OMPluginBase):
                 sensors_loaded = self._load_sensor_configuration()
             if not power_loaded:
                 power_loaded = self._load_power_configuration()
-            should_load = not all([inputs_loaded, outputs_loaded, shutters_loaded, sensors_loaded, power_loaded])
+            if not rooms_loaded:
+                rooms_loaded = self._load_rooms_configuration()
+            should_load = not all([inputs_loaded, outputs_loaded, shutters_loaded, sensors_loaded, power_loaded, rooms_loaded])
             if should_load:
                 time.sleep(15)
 
@@ -348,16 +352,16 @@ class MQTTClient(OMPluginBase):
     def _load_homeassistant_discovery(self):
         if self._homeassistant_discovery_enabled:
             try:
-                self.logger('HomeAssistant Discovery started...')
+                self._logger('HomeAssistant Discovery started...')
                 
                 self._load_homeassistant_shutter_discovery()
                 self._load_homeassistant_energy_discovery()
                 self._load_homeassistant_power_discovery()
                 self._load_homeassistant_sensor_discovery()
 
-                self.logger('HomeAssistant Discovery finished.')
+                self._logger('HomeAssistant Discovery finished.')
             except Exception as ex:
-                self.logger('Error while loading HomeAssistant components discovery: {0}'.format(ex))
+                self._logger('Error while loading HomeAssistant components discovery: {0}'.format(ex))
 
     def _load_homeassistant_shutter_discovery(self):
         if self._config.get('shutter_status_enabled'):
@@ -375,10 +379,15 @@ class MQTTClient(OMPluginBase):
                 thread.start()
 
     def _dump_shutter_discovery_json(self, shutter_id, shutter):
+        room = ''
+
+        if shutter.get('room_id') in self._rooms:
+            room = self._rooms[shutter.get('room_id')]['name']
+
         return {
             "name": "OpenMotics {0} Shutter".format(shutter.get('name')),
+            "friendly_name": shutter.get('name'),
             "unique_id": "openmotics {0} shutter".format(shutter.get('name').lower()),
-            "state_topic": self._config.get('shutter_state_topic_format').format(id=shutter_id),
             "set_position_topic": self._config.get('shutter_position_command_topic').replace('+', str(shutter_id)),
             "position_topic": self._config.get('shutter_position_topic_format').format(id=shutter_id),
             "command_topic": self._config.get('shutter_command_topic').replace('+', str(shutter_id)),
@@ -386,17 +395,19 @@ class MQTTClient(OMPluginBase):
             "payload_open": "up",
             "payload_close": "down",
             "payload_stop": "stop",
-            "state_open": "up",
             "state_opening": "going_up",
             "state_closed": "down",
-            "state_closing": "going_down",
             "state_stopped": "stopped",
             "position_open": 0,
             "position_closed": 99,
-            "optimistic": "false",
-            "device_class": "shutter",
-            "value_template": "{{ value }}",
-            "position_template": "{{ value }}"
+            "device": {
+                "name": "Shutter {0}".format(shutter.get('name')),
+                "identifiers": "Shutter {0}".format(shutter.get('name')),
+                "manufacturer": "OpenMotics",
+                "model": "Relay module",
+                "suggested_area": room
+            },
+            "device_class": "shutter"
         }
 
     def _load_homeassistant_energy_discovery(self):
@@ -424,6 +435,12 @@ class MQTTClient(OMPluginBase):
             "state_topic": self._config.get('energy_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.night / 1000 | float | round(2) }}",
             "unit_of_measurement": "kWh",
+            "device": {
+                "name": "Energy {0}".format(sensor.get('name')),
+                "identifiers": "Energy {0}".format(sensor.get('name')),
+                "manufacturer": "OpenMotics",
+                "model": "Energy module"
+            },
             "device_class": "energy",
             "state_class": "total_increasing"
         }
@@ -459,6 +476,12 @@ class MQTTClient(OMPluginBase):
             "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.power | float | round(2) }}",
             "unit_of_measurement": "W",
+            "device": {
+                "name": "Energy {0}".format(sensor.get('name')),
+                "identifiers": "Energy {0}".format(sensor.get('name')),
+                "manufacturer": "OpenMotics",
+                "model": "Energy module"
+            },
             "device_class": "power",
             "state_class": "measurement"
         }
@@ -482,6 +505,12 @@ class MQTTClient(OMPluginBase):
             "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.voltage | float | round(2) }}",
             "unit_of_measurement": "V",
+            "device": {
+                "name": "Energy {0}".format(sensor.get('name')),
+                "identifiers": "Energy {0}".format(sensor.get('name')),
+                "manufacturer": "OpenMotics",
+                "model": "Energy module"
+            },
             "device_class": "voltage",
             "state_class": "total_increasing"
         }
@@ -505,6 +534,12 @@ class MQTTClient(OMPluginBase):
             "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.current | float | round(3) }}",
             "unit_of_measurement": "A",
+            "device": {
+                "name": "Energy {0}".format(sensor.get('name')),
+                "identifiers": "Energy {0}".format(sensor.get('name')),
+                "manufacturer": "OpenMotics",
+                "model": "Energy module"
+            },
             "device_class": "current",
             "state_class": "total_increasing"
         }
@@ -528,6 +563,12 @@ class MQTTClient(OMPluginBase):
             "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.frequency | float | round(2) }}",
             "unit_of_measurement": "Hz",
+            "device": {
+                "name": "Energy {0}".format(sensor.get('name')),
+                "identifiers": "Energy {0}".format(sensor.get('name')),
+                "manufacturer": "OpenMotics",
+                "model": "Energy module"
+            },
             "device_class": "frequency",
             "state_class": "total_increasing"
         }
@@ -561,12 +602,24 @@ class MQTTClient(OMPluginBase):
         else:
             return None
 
+        room = ''
+
+        if sensor.get('room_id') in self._rooms:
+            room = self._rooms[sensor.get('room_id')]['name']
+
         return {
-            "name": "OpenMotics Sensor {0} {1}".format(sensor.get('name'), sensor.get('physical_quantity').capitalize()),
+            "name": sensor.get('name'),
             "unique_id": "openmotics {0} {1}".format(sensor.get('name').lower(), sensor.get('physical_quantity').lower()),
             "state_topic": self._config.get('sensor_status_topic_format').format(id=sensor_id),
             "value_template": "{{ value_json.value | float | round(2) }}",
             "unit_of_measurement": unit_of_measurement,
+            "device": {
+                "name": "Sensor {0}".format(sensor.get('name')),
+                "identifiers": "Sensor {0}".format(sensor.get('name')),
+                "manufacturer": "OpenMotics",
+                "model": "Sensor module",
+                "suggested_area": room
+            },
             "device_class": device_class,
             "state_class": "measurement"
         }
@@ -628,6 +681,7 @@ class MQTTClient(OMPluginBase):
                                                                     'O': 'output',
                                                                     'd': 'dimmer',
                                                                     'D': 'dimmer'}[config['module_type']],
+                                                    'room_id': config['room'],
                                                     'type': 'relay' if config['type'] == 0 else 'light'}
                     for output_id in self._outputs.keys():
                         if output_id not in ids:
@@ -660,7 +714,7 @@ class MQTTClient(OMPluginBase):
                 result = json.loads(self.webinterface.get_shutter_configurations())
                 if result['success'] is False:
                     shutter_config_loaded = False
-                    self.logger('Failed to load shutter configurations')
+                    self._logger('Failed to load shutter configurations')
                 else:
                     ids = []
                     for config in result['config']:
@@ -676,20 +730,21 @@ class MQTTClient(OMPluginBase):
                                                      'timer_up': config['timer_up'],
                                                      'timer_down': config['timer_down'],
                                                      'steps': config['steps'],
-                                                     'up_down_config': config['up_down_config']
+                                                     'up_down_config': config['up_down_config'],
+                                                     'room_id': config['room']
                                                     }
                     for shutter_id in self._shutters.keys():
                         if shutter_id not in ids:
                             del self._shutters[shutter_id]
-                    self.logger('Configuring {0} shutters'.format(len(ids)))
+                    self._logger('Configuring {0} shutters'.format(len(ids)))
             except Exception as ex:
                 shutter_config_loaded = False
-                self.logger('Error while loading shutter configurations')
+                self._logger('Error while loading shutter configurations')
             try:
                 result = json.loads(self.webinterface.get_shutter_status())
                 if result['success'] is False:
                     shutter_config_loaded = False
-                    self.logger('Failed to get shutter status')
+                    self._logger('Failed to get shutter status')
                 else:
                     for id in sorted(result['detail']):
                         shutter_id = int(id)
@@ -697,13 +752,13 @@ class MQTTClient(OMPluginBase):
                             continue
                         state = result['detail'][id]['state']
                         position = result['detail'][id]['actual_position']
-                        self.logger('Shutter {0} state {1}'.format(shutter_id, state))
+                        self._logger('Shutter {0} state {1}'.format(shutter_id, state))
                         self._shutters[shutter_id]['state'] = state
                         if position is not None:
                             self._shutters[shutter_id]['position'] = position
             except Exception as ex:
                 shutter_config_loaded = False
-                self.logger('Error getting shutter status: {0}'.format(ex))
+                self._logger('Error getting shutter status: {0}'.format(ex))
         return shutter_config_loaded
 
     def _load_sensor_configuration(self):
@@ -721,6 +776,7 @@ class MQTTClient(OMPluginBase):
                         ids.append(sensor_id)
                         self._sensors[sensor_id] = {'name': config['name'],
                                                     'external_id': str(config['external_id']),
+                                                    'room_id': config['room'],
                                                     'physical_quantity': str(config['physical_quantity']),
                                                     'offset': config['offset'],
                                                     'source': config.get('source'),
@@ -771,6 +827,27 @@ class MQTTClient(OMPluginBase):
                 power_config_loaded = False
                 logger.exception('Error while loading power configurations')
         return power_config_loaded
+
+    def _load_rooms_configuration(self):
+        room_config_loaded = True
+        try:
+            result = json.loads(self.webinterface.get_room_configurations())
+            if result['success'] is False:
+                self._logger('Failed to load room configurations')
+                room_config_loaded = False
+            else:
+                ids = []
+                for config in result['config']:
+                    room_id = config['id']
+                    if not config['name'].strip():
+                        continue
+                    ids.append(room_id)
+                    self._rooms[room_id] = config
+                self._logger('Configuring {0} rooms'.format(len(ids)))
+        except Exception as ex:
+            self._logger('Error while loading rooms configurations')
+            room_config_loaded = False
+        return room_config_loaded
 
     def _try_connect(self):
         if self._enabled is True:
@@ -884,42 +961,42 @@ class MQTTClient(OMPluginBase):
             except Exception as ex:
                 logger.exception('Error processing outputs')
 
-    @shutter_status
-    def shutter_status(self, status):
+    @shutter_status(version = 2)
+    def shutter_status(self, status, detail):
         if self._enabled and self._shutter_enabled:
             try:
                 new_shutter_status = {}
                 for id, state in enumerate(status):
-                    new_shutter_status[id] = state
+                    new_shutter_status[id] = {}
+                    new_shutter_status[id]['state'] = state
+                    new_shutter_status[id]['position'] = detail[id]['actual_position']
                 current_shutter_status = self._shutters
                 for shutter_id in current_shutter_status:
                     name = current_shutter_status[shutter_id].get('name')
                     state = current_shutter_status[shutter_id].get('state')
                     position = current_shutter_status[shutter_id].get('position', None)
-                    if shutter_id in new_shutter_status:
-                        if state != new_shutter_status[shutter_id]:
-                            current_shutter_status[shutter_id]['state'] = new_shutter_status[shutter_id]
-                            self._log('Shutter {0} ({1}) changed to {2}'.format(shutter_id, name, state))
-                            self.logger('Shutter {0} ({1}) changed to {2}'.format(shutter_id, name, state))
-                    data = {'id': shutter_id,
-                            'name': name,
-                            'state': state,
-                            'position': position,
-                            'timestamp': self._timestamp2isoformat()}
-                    thread = Thread(
-                        target=self._send,
-                        args=(self._shutter_topic.format(id=shutter_id), state, self._shutter_qos, self._shutter_retain)
-                    )
-                    thread.start()
 
-                    if position is not None:
-                        thread = Thread(
-                            target=self._send,
-                            args=(self._shutter_position_topic.format(id=shutter_id), position, self._shutter_qos, self._shutter_retain)
-                        )
-                        thread.start()
+                    new_state = new_shutter_status[shutter_id]['state']
+                    new_position = new_shutter_status[shutter_id]['position']
+                    if shutter_id in new_shutter_status:
+                        if state != new_state:
+                            current_shutter_status[shutter_id]['state'] = new_state
+                            current_shutter_status[shutter_id]['position'] = new_position
+                            thread = Thread(
+                                target=self._send,
+                                args=(self._shutter_topic.format(id=shutter_id), new_state, self._shutter_qos, self._shutter_retain)
+                            )
+                            thread.start()
+                            self._logger('Shutter {0} ({1}) changed to {2} ({3})'.format(shutter_id, name, new_state, new_position), True)
+
+                        if position != new_position:
+                            thread = Thread(
+                                target=self._send,
+                                args=(self._shutter_position_topic.format(id=shutter_id), new_position, self._shutter_qos, self._shutter_retain)
+                            )
+                            thread.start()
             except Exception as ex:
-                self.logger('Error processing shutters: {0}'.format(ex))
+                self._logger('Error processing shutters: {0}'.format(ex))
 
     @receive_events
     def receive_events(self, event_id):
@@ -1063,7 +1140,7 @@ class MQTTClient(OMPluginBase):
 
     def on_connect(self, client, userdata, flags, rc):
         if rc != 0:
-            logger.error('Error connecting: rc={0}', rc)
+            self._logger('Error connecting: rc={0}', rc)
             return
 
         logger.info('Connected to MQTT broker {0}:{1}'.format(self._hostname, self._port))
@@ -1073,23 +1150,23 @@ class MQTTClient(OMPluginBase):
                 self.client.subscribe(self._output_command_topic)
                 logger.info('Subscribed to {0}'.format(self._output_command_topic))
             except Exception as ex:
-                self.logger('Could not subscribe to {0}: {1}'.format(self._output_command_topic, ex))
+                self._logger('Could not subscribe to {0}: {1}'.format(self._output_command_topic, ex))
 
         # subscribe to shutter command topic if provided
         if self._shutter_command_topic:
             try:
                 self.client.subscribe(self._shutter_command_topic)
-                self.logger('Subscribed to {0}'.format(self._shutter_command_topic))
+                self._logger('Subscribed to {0}'.format(self._shutter_command_topic))
             except Exception as ex:
-                self.logger('Could not subscribe to {0}: {1}'.format(self._shutter_command_topic, ex))
+                self._logger('Could not subscribe to {0}: {1}'.format(self._shutter_command_topic, ex))
 
         # subscribe to shutter position command topic if provided
         if self._shutter_position_command_topic:
             try:
                 self.client.subscribe(self._shutter_position_command_topic)
-                self.logger('Subscribed to {0}'.format(self._shutter_position_command_topic))
+                self._logger('Subscribed to {0}'.format(self._shutter_position_command_topic))
             except Exception as ex:
-                self.logger('Could not subscribe to {0}: {1}'.format(self._shutter_position_command_topic, ex))
+                self._logger('Could not subscribe to {0}: {1}'.format(self._shutter_position_command_topic, ex))
 
     def on_message(self, client, userdata, msg):
         output_regexp = self._output_command_topic.replace('+', '(\d+)')
@@ -1125,7 +1202,7 @@ class MQTTClient(OMPluginBase):
                 if output['module_type'] == 'dimmer':
                     dimmer = None if value == 0 else max(0, min(100, value))
                     if value > 0:
-                        log_value = 'ON ({0}%)'.format(value)
+                        log_value = '{0} ON ({1}%)'.format(output_id, value)
                 result = json.loads(self.webinterface.set_output(id=output_id, is_on=is_on, dimmer=dimmer))
                 if result['success'] is False:
                     log_message = 'Failed to set output {0} to {1}: {2}'.format(output_id, value, result.get('msg', 'Unknown error'))
@@ -1201,7 +1278,7 @@ class MQTTClient(OMPluginBase):
                         target=self._execute_shutter_position_command,
                         args=(
                             shutter_id,
-                            value.lower()
+                            value
                         )
                     )
                     thread.start()
@@ -1227,7 +1304,12 @@ class MQTTClient(OMPluginBase):
                 self._log(log_message)
                 self.logger(log_message)
         except Exception as ex:
-            self.logger('Error calling shutter position web service: {0}'.format(ex))
+            self._logger('Error calling shutter position web service: {0}'.format(ex))
+
+    def _logger(self, message, mqtt_logging=False):
+        if mqtt_logging:
+            self._log(message)
+        self.logger(message)
 
     @om_expose
     def get_config_description(self):
