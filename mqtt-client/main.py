@@ -14,6 +14,7 @@ import json
 from threading import Thread
 from plugins.base import om_expose, input_status, output_status, shutter_status, OMPluginBase, PluginConfigChecker, receive_events, om_metric_receive, background_task
 from serial_utils import CommunicationTimedOutException
+from enums import OutputType, HardwareType
 import logging
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,24 @@ class MQTTClient(OMPluginBase):
         8: 8,
         12: 12
     }
+    """
+    Openmotics outputs not supported on HomeAssistant:
+        OutputType.ALARM: 'alarm',
+        OutputType.APPLIANCE: 'appliance',
+        OutputType.PUMP: 'pump',
+        OutputType.HVAC: 'hvac',
+        OutputType.GENERIC: 'generic',
+        OutputType.MOTOR: 'motor',
+        OutputType.HEATER: 'heater',
+    """
+    output_ha_types = {OutputType.OUTLET: 'switch',
+                       OutputType.VALVE: 'switch',
+                       OutputType.VENTILATION: 'fan',
+                       OutputType.SHUTTER_RELAY: 'shutter',
+                       OutputType.LIGHT: 'light'}
+
+    input_status_map = {'ON': 1,
+                        'OFF': 0}
 
     config_description = [
         {'name': 'hostname',
@@ -48,11 +67,9 @@ class MQTTClient(OMPluginBase):
          'type': 'password',
          'description': 'MQTT broker password'},
         # home assistant support
-        {
-         'name': 'homeassistant_discovery_enabled',
+        {'name': 'homeassistant_discovery_enabled',
          'type': 'bool',
-         'description': 'Enable HomeAssistant Components Discovery.'
-        },
+         'description': 'Enable HomeAssistant Components Discovery.'},
         {'name': 'homeassistant_qos',
          'type': 'enum',
          'choices': ['0', '1', '2'],
@@ -245,9 +262,9 @@ class MQTTClient(OMPluginBase):
         self._rooms = {}
 
         self._read_config()
-        self._try_connect()
-
         self._load_configuration()
+
+        self._try_connect()
 
         logger.info("Started MQTTClient plugin")
 
@@ -347,13 +364,12 @@ class MQTTClient(OMPluginBase):
             if should_load:
                 time.sleep(15)
 
-        self._load_homeassistant_discovery()
-
     def _load_homeassistant_discovery(self):
         if self._homeassistant_discovery_enabled:
             try:
                 self._logger('HomeAssistant Discovery started...')
                 
+                self._load_homeassistant_output_discovery()
                 self._load_homeassistant_shutter_discovery()
                 self._load_homeassistant_energy_discovery()
                 self._load_homeassistant_power_discovery()
@@ -362,6 +378,148 @@ class MQTTClient(OMPluginBase):
                 self._logger('HomeAssistant Discovery finished.')
             except Exception as ex:
                 self._logger('Error while loading HomeAssistant components discovery: {0}'.format(ex))
+
+    def _load_homeassistant_output_discovery(self):
+        if self._config.get('output_status_enabled'):
+            for output_id in self._outputs.keys():
+                output = self._outputs[output_id]
+
+                if output.get('type') == OutputType.LIGHT:
+                    call_function = self._dump_light_discovery_json(output_id=output_id, light=output)
+                elif output.get('type') == OutputType.OUTLET:
+                    call_function = self._dump_switch_discovery_json(output_id=output_id, switch=output)
+                elif output.get('type') == OutputType.VALVE:
+                    call_function = self._dump_valve_discovery_json(output_id=output_id, valve=output)
+                elif output.get('type') == OutputType.VENTILATION:
+                    call_function = self._dump_ventilation_discovery_json(output_id=output_id, ventilation=output)
+                else:
+                    continue
+
+                thread = Thread(
+                    target=self._send,
+                    args=(
+                        'homeassistant/{0}/openmotics/{1}/config'.format(MQTTClient.output_ha_types.get(output.get('type')), output_id), 
+                        call_function,
+                        self._homeassistant_qos, 
+                        self._homeassistant_retain
+                    )
+                )
+                thread.start()
+
+    def _dump_light_discovery_json(self, output_id, light):
+        room = ''
+
+        if light.get('room_id') in self._rooms:
+            room = self._rooms[light.get('room_id')]['name']
+
+        return {
+            "name": light.get('name'),
+            "unique_id": "openmotics {0} light".format(light.get('name').lower()),
+            "state_topic": self._config.get('output_status_topic_format').format(id=output_id),
+            "command_topic": self._config.get('output_command_topic').replace('+', str(output_id)),
+            "retain": self._config.get('output_status_retain'),
+            "state_value_template": "{{ value_json.value }}",
+            "payload_on": "100",
+            "payload_off": "0",
+            "payload_available": "100",
+            "payload_not_available": "0",
+            "supported_color_modes": [],
+            "device": {
+                "name": "Light {0}".format(light.get('name')),
+                "identifiers": "Light {0}".format(light.get('name')),
+                "manufacturer": "OpenMotics",
+                "model": ("Relay module" if light['hardware_type'] == HardwareType.PHYSICAL else "Virtual relay module"),
+                "suggested_area": room
+            },
+            "device_class": MQTTClient.output_ha_types.get(light.get('type'))
+        }
+
+    def _dump_switch_discovery_json(self, output_id, switch):
+        room = ''
+
+        if switch.get('room_id') in self._rooms:
+            room = self._rooms[switch.get('room_id')]['name']
+
+        return {
+            "name": "Switch {0}".format(switch.get('name')),
+            "unique_id": "openmotics {0} switch".format(switch.get('name').lower()),
+            "state_topic": self._config.get('output_status_topic_format').format(id=output_id),
+            "command_topic": self._config.get('output_command_topic').replace('+', str(output_id)),
+            "retain": self._config.get('output_status_retain'),
+            "value_template": "{{ value_json.value }}",
+            "state_on": "100",
+            "state_off": "0",
+            "payload_on": "100",
+            "payload_off": "0",
+            "payload_available": "100",
+            "payload_not_available": "0",
+            "device": {
+                "name": "Switch {0}".format(switch.get('name')),
+                "identifiers": "Switch {0}".format(switch.get('name')),
+                "manufacturer": "OpenMotics",
+                "model": ("Relay module" if switch['hardware_type'] == HardwareType.PHYSICAL else "Virtual relay module"),
+                "suggested_area": room
+            },
+            "device_class": MQTTClient.output_ha_types.get(switch.get('type'))
+        }
+
+    def _dump_valve_discovery_json(self, output_id, valve):
+        room = ''
+
+        if valve.get('room_id') in self._rooms:
+            room = self._rooms[valve.get('room_id')]['name']
+
+        return {
+            "name": valve.get('name'),
+            "icon": "mdi:valve-closed",
+            "unique_id": "openmotics {0} valve".format(valve.get('name').lower()),
+            "state_topic": self._config.get('output_status_topic_format').format(id=output_id),
+            "command_topic": self._config.get('output_command_topic').replace('+', str(output_id)),
+            "retain": self._config.get('output_status_retain'),
+            "value_template": "{{ value_json.value }}",
+            "state_on": "100",
+            "state_off": "0",
+            "payload_on": "100",
+            "payload_off": "0",
+            "payload_available": "100",
+            "payload_not_available": "0",
+            "device": {
+                "name": "Valve {0}".format(valve.get('name')),
+                "identifiers": "Valve {0}".format(valve.get('name')),
+                "manufacturer": "OpenMotics",
+                "model": ("Relay module" if valve['hardware_type'] == HardwareType.PHYSICAL else "Virtual relay module"),
+                "suggested_area": room
+            },
+            "device_class": MQTTClient.output_ha_types.get(valve.get('type'))
+        }
+
+    def _dump_ventilation_discovery_json(self, output_id, ventilation):
+        room = ''
+
+        if ventilation.get('room_id') in self._rooms:
+            room = self._rooms[ventilation.get('room_id')]['name']
+
+        return {
+            "name": ventilation.get('name'),
+            "icon": "mdi:fan",
+            "unique_id": "openmotics {0} ventilation".format(ventilation.get('name').lower()),
+            "state_topic": self._config.get('output_status_topic_format').format(id=output_id),
+            "command_topic": self._config.get('output_command_topic').replace('+', str(output_id)),
+            "retain": self._config.get('output_status_retain'),
+            "state_value_template": "{{ value_json.value }}",
+            "payload_on": "100",
+            "payload_off": "0",
+            "payload_available": "100",
+            "payload_not_available": "0",
+            "device": {
+                "name": "Ventilation {0}".format(ventilation.get('name')),
+                "identifiers": "Ventilation {0}".format(ventilation.get('name')),
+                "manufacturer": "OpenMotics",
+                "model": ("Relay module" if ventilation['hardware_type'] == HardwareType.PHYSICAL else "Virtual relay module"),
+                "suggested_area": room
+            },
+            "device_class": MQTTClient.output_ha_types.get(ventilation.get('type'))
+        }
 
     def _load_homeassistant_shutter_discovery(self):
         if self._config.get('shutter_status_enabled'):
@@ -385,13 +543,12 @@ class MQTTClient(OMPluginBase):
             room = self._rooms[shutter.get('room_id')]['name']
 
         return {
-            "name": "OpenMotics {0} Shutter".format(shutter.get('name')),
-            "friendly_name": shutter.get('name'),
+            "name": shutter.get('name'),
             "unique_id": "openmotics {0} shutter".format(shutter.get('name').lower()),
             "set_position_topic": self._config.get('shutter_position_command_topic').replace('+', str(shutter_id)),
             "position_topic": self._config.get('shutter_position_topic_format').format(id=shutter_id),
             "command_topic": self._config.get('shutter_command_topic').replace('+', str(shutter_id)),
-            "retain": "true",
+            "retain": self._config.get('shutter_status_retain'),
             "payload_open": "up",
             "payload_close": "down",
             "payload_stop": "stop",
@@ -431,10 +588,11 @@ class MQTTClient(OMPluginBase):
     def _dump_energy_discovery_json(self, module_id, sensor_id, sensor):
         return {
             "name": "OpenMotics {0} Energy".format(sensor.get('name')),
-            "unique_id": "openmotics {0} energy".format(sensor.get('name').lower()),
+            "unique_id": "openmotics {0} {1} energy".format(module_id, sensor.get('name').lower()),
             "state_topic": self._config.get('energy_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.night / 1000 | float | round(2) }}",
             "unit_of_measurement": "kWh",
+            "retain": self._config.get('energy_status_retain'),
             "device": {
                 "name": "Energy {0}".format(sensor.get('name')),
                 "identifiers": "Energy {0}".format(sensor.get('name')),
@@ -472,10 +630,11 @@ class MQTTClient(OMPluginBase):
     def _dump_power_discovery_json(self, module_id, sensor_id, sensor):
         return {
             "name": "OpenMotics {0} Power".format(sensor.get('name')),
-            "unique_id": "openmotics {0} power".format(sensor.get('name').lower()),
+            "unique_id": "openmotics {0} {1} power".format(module_id, sensor.get('name').lower()),
             "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.power | float | round(2) }}",
             "unit_of_measurement": "W",
+            "retain": self._config.get('power_status_retain'),
             "device": {
                 "name": "Energy {0}".format(sensor.get('name')),
                 "identifiers": "Energy {0}".format(sensor.get('name')),
@@ -501,10 +660,11 @@ class MQTTClient(OMPluginBase):
     def _dump_power_voltage_discovery_json(self, module_id, sensor_id, sensor):
         return {
             "name": "OpenMotics {0} Voltage".format(sensor.get('name')),
-            "unique_id": "openmotics {0} voltage".format(sensor.get('name').lower()),
+            "unique_id": "openmotics {0} {1} voltage".format(module_id, sensor.get('name').lower()),
             "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.voltage | float | round(2) }}",
             "unit_of_measurement": "V",
+            "retain": self._config.get('power_status_retain'),
             "device": {
                 "name": "Energy {0}".format(sensor.get('name')),
                 "identifiers": "Energy {0}".format(sensor.get('name')),
@@ -530,10 +690,11 @@ class MQTTClient(OMPluginBase):
     def _dump_power_current_discovery_json(self, module_id, sensor_id, sensor):
         return {
             "name": "OpenMotics {0} Current".format(sensor.get('name')),
-            "unique_id": "openmotics {0} current".format(sensor.get('name').lower()),
+            "unique_id": "openmotics {0} {1} current".format(module_id, sensor.get('name').lower()),
             "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.current | float | round(3) }}",
             "unit_of_measurement": "A",
+            "retain": self._config.get('power_status_retain'),
             "device": {
                 "name": "Energy {0}".format(sensor.get('name')),
                 "identifiers": "Energy {0}".format(sensor.get('name')),
@@ -559,10 +720,11 @@ class MQTTClient(OMPluginBase):
     def _dump_power_frequency_discovery_json(self, module_id, sensor_id, sensor):
         return {
             "name": "OpenMotics {0} Frequency".format(sensor.get('name')),
-            "unique_id": "openmotics {0} frequency".format(sensor.get('name').lower()),
+            "unique_id": "openmotics {0} {1} frequency".format(module_id, sensor.get('name').lower()),
             "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.frequency | float | round(2) }}",
             "unit_of_measurement": "Hz",
+            "retain": self._config.get('power_status_retain'),
             "device": {
                 "name": "Energy {0}".format(sensor.get('name')),
                 "identifiers": "Energy {0}".format(sensor.get('name')),
@@ -613,6 +775,7 @@ class MQTTClient(OMPluginBase):
             "state_topic": self._config.get('sensor_status_topic_format').format(id=sensor_id),
             "value_template": "{{ value_json.value | float | round(2) }}",
             "unit_of_measurement": unit_of_measurement,
+            "retain": self._config.get('sensor_status_retain'),
             "device": {
                 "name": "Sensor {0}".format(sensor.get('name')),
                 "identifiers": "Sensor {0}".format(sensor.get('name')),
@@ -636,6 +799,8 @@ class MQTTClient(OMPluginBase):
                     ids = []
                     for config in result['config']:
                         input_id = config['id']
+                        if not config['in_use']:
+                            continue
                         ids.append(input_id)
                         self._inputs[input_id] = config
                     for input_id in self._inputs.keys():
@@ -674,15 +839,20 @@ class MQTTClient(OMPluginBase):
                     for config in result['config']:
                         if config['module_type'] not in ['o', 'O', 'd', 'D']:
                             continue
+                        if not config['module']['hardware_type'] in [HardwareType.PHYSICAL, HardwareType.VIRTUAL]:
+                            continue
+                        if not config['in_use']:
+                            continue
                         output_id = config['id']
                         ids.append(output_id)
                         self._outputs[output_id] = {'name': config['name'],
+                                                    'hardware_type': config['module']['hardware_type'],
                                                     'module_type': {'o': 'output',
                                                                     'O': 'output',
                                                                     'd': 'dimmer',
                                                                     'D': 'dimmer'}[config['module_type']],
                                                     'room_id': config['room'],
-                                                    'type': 'relay' if config['type'] == 0 else 'light'}
+                                                    'type': config['type']}
                     for output_id in self._outputs.keys():
                         if output_id not in ids:
                             del self._outputs[output_id]
@@ -720,7 +890,7 @@ class MQTTClient(OMPluginBase):
                     for config in result['config']:
                         if not config['in_use']:
                             continue
-                        if not config['module']['hardware_type'] == "physical":
+                        if not config['module']['hardware_type'] == HardwareType.PHYSICAL:
                             continue
                         shutter_id = config['id']
                         ids.append(shutter_id)
@@ -773,6 +943,10 @@ class MQTTClient(OMPluginBase):
                     ids = []
                     for config in result['config']:
                         sensor_id = config['id']
+
+                        if not config['in_use']:
+                            continue
+
                         ids.append(sensor_id)
                         self._sensors[sensor_id] = {'name': config['name'],
                                                     'external_id': str(config['external_id']),
@@ -895,71 +1069,75 @@ class MQTTClient(OMPluginBase):
             try:
                 if input_id in self._inputs:
                     name = self._inputs[input_id].get('name')
-                    self._log('Input {0} ({1}) switched {2}'.format(input_id, name, status))
-                    logger.info('Input {0} ({1}) switched {2}'.format(input_id, name,  status))
-                    data = {'id': input_id,
-                            'name': name,
-                            'status': status,
-                            'timestamp': self._timestamp2isoformat()}
-                    thread = Thread(
-                        target=self._send,
-                        args=(self._input_topic.format(id=input_id), data, self._input_qos, self._input_retain)
-                    )
-                    thread.start()
+                    if self._inputs[input_id].get('status') != self.input_status_map[status]:
+                        self._log('Input {0} ({1}) switched from {2} to {3}'.format(input_id, name,  self._inputs[input_id].get('status'), status))
+                        logger.info('Input {0} ({1}) switched from {2} to {3}'.format(input_id, name,  self._inputs[input_id].get('status'), status))
+                        data = {'id': input_id,
+                                'name': name,
+                                'status': status,
+                                'timestamp': self._timestamp2isoformat()}
+                        thread = Thread(
+                            target=self._send,
+                            args=(self._input_topic.format(id=input_id), data, self._input_qos, self._input_retain)
+                        )
+                        thread.start()
                 else:
                     logger.error('Got event for unknown input {0}'.format(input_id))
             except Exception as ex:
                 logger.exception('Error processing input {0}'.format(input_id))
 
-    @output_status
-    def output_status(self, status):
+    @output_status(version = 2)
+    def output_status(self, event_data):
         if self._enabled and self._output_enabled:
             try:
-                new_output_status = {}
-                for entry in status:
-                    new_output_status[entry[0]] = entry[1]
+                output_id = event_data['id']
                 current_output_status = self._outputs
-                for output_id in current_output_status:
+                if output_id in current_output_status:
                     status = current_output_status[output_id].get('status')
                     dimmer = current_output_status[output_id].get('dimmer')
-                    name = current_output_status[output_id].get('name')
                     if status is None or dimmer is None:
-                        continue
-                    changed = False
-                    if output_id in new_output_status:
-                        if status != 1:
-                            changed = True
-                            current_output_status[output_id]['status'] = 1
-                            self._log('Output {0} ({1}) changed to ON'.format(output_id, name))
-                            logger.info('Output {0} ({1}) changed to ON'.format(output_id, name))
-                        if dimmer != new_output_status[output_id]:
-                            changed = True
-                            current_output_status[output_id]['dimmer'] = new_output_status[output_id]
-                            self._log('Output {0} ({1}) changed to level {2}'.format(output_id, name, new_output_status[output_id]))
-                            logger.info('Output {0} ({1}) changed to level {2}'.format(output_id, name, new_output_status[output_id]))
-                    elif status != 0:
-                        changed = True
-                        current_output_status[output_id]['status'] = 0
-                        self._log('Output {0} ({1}) changed to OFF'.format(output_id, name))
-                        logger.info('Output {0} ({1}) changed to OFF'.format(output_id, name))
-                    if changed is True:
-                        if current_output_status[output_id]['module_type'] == 'output':
-                            level = 100
-                        else:
-                            level = dimmer
-                        if current_output_status[output_id]['status'] == 0:
-                            level = 0
-                        data = {'id': output_id,
-                                'name': name,
-                                'value': level,
-                                'timestamp': self._timestamp2isoformat()}
-                        thread = Thread(
-                            target=self._send,
-                            args=(self._output_topic.format(id=output_id), data, self._output_qos, self._output_retain)
-                        )
-                        thread.start()
+                        return
+             
+                    # set vars for control flow 
+                    event_status = 1 if event_data['status']['on'] is True else 0
+                    event_dimmer = event_data['status'].get('value')
+    
+                    self._process_output_event(output_id, event_status, event_dimmer)
             except Exception as ex:
-                logger.exception('Error processing outputs')
+                self._logger('Error processing outputs: {0}'.format(ex))
+
+    def _process_output_event(self, output_id, event_status, event_dimmer, force_change=False):
+        current_output_status = self._outputs
+        name = current_output_status[output_id].get('name')
+        status = current_output_status[output_id].get('status')
+        dimmer = current_output_status[output_id].get('dimmer')
+
+        change = False
+        if event_status != status:
+            change = True
+            current_output_status[output_id]['status'] = event_status
+        if event_dimmer is not None and dimmer != event_dimmer:
+            change = True
+            current_output_status[output_id]['dimmer'] = event_dimmer
+
+        if change is True or force_change is True:
+            level = event_status * 100
+
+            if current_output_status[output_id]['module_type'] != 'output':
+                # if there's no change to dimmer, keep old value
+                level = event_dimmer or dimmer
+
+            if not force_change:
+                self._logger('Output {0} ({1}) changed from {2} to {3}'.format(output_id, name, status, event_status), True)
+            data = {'id': output_id,
+                    'name': name,
+                    'value': level,
+                    'timestamp': self._timestamp2isoformat()}
+            thread = Thread(
+                target=self._send,
+                args=(self._output_topic.format(id=output_id), data, self._output_qos, self._output_retain)
+            )
+            thread.start()
 
     @shutter_status(version = 2)
     def shutter_status(self, status, detail):
@@ -988,6 +1166,7 @@ class MQTTClient(OMPluginBase):
                             )
                             thread.start()
                             self._logger('Shutter {0} ({1}) changed to {2} ({3})'.format(shutter_id, name, new_state, new_position), True)
+                            return
 
                         if position != new_position:
                             thread = Thread(
@@ -1143,7 +1322,22 @@ class MQTTClient(OMPluginBase):
             self._logger('Error connecting: rc={0}', rc)
             return
 
-        logger.info('Connected to MQTT broker {0}:{1}'.format(self._hostname, self._port))
+        self._logger('Connected to MQTT broker {0}:{1}'.format(self._hostname, self._port))
+
+        # load home assistant discovery
+        self._load_homeassistant_discovery()
+
+        # load initial output status
+        current_output_status = self._outputs
+        for output_id in current_output_status:
+            name = current_output_status[output_id].get('name')
+            status = current_output_status[output_id].get('status')
+            dimmer = current_output_status[output_id].get('dimmer')
+            if status is None or dimmer is None:
+                continue
+
+            self._process_output_event(output_id=output_id, event_status=status, event_dimmer=dimmer, force_change=True)
+
         # subscribe to output command topic if provided
         if self._output_command_topic:
             try:
