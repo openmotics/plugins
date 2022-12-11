@@ -497,10 +497,15 @@ class MQTTClient(OMPluginBase):
                             continue
                         state = result['detail'][id]['state']
                         position = result['detail'][id]['actual_position']
+                        desired_position = result['detail'][id]['desired_position']
+
                         self._logger('Shutter {0} state {1}'.format(shutter_id, state))
+
                         self._shutters[shutter_id]['state'] = state
                         if position is not None:
                             self._shutters[shutter_id]['position'] = position
+                        if desired_position is not None:
+                            self._shutters[shutter_id]['desired_position'] = desired_position
             except Exception as ex:
                 shutter_config_loaded = False
                 self._logger('Error getting shutter status: {0}'.format(ex))
@@ -722,40 +727,45 @@ class MQTTClient(OMPluginBase):
                 for id, state in enumerate(status):
                     new_shutter_status[id] = {}
                     new_shutter_status[id]['state'] = state
-                    new_shutter_status[id]['position'] = detail[id]['desired_position']
+                    new_shutter_status[id]['position'] = detail[id]['actual_position']
+                    new_shutter_status[id]['desired_position'] = detail[id]['desired_position']
 
                 current_shutter_status = self._shutters
                 for shutter_id in current_shutter_status:
                     if shutter_id in new_shutter_status:
                         new_state = new_shutter_status[shutter_id]['state']
                         new_position = new_shutter_status[shutter_id]['position']
-                        if new_state is None and new_position is None:
+                        new_desired_position = new_shutter_status[shutter_id]['desired_position']
+                        if new_state is None and new_position is None and new_desired_position is None:
                             continue
-                        self._process_shutter_event(shutter_id, new_state, new_position)
+                        self._process_shutter_event(shutter_id, new_shutter_status[shutter_id])
 
             except Exception as ex:
                 self._logger('Error processing shutters: {0}'.format(ex))
 
-    def _process_shutter_event(self, shutter_id, new_state, new_position, force_change=False):
+    def _process_shutter_event(self, shutter_id, new_shutter_status, force_change=False):
         current_shutter_status = self._shutters
         name = current_shutter_status[shutter_id].get('name')
         state = current_shutter_status[shutter_id].get('state')
         position = current_shutter_status[shutter_id].get('position', None)
 
-        if state != new_state or force_change is True:
-            if new_state is not None:
-                current_shutter_status[shutter_id]['state'] = new_state
+        if (state != new_shutter_status['state']) or (force_change is True):
+            if new_shutter_status['state'] is not None:
+                current_shutter_status[shutter_id]['state'] = new_shutter_status['state']
                 thread = Thread(
                     target=self._send,
-                    args=(self._shutter_topic.format(id=shutter_id), new_state, self._shutter_qos, self._shutter_retain)
+                    args=(self._shutter_topic.format(id=shutter_id), new_shutter_status['state'], self._shutter_qos, self._shutter_retain)
                 )
                 thread.start()
                 if not force_change:
-                    self._logger('Shutter {0} ({1}) changed from {2} to {3}'.format(shutter_id, name, state, new_state), True)
+                    self._logger('Shutter {0} ({1}) changed from {2} to {3}'.format(shutter_id, name, state, new_shutter_status['state']), True)
 
-        if position != new_position or force_change is True:
+        new_position = new_shutter_status.get('desired_position', new_shutter_status.get('position'))
+        if (position != new_position) or (force_change is True):
             if new_position is not None:
                 current_shutter_status[shutter_id]['position'] = new_position
+                current_shutter_status[shutter_id]['desired_position'] = new_position
+
                 thread = Thread(
                     target=self._send,
                     args=(self._shutter_position_topic.format(id=shutter_id), new_position, self._shutter_qos, self._shutter_retain)
@@ -905,57 +915,63 @@ class MQTTClient(OMPluginBase):
         return background_function
 
     def on_connect(self, client, userdata, flags, rc):
-        if rc != 0:
-            self._logger('Error connecting: rc={0}', rc)
-            return
+        try:
+            if rc != 0:
+                self._logger('Error connecting: rc={0}', rc)
+                return
 
-        self._logger('Connected to MQTT broker {0}:{1}'.format(self._hostname, self._port))
+            self._logger('Connected to MQTT broker {0}:{1}'.format(self._hostname, self._port))
 
-        # load initial output status
-        current_output_status = self._outputs
-        for output_id in current_output_status:
-            event_status = current_output_status[output_id].get('status')
-            event_dimmer = current_output_status[output_id].get('dimmer')
-            if event_status is None or event_dimmer is None:
-                continue
+            # load initial output status
+            current_output_status = self._outputs
+            for output_id in current_output_status:
+                event_status = current_output_status[output_id].get('status')
+                event_dimmer = current_output_status[output_id].get('dimmer')
+                if event_status is None or event_dimmer is None:
+                    continue
 
-            self._process_output_event(output_id, event_status, event_dimmer, force_change=True)
+                self._process_output_event(output_id, event_status, event_dimmer, force_change=True)
 
-        # load initial shutters status
-        current_shutter_status = self._shutters
-        for shutter_id in current_shutter_status:
-            new_state = current_shutter_status[shutter_id].get('state')
-            new_position = current_shutter_status[shutter_id].get('position', None)
+            # load initial shutters status
+            current_shutter_status = self._shutters
+            for shutter_id in current_shutter_status:
+                new_state = current_shutter_status[shutter_id].get('state')
+                new_position = current_shutter_status[shutter_id].get('position', None)
+                new_desired_position = current_shutter_status[shutter_id].get('desired_position', None)
+                if new_state is None and new_position is None and new_desired_position is None:
+                    continue
 
-            self._process_shutter_event(shutter_id, new_state, new_position, force_change=True)
+                self._process_shutter_event(shutter_id, current_shutter_status[shutter_id], force_change=True)
 
-        # load home assistant discovery
-        homeassistant = HomeAssistant(
-            self._logger,
-            client,
-            self._config,
-            self._outputs,
-            self._shutters,
-            self._power_modules,
-            self._sensors,
-            self._rooms)
-        homeassistant.start_discovery()
+            # load home assistant discovery
+            homeassistant = HomeAssistant(
+                self._logger,
+                client,
+                self._config,
+                self._outputs,
+                self._shutters,
+                self._power_modules,
+                self._sensors,
+                self._rooms)
+            homeassistant.start_discovery()
 
-        # subscribe to output command topic if provided
-        if self._output_command_topic:
-            try:
-                self.client.subscribe(self._output_command_topic)
-                logger.info('Subscribed to {0}'.format(self._output_command_topic))
-            except Exception as ex:
-                self._logger('Could not subscribe to {0}: {1}'.format(self._output_command_topic, ex))
+            # subscribe to output command topic if provided
+            if self._output_command_topic:
+                try:
+                    self.client.subscribe(self._output_command_topic)
+                    self._logger('Subscribed to {0}'.format(self._output_command_topic))
+                except Exception as ex:
+                    self._logger('Could not subscribe to {0}: {1}'.format(self._output_command_topic, ex))
 
-        # subscribe to shutter command topic if provided
-        if self._shutter_command_topic:
-            try:
-                self.client.subscribe(self._shutter_command_topic)
-                self._logger('Subscribed to {0}'.format(self._shutter_command_topic))
-            except Exception as ex:
-                self._logger('Could not subscribe to {0}: {1}'.format(self._shutter_command_topic, ex))
+            # subscribe to shutter command topic if provided
+            if self._shutter_command_topic:
+                try:
+                    self.client.subscribe(self._shutter_command_topic)
+                    self._logger('Subscribed to {0}'.format(self._shutter_command_topic))
+                except Exception as ex:
+                    self._logger('Could not subscribe to {0}: {1}'.format(self._shutter_command_topic, ex))
+        except Exception as ex:
+            self._logger('Error when handling connection: {0}'.format(ex))
 
         # subscribe to shutter position command topic if provided
         if self._shutter_position_command_topic:
