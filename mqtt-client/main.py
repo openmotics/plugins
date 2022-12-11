@@ -262,9 +262,7 @@ class MQTTClient(OMPluginBase):
         self._rooms = {}
 
         self._read_config()
-        self._load_configuration()
-
-        self._try_connect()
+        self._load_and_connect()
 
         logger.info("Started MQTTClient plugin")
 
@@ -339,30 +337,38 @@ class MQTTClient(OMPluginBase):
         logger.info('MQTTClient is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     def _load_configuration(self):
-        inputs_loaded = False
-        outputs_loaded = False
-        shutters_loaded = False
-        sensors_loaded = False
-        power_loaded = False
-        rooms_loaded = False
-        should_load = True
+        if self._enabled is True:
+            inputs_loaded = False
+            outputs_loaded = False
+            shutters_loaded = False
+            sensors_loaded = False
+            power_loaded = False
+            rooms_loaded = False
+            should_load = True
 
-        while should_load:
-            if not inputs_loaded:
-                inputs_loaded = self._load_input_configuration()
-            if not outputs_loaded:
-                outputs_loaded = self._load_output_configuration()
-            if not shutters_loaded:
-                shutters_loaded = self._load_shutter_configuration()
-            if not sensors_loaded:
-                sensors_loaded = self._load_sensor_configuration()
-            if not power_loaded:
-                power_loaded = self._load_power_configuration()
-            if not rooms_loaded:
-                rooms_loaded = self._load_rooms_configuration()
-            should_load = not all([inputs_loaded, outputs_loaded, shutters_loaded, sensors_loaded, power_loaded, rooms_loaded])
-            if should_load:
-                time.sleep(15)
+            while should_load:
+                if not inputs_loaded:
+                    inputs_loaded = self._load_input_configuration()
+                if not outputs_loaded:
+                    outputs_loaded = self._load_output_configuration()
+                if not shutters_loaded:
+                    shutters_loaded = self._load_shutter_configuration()
+                if not sensors_loaded:
+                    sensors_loaded = self._load_sensor_configuration()
+                if not power_loaded:
+                    power_loaded = self._load_power_configuration()
+                if not rooms_loaded:
+                    rooms_loaded = self._load_rooms_configuration()
+                should_load = not all([inputs_loaded, outputs_loaded, shutters_loaded, sensors_loaded, power_loaded, rooms_loaded])
+                if should_load:
+                    time.sleep(15)
+
+    def _load_and_connect(self):
+        try:
+            self._load_configuration()
+            self._try_connect()
+        except Exception as ex:
+            self._logger("Error while loading config and trying to connect: {0}".format(ex))
 
     def _load_homeassistant_discovery(self):
         if self._homeassistant_discovery_enabled:
@@ -1147,35 +1153,47 @@ class MQTTClient(OMPluginBase):
                 for id, state in enumerate(status):
                     new_shutter_status[id] = {}
                     new_shutter_status[id]['state'] = state
-                    new_shutter_status[id]['position'] = detail[id]['actual_position']
+                    new_shutter_status[id]['position'] = detail[id]['desired_position']
+
                 current_shutter_status = self._shutters
                 for shutter_id in current_shutter_status:
-                    name = current_shutter_status[shutter_id].get('name')
-                    state = current_shutter_status[shutter_id].get('state')
-                    position = current_shutter_status[shutter_id].get('position', None)
-
-                    new_state = new_shutter_status[shutter_id]['state']
-                    new_position = new_shutter_status[shutter_id]['position']
                     if shutter_id in new_shutter_status:
-                        if state != new_state:
-                            current_shutter_status[shutter_id]['state'] = new_state
-                            current_shutter_status[shutter_id]['position'] = new_position
-                            thread = Thread(
-                                target=self._send,
-                                args=(self._shutter_topic.format(id=shutter_id), new_state, self._shutter_qos, self._shutter_retain)
-                            )
-                            thread.start()
-                            self._logger('Shutter {0} ({1}) changed to {2} ({3})'.format(shutter_id, name, new_state, new_position), True)
-                            return
+                        new_state = new_shutter_status[shutter_id]['state']
+                        new_position = new_shutter_status[shutter_id]['position']
+                        if new_state is None and new_position is None:
+                            continue
+                        self._process_shutter_event(shutter_id, new_state, new_position)
 
-                        if position != new_position:
-                            thread = Thread(
-                                target=self._send,
-                                args=(self._shutter_position_topic.format(id=shutter_id), new_position, self._shutter_qos, self._shutter_retain)
-                            )
-                            thread.start()
             except Exception as ex:
                 self._logger('Error processing shutters: {0}'.format(ex))
+
+    def _process_shutter_event(self, shutter_id, new_state, new_position, force_change=False):
+        current_shutter_status = self._shutters
+        name = current_shutter_status[shutter_id].get('name')
+        state = current_shutter_status[shutter_id].get('state')
+        position = current_shutter_status[shutter_id].get('position', None)
+
+        if state != new_state or force_change is True:
+            if new_state is not None:
+                current_shutter_status[shutter_id]['state'] = new_state
+                thread = Thread(
+                    target=self._send,
+                    args=(self._shutter_topic.format(id=shutter_id), new_state, self._shutter_qos, self._shutter_retain)
+                )
+                thread.start()
+                if not force_change:
+                    self._logger('Shutter {0} ({1}) changed from {2} to {3}'.format(shutter_id, name, state, new_state), True)
+
+        if position != new_position or force_change is True:
+            if new_position is not None:
+                current_shutter_status[shutter_id]['position'] = new_position
+                thread = Thread(
+                    target=self._send,
+                    args=(self._shutter_position_topic.format(id=shutter_id), new_position, self._shutter_qos, self._shutter_retain)
+                )
+                thread.start()
+                if not force_change:
+                    self._logger('Shutter {0} ({1}) changed from {2} to {3}'.format(shutter_id, name, position, new_position), True)
 
     @receive_events
     def receive_events(self, event_id):
@@ -1330,13 +1348,20 @@ class MQTTClient(OMPluginBase):
         # load initial output status
         current_output_status = self._outputs
         for output_id in current_output_status:
-            name = current_output_status[output_id].get('name')
-            status = current_output_status[output_id].get('status')
-            dimmer = current_output_status[output_id].get('dimmer')
-            if status is None or dimmer is None:
+            event_status = current_output_status[output_id].get('status')
+            event_dimmer = current_output_status[output_id].get('dimmer')
+            if event_status is None or event_dimmer is None:
                 continue
 
-            self._process_output_event(output_id=output_id, event_status=status, event_dimmer=dimmer, force_change=True)
+            self._process_output_event(output_id, event_status, event_dimmer, force_change=True)
+
+        # load initial shutters status
+        current_shutter_status = self._shutters
+        for shutter_id in current_shutter_status:
+            new_state = current_shutter_status[shutter_id].get('state')
+            new_position = current_shutter_status[shutter_id].get('position', None)
+
+            self._process_shutter_event(shutter_id, new_state, new_position, force_change=True)
 
         # subscribe to output command topic if provided
         if self._output_command_topic:
@@ -1524,11 +1549,9 @@ class MQTTClient(OMPluginBase):
             self._config = config
             self._read_config()
             self.write_config(config)
-            if self._enabled:
-                thread = Thread(target=self._load_configuration)
-                thread.start()
+            thread = Thread(target=self._load_and_connect)
+            thread.start()
         except Exception as ex:
-            logger.exception('Error saving configuration')
+            logger.exception('Error saving configuration: {0}'.format(ex))
 
-        self._try_connect()
         return json.dumps({'success': True})
