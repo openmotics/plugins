@@ -71,7 +71,7 @@ class HomeAssistant():
                 thread = Thread(
                     target=self._send,
                     args=(
-                        'homeassistant/{0}/openmotics/{1}/config'.format(HomeAssistant.output_ha_types.get(output.get('type')), output_id), 
+                        '{0}{1}/openmotics/{2}/config'.format(self._config.get('homeassistant_discovery_prefix_topic'), HomeAssistant.output_ha_types.get(output.get('type')), output_id), 
                         call_function,
                         self._qos, 
                         self._retain
@@ -86,7 +86,7 @@ class HomeAssistant():
                 thread = Thread(
                     target=self._send,
                     args=(
-                        'homeassistant/cover/openmotics/{0}/config'.format(shutter_id), 
+                        '{0}cover/openmotics/{1}/config'.format(self._config.get('homeassistant_discovery_prefix_topic'), shutter_id), 
                         self._dump_shutter_discovery_json(shutter_id, shutter), 
                         self._qos, 
                         self._retain
@@ -104,7 +104,7 @@ class HomeAssistant():
                         thread = Thread(
                             target=self._send,
                             args=(
-                                'homeassistant/sensor/{0}_energy/{1}/config'.format(module_id, sensor_id), 
+                                '{0}sensor/{1}_energy/{2}/config'.format(self._config.get('homeassistant_discovery_prefix_topic'), module_id, sensor_id), 
                                 self._dump_energy_discovery_json(module_id, sensor_id, module_config[sensor_id]), 
                                 self._qos, 
                                 self._retain
@@ -134,7 +134,7 @@ class HomeAssistant():
                     thread = Thread(
                         target=self._send,
                         args=(
-                            'homeassistant/sensor/openmotics_{0}/{1}/config'.format(sensor.get('physical_quantity'), sensor_id), 
+                            '{0}sensor/openmotics_{1}/{2}/config'.format(self._config.get('homeassistant_discovery_prefix_topic'), sensor.get('physical_quantity'), sensor_id), 
                             sensor_data, 
                             self._qos, 
                             self._retain
@@ -146,7 +146,7 @@ class HomeAssistant():
         thread = Thread(
             target=self._send,
             args=(
-                'homeassistant/sensor/{0}_power/{1}/config'.format(module_id, sensor_id), 
+                '{0}sensor/{1}_power/{2}/config'.format(self._config.get('homeassistant_discovery_prefix_topic'), module_id, sensor_id), 
                 self._dump_power_discovery_json(module_id, sensor_id, sensor), 
                 self._qos, 
                 self._retain
@@ -158,7 +158,7 @@ class HomeAssistant():
         thread = Thread(
             target=self._send,
             args=(
-                'homeassistant/sensor/{0}_power_voltage/{1}/config'.format(module_id, sensor_id), 
+                '{0}sensor/{1}_power_voltage/{2}/config'.format(self._config.get('homeassistant_discovery_prefix_topic'), module_id, sensor_id), 
                 self._dump_power_voltage_discovery_json(module_id, sensor_id, sensor), 
                 self._qos, 
                 self._retain
@@ -170,7 +170,7 @@ class HomeAssistant():
         thread = Thread(
             target=self._send,
             args=(
-                'homeassistant/sensor/{0}_power_current/{1}/config'.format(module_id, sensor_id), 
+                '{0}sensor/{1}_power_current/{2}/config'.format(self._config.get('homeassistant_discovery_prefix_topic'), module_id, sensor_id), 
                 self._dump_power_current_discovery_json(module_id, sensor_id, sensor), 
                 self._qos, 
                 self._retain
@@ -182,7 +182,7 @@ class HomeAssistant():
         thread = Thread(
             target=self._send,
             args=(
-                'homeassistant/sensor/{0}_power_frequency/{1}/config'.format(module_id, sensor_id), 
+                '{0}sensor/{1}_power_frequency/{2}/config'.format(self._config.get('homeassistant_discovery_prefix_topic'), module_id, sensor_id), 
                 self._dump_power_frequency_discovery_json(module_id, sensor_id, sensor), 
                 self._qos, 
                 self._retain

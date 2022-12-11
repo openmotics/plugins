@@ -56,6 +56,9 @@ class MQTTClient(OMPluginBase):
         {'name': 'homeassistant_discovery_enabled',
          'type': 'bool',
          'description': 'Enable HomeAssistant Components Discovery.'},
+        {'name': 'homeassistant_discovery_prefix_topic',
+         'type': 'str',
+         'description': 'HomeAssistant topic prefix for MQTT Discovery. Default: homeassistant/'},
         {'name': 'homeassistant_qos',
          'type': 'enum',
          'choices': ['0', '1', '2'],
@@ -198,6 +201,7 @@ class MQTTClient(OMPluginBase):
     default_config = {
         'port': 1883,
         'username': 'openmotics',
+        'homeassistant_discovery_prefix_topic': 'homeassistant/',
         'homeassistant_qos': 0,
         'input_status_topic_format': 'openmotics/input/{id}/state',
         'input_status_qos': 0,
@@ -260,9 +264,10 @@ class MQTTClient(OMPluginBase):
         self._username = self._config.get('username')
         self._password = self._config.get('password')
         # home assistant support
-        self._homeassistant_discovery_enabled = self._config.get('homeassistant_discovery_enabled')
-        self._homeassistant_qos     = int(self._config.get('homeassistant_qos'))
-        self._homeassistant_retain  = self._config.get('homeassistant_retain')
+        self._homeassistant_discovery_enabled      = self._config.get('homeassistant_discovery_enabled')
+        self._homeassistant_discovery_prefix_topic = self._config.get('homeassistant_discovery_prefix_topic')
+        self._homeassistant_qos                    = int(self._config.get('homeassistant_qos'))
+        self._homeassistant_retain                 = self._config.get('homeassistant_retain')
         # inputs
         self._input_enabled = self._config.get('input_status_enabled')
         self._input_topic   = self._config.get('input_status_topic_format')
