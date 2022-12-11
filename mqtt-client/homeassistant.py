@@ -12,7 +12,6 @@ class HomeAssistant():
     Openmotics outputs not supported on HomeAssistant:
         OutputType.ALARM: 'alarm',
         OutputType.APPLIANCE: 'appliance',
-        OutputType.PUMP: 'pump',
         OutputType.HVAC: 'hvac',
         OutputType.GENERIC: 'generic',
         OutputType.MOTOR: 'motor',
@@ -20,6 +19,7 @@ class HomeAssistant():
     """
     output_ha_types = {OutputType.OUTLET: 'switch',
                        OutputType.VALVE: 'switch',
+                       OutputType.PUMP: 'switch',
                        OutputType.VENTILATION: 'fan',
                        OutputType.SHUTTER_RELAY: 'shutter',
                        OutputType.LIGHT: 'light'}
@@ -65,6 +65,8 @@ class HomeAssistant():
                     call_function = self._dump_valve_discovery_json(output_id=output_id, valve=output)
                 elif output.get('type') == OutputType.VENTILATION:
                     call_function = self._dump_ventilation_discovery_json(output_id=output_id, ventilation=output)
+                elif output.get('type') == OutputType.PUMP:
+                    call_function = self._dump_pump_discovery_json(output_id=output_id, pump=output)
                 else:
                     continue
 
@@ -142,48 +144,48 @@ class HomeAssistant():
                     )
                     thread.start()
 
-    def _send_power_discovery(self, module_id, sensor_id, sensor):
+    def _send_power_discovery(self, module_id, sensor_id, power):
         thread = Thread(
             target=self._send,
             args=(
                 '{0}sensor/{1}_power/{2}/config'.format(self._config.get('homeassistant_discovery_prefix_topic'), module_id, sensor_id), 
-                self._dump_power_discovery_json(module_id, sensor_id, sensor), 
+                self._dump_power_discovery_json(module_id, sensor_id, power), 
                 self._qos, 
                 self._retain
             )
         )
         thread.start()
 
-    def _send_power_voltage_discovery(self, module_id, sensor_id, sensor):
+    def _send_power_voltage_discovery(self, module_id, sensor_id, voltage):
         thread = Thread(
             target=self._send,
             args=(
                 '{0}sensor/{1}_power_voltage/{2}/config'.format(self._config.get('homeassistant_discovery_prefix_topic'), module_id, sensor_id), 
-                self._dump_power_voltage_discovery_json(module_id, sensor_id, sensor), 
+                self._dump_power_voltage_discovery_json(module_id, sensor_id, voltage), 
                 self._qos, 
                 self._retain
             )
         )
         thread.start()
 
-    def _send_power_current_discovery(self, module_id, sensor_id, sensor):
+    def _send_power_current_discovery(self, module_id, sensor_id, current):
         thread = Thread(
             target=self._send,
             args=(
                 '{0}sensor/{1}_power_current/{2}/config'.format(self._config.get('homeassistant_discovery_prefix_topic'), module_id, sensor_id), 
-                self._dump_power_current_discovery_json(module_id, sensor_id, sensor), 
+                self._dump_power_current_discovery_json(module_id, sensor_id, current), 
                 self._qos, 
                 self._retain
             )
         )
         thread.start()
 
-    def _send_power_frequency_discovery(self, module_id, sensor_id, sensor):
+    def _send_power_frequency_discovery(self, module_id, sensor_id, frequency):
         thread = Thread(
             target=self._send,
             args=(
                 '{0}sensor/{1}_power_frequency/{2}/config'.format(self._config.get('homeassistant_discovery_prefix_topic'), module_id, sensor_id), 
-                self._dump_power_frequency_discovery_json(module_id, sensor_id, sensor), 
+                self._dump_power_frequency_discovery_json(module_id, sensor_id, frequency), 
                 self._qos, 
                 self._retain
             )
@@ -225,7 +227,7 @@ class HomeAssistant():
             room = self._rooms[switch.get('room_id')]['name']
 
         return {
-            "name": "Switch {0}".format(switch.get('name')),
+            "name": switch.get('name'),
             "unique_id": "openmotics {0} switch".format(switch.get('name').lower()),
             "state_topic": self._config.get('output_status_topic_format').format(id=output_id),
             "command_topic": self._config.get('output_command_topic').replace('+', str(output_id)),
@@ -305,6 +307,36 @@ class HomeAssistant():
             "device_class": HomeAssistant.output_ha_types.get(ventilation.get('type'))
         }
 
+    def _dump_pump_discovery_json(self, output_id, pump):
+        room = ''
+
+        if pump.get('room_id') in self._rooms:
+            room = self._rooms[pump.get('room_id')]['name']
+
+        return {
+            "name": pump.get('name'),
+            "icon": "mdi:pump",
+            "unique_id": "openmotics {0} pump".format(pump.get('name').lower()),
+            "state_topic": self._config.get('output_status_topic_format').format(id=output_id),
+            "command_topic": self._config.get('output_command_topic').replace('+', str(output_id)),
+            "retain": self._config.get('output_status_retain'),
+            "value_template": "{{ value_json.value }}",
+            "state_on": "100",
+            "state_off": "0",
+            "payload_on": "100",
+            "payload_off": "0",
+            "payload_available": "100",
+            "payload_not_available": "0",
+            "device": {
+                "name": "Pump {0}".format(pump.get('name')),
+                "identifiers": "Pump {0}".format(pump.get('name')),
+                "manufacturer": "OpenMotics",
+                "model": ("Relay module" if pump['hardware_type'] == HardwareType.PHYSICAL else "Virtual relay module"),
+                "suggested_area": room
+            },
+            "device_class": HomeAssistant.output_ha_types.get(pump.get('type'))
+        }
+
     def _dump_shutter_discovery_json(self, shutter_id, shutter):
         room = ''
 
@@ -336,17 +368,17 @@ class HomeAssistant():
             "device_class": "shutter"
         }
 
-    def _dump_energy_discovery_json(self, module_id, sensor_id, sensor):
+    def _dump_energy_discovery_json(self, module_id, sensor_id, energy):
         return {
-            "name": "OpenMotics {0} Energy".format(sensor.get('name')),
-            "unique_id": "openmotics {0} {1} energy".format(module_id, sensor.get('name').lower()),
+            "name": energy.get('name'),
+            "unique_id": "openmotics {0} {1} energy".format(module_id, energy.get('name').lower()),
             "state_topic": self._config.get('energy_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.night / 1000 | float | round(2) }}",
             "unit_of_measurement": "kWh",
             "retain": self._config.get('energy_status_retain'),
             "device": {
-                "name": "Energy {0}".format(sensor.get('name')),
-                "identifiers": "Energy {0}".format(sensor.get('name')),
+                "name": "Energy {0}".format(energy.get('name')),
+                "identifiers": "Energy {0}".format(energy.get('name')),
                 "manufacturer": "OpenMotics",
                 "model": "Energy module"
             },
@@ -354,17 +386,17 @@ class HomeAssistant():
             "state_class": "total_increasing"
         }
 
-    def _dump_power_discovery_json(self, module_id, sensor_id, sensor):
+    def _dump_power_discovery_json(self, module_id, sensor_id, power):
         return {
-            "name": sensor.get('name'),
-            "unique_id": "openmotics {0} {1} power".format(module_id, sensor.get('name').lower()),
+            "name": power.get('name'),
+            "unique_id": "openmotics {0} {1} power".format(module_id, power.get('name').lower()),
             "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.power | float | round(2) }}",
             "unit_of_measurement": "W",
             "retain": self._config.get('power_status_retain'),
             "device": {
-                "name": "Energy {0}".format(sensor.get('name')),
-                "identifiers": "Energy {0}".format(sensor.get('name')),
+                "name": "Energy {0}".format(power.get('name')),
+                "identifiers": "Energy {0}".format(power.get('name')),
                 "manufacturer": "OpenMotics",
                 "model": "Energy module"
             },
@@ -372,17 +404,17 @@ class HomeAssistant():
             "state_class": "measurement"
         }
 
-    def _dump_power_voltage_discovery_json(self, module_id, sensor_id, sensor):
+    def _dump_power_voltage_discovery_json(self, module_id, sensor_id, voltage):
         return {
-            "name": "OpenMotics {0} Voltage".format(sensor.get('name')),
-            "unique_id": "openmotics {0} {1} voltage".format(module_id, sensor.get('name').lower()),
+            "name": voltage.get('name'),
+            "unique_id": "openmotics {0} {1} voltage".format(module_id, voltage.get('name').lower()),
             "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.voltage | float | round(2) }}",
             "unit_of_measurement": "V",
             "retain": self._config.get('power_status_retain'),
             "device": {
-                "name": "Energy {0}".format(sensor.get('name')),
-                "identifiers": "Energy {0}".format(sensor.get('name')),
+                "name": "Energy {0}".format(voltage.get('name')),
+                "identifiers": "Energy {0}".format(voltage.get('name')),
                 "manufacturer": "OpenMotics",
                 "model": "Energy module"
             },
@@ -390,17 +422,17 @@ class HomeAssistant():
             "state_class": "total_increasing"
         }
 
-    def _dump_power_current_discovery_json(self, module_id, sensor_id, sensor):
+    def _dump_power_current_discovery_json(self, module_id, sensor_id, current):
         return {
-            "name": "OpenMotics {0} Current".format(sensor.get('name')),
-            "unique_id": "openmotics {0} {1} current".format(module_id, sensor.get('name').lower()),
+            "name": current.get('name'),
+            "unique_id": "openmotics {0} {1} current".format(module_id, current.get('name').lower()),
             "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.current | float | round(3) }}",
             "unit_of_measurement": "A",
             "retain": self._config.get('power_status_retain'),
             "device": {
-                "name": "Energy {0}".format(sensor.get('name')),
-                "identifiers": "Energy {0}".format(sensor.get('name')),
+                "name": "Energy {0}".format(current.get('name')),
+                "identifiers": "Energy {0}".format(current.get('name')),
                 "manufacturer": "OpenMotics",
                 "model": "Energy module"
             },
@@ -408,17 +440,17 @@ class HomeAssistant():
             "state_class": "total_increasing"
         }
 
-    def _dump_power_frequency_discovery_json(self, module_id, sensor_id, sensor):
+    def _dump_power_frequency_discovery_json(self, module_id, sensor_id, frequency):
         return {
-            "name": "OpenMotics {0} Frequency".format(sensor.get('name')),
-            "unique_id": "openmotics {0} {1} frequency".format(module_id, sensor.get('name').lower()),
+            "name": frequency.get('name'),
+            "unique_id": "openmotics {0} {1} frequency".format(module_id, frequency.get('name').lower()),
             "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.frequency | float | round(2) }}",
             "unit_of_measurement": "Hz",
             "retain": self._config.get('power_status_retain'),
             "device": {
-                "name": "Energy {0}".format(sensor.get('name')),
-                "identifiers": "Energy {0}".format(sensor.get('name')),
+                "name": "Energy {0}".format(frequency.get('name')),
+                "identifiers": "Energy {0}".format(frequency.get('name')),
                 "manufacturer": "OpenMotics",
                 "model": "Energy module"
             },
