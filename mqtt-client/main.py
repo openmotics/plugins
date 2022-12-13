@@ -475,7 +475,7 @@ class MQTTClient(OMPluginBase):
                                                      'timer_up': config['timer_up'],
                                                      'timer_down': config['timer_down'],
                                                      'steps': config['steps'],
-                                                     'up_down_config': config['up_down_config'],
+                                                     'normal_direction': config['up_down_config'],
                                                      'room_id': config['room']
                                                     }
                     for shutter_id in self._shutters.keys():
@@ -497,15 +497,12 @@ class MQTTClient(OMPluginBase):
                             continue
                         state = result['detail'][id]['state']
                         position = result['detail'][id]['actual_position']
-                        desired_position = result['detail'][id]['desired_position']
 
                         self._logger('Shutter {0} state {1}'.format(shutter_id, state))
 
                         self._shutters[shutter_id]['state'] = state
                         if position is not None:
                             self._shutters[shutter_id]['position'] = position
-                        if desired_position is not None:
-                            self._shutters[shutter_id]['desired_position'] = desired_position
             except Exception as ex:
                 shutter_config_loaded = False
                 self._logger('Error getting shutter status: {0}'.format(ex))
@@ -728,15 +725,13 @@ class MQTTClient(OMPluginBase):
                     new_shutter_status[id] = {}
                     new_shutter_status[id]['state'] = state
                     new_shutter_status[id]['position'] = detail[id]['actual_position']
-                    new_shutter_status[id]['desired_position'] = detail[id]['desired_position']
 
                 current_shutter_status = self._shutters
                 for shutter_id in current_shutter_status:
                     if shutter_id in new_shutter_status:
                         new_state = new_shutter_status[shutter_id]['state']
                         new_position = new_shutter_status[shutter_id]['position']
-                        new_desired_position = new_shutter_status[shutter_id]['desired_position']
-                        if new_state is None and new_position is None and new_desired_position is None:
+                        if new_state is None and new_position is None:
                             continue
                         self._process_shutter_event(shutter_id, new_shutter_status[shutter_id])
 
@@ -760,19 +755,17 @@ class MQTTClient(OMPluginBase):
                 if not force_change:
                     self._logger('Shutter {0} ({1}) changed from {2} to {3}'.format(shutter_id, name, state, new_shutter_status['state']), True)
 
-        new_position = new_shutter_status.get('desired_position', new_shutter_status.get('position'))
-        if (position != new_position) or (force_change is True):
-            if new_position is not None:
-                current_shutter_status[shutter_id]['position'] = new_position
-                current_shutter_status[shutter_id]['desired_position'] = new_position
+        if (position != new_shutter_status.get('position')) or (force_change is True):
+            if new_shutter_status.get('position') is not None:
+                current_shutter_status[shutter_id]['position'] = new_shutter_status.get('position')
 
                 thread = Thread(
                     target=self._send,
-                    args=(self._shutter_position_topic.format(id=shutter_id), new_position, self._shutter_qos, self._shutter_retain)
+                    args=(self._shutter_position_topic.format(id=shutter_id), new_shutter_status.get('position'), self._shutter_qos, self._shutter_retain)
                 )
                 thread.start()
                 if not force_change:
-                    self._logger('Shutter {0} ({1}) changed from {2} to {3}'.format(shutter_id, name, position, new_position), True)
+                    self._logger('Shutter {0} ({1}) changed from {2} to {3}'.format(shutter_id, name, position, new_shutter_status.get('position')), True)
 
     @receive_events
     def receive_events(self, event_id):
@@ -937,8 +930,7 @@ class MQTTClient(OMPluginBase):
             for shutter_id in current_shutter_status:
                 new_state = current_shutter_status[shutter_id].get('state')
                 new_position = current_shutter_status[shutter_id].get('position', None)
-                new_desired_position = current_shutter_status[shutter_id].get('desired_position', None)
-                if new_state is None and new_position is None and new_desired_position is None:
+                if new_state is None and new_position is None:
                     continue
 
                 self._process_shutter_event(shutter_id, current_shutter_status[shutter_id], force_change=True)

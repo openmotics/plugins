@@ -258,6 +258,7 @@ class HomeAssistant():
         return {
             "name": valve.get('name'),
             "icon": "mdi:valve-closed",
+            "object_id": "valve_{0}".format(valve.get('name')),
             "unique_id": "openmotics {0} valve".format(valve.get('name').lower()),
             "state_topic": self._config.get('output_status_topic_format').format(id=output_id),
             "command_topic": self._config.get('output_command_topic').replace('+', str(output_id)),
@@ -288,6 +289,7 @@ class HomeAssistant():
         return {
             "name": ventilation.get('name'),
             "icon": "mdi:fan",
+            "object_id": "ventilation_{0}".format(ventilation.get('name')),
             "unique_id": "openmotics {0} ventilation".format(ventilation.get('name').lower()),
             "state_topic": self._config.get('output_status_topic_format').format(id=output_id),
             "command_topic": self._config.get('output_command_topic').replace('+', str(output_id)),
@@ -316,6 +318,7 @@ class HomeAssistant():
         return {
             "name": pump.get('name'),
             "icon": "mdi:pump",
+            "object_id": "pump_{0}".format(pump.get('name')),
             "unique_id": "openmotics {0} pump".format(pump.get('name').lower()),
             "state_topic": self._config.get('output_status_topic_format').format(id=output_id),
             "command_topic": self._config.get('output_command_topic').replace('+', str(output_id)),
@@ -371,6 +374,7 @@ class HomeAssistant():
     def _dump_energy_discovery_json(self, module_id, sensor_id, energy):
         return {
             "name": energy.get('name'),
+            "object_id": "openmotics_{0}_{1}_energy".format(module_id, energy.get('name')),
             "unique_id": "openmotics {0} {1} energy".format(module_id, energy.get('name').lower()),
             "state_topic": self._config.get('energy_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.night / 1000 | float | round(2) }}",
@@ -389,6 +393,7 @@ class HomeAssistant():
     def _dump_power_discovery_json(self, module_id, sensor_id, power):
         return {
             "name": power.get('name'),
+            "object_id": "openmotics_{0}_{1}_power".format(module_id, power.get('name')),
             "unique_id": "openmotics {0} {1} power".format(module_id, power.get('name').lower()),
             "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.power | float | round(2) }}",
@@ -407,6 +412,7 @@ class HomeAssistant():
     def _dump_power_voltage_discovery_json(self, module_id, sensor_id, voltage):
         return {
             "name": voltage.get('name'),
+            "object_id": "openmotics_{0}_{1}_voltage".format(module_id, voltage.get('name')),
             "unique_id": "openmotics {0} {1} voltage".format(module_id, voltage.get('name').lower()),
             "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.voltage | float | round(2) }}",
@@ -425,6 +431,7 @@ class HomeAssistant():
     def _dump_power_current_discovery_json(self, module_id, sensor_id, current):
         return {
             "name": current.get('name'),
+            "object_id": "openmotics_{0}_{1}_current".format(module_id, current.get('name')),
             "unique_id": "openmotics {0} {1} current".format(module_id, current.get('name').lower()),
             "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.current | float | round(3) }}",
@@ -443,6 +450,7 @@ class HomeAssistant():
     def _dump_power_frequency_discovery_json(self, module_id, sensor_id, frequency):
         return {
             "name": frequency.get('name'),
+            "object_id": "openmotics_{0}_{1}_frequency".format(module_id, frequency.get('name')),
             "unique_id": "openmotics {0} {1} frequency".format(module_id, frequency.get('name').lower()),
             "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.frequency | float | round(2) }}",
@@ -476,6 +484,7 @@ class HomeAssistant():
 
         return {
             "name": sensor.get('name'),
+            "object_id": "{0}_{1}".format(sensor.get('name'), device_class),
             "unique_id": "openmotics {0} {1}".format(sensor.get('name').lower(), sensor.get('physical_quantity').lower()),
             "state_topic": self._config.get('sensor_status_topic_format').format(id=sensor_id),
             "value_template": "{{ value_json.value | float | round(2) }}",
