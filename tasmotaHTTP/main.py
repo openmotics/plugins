@@ -5,7 +5,7 @@ An Tasmota HTTP plugin
 import six
 import time
 import requests
-import simplejson as json
+import json
 from plugins.base import om_expose, OMPluginBase, PluginConfigChecker, background_task
 import logging
 
@@ -18,7 +18,7 @@ class TasmotaHTTP(OMPluginBase):
     """
 
     name = 'tasmotaHTTP'
-    version = '1.0.2'
+    version = '1.0.3'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'refresh_interval',

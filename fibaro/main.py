@@ -6,7 +6,7 @@ import six
 import time
 import requests
 import logging
-import simplejson as json
+import json
 from threading import Thread
 from plugins.base import om_expose, output_status, OMPluginBase, PluginConfigChecker, background_task, om_metric_data
 
@@ -18,7 +18,7 @@ class Fibaro(OMPluginBase):
     """
 
     name = 'Fibaro'
-    version = '2.0.19'
+    version = '2.0.20'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 

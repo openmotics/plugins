@@ -8,7 +8,7 @@ import sys
 import time
 import requests
 import logging
-import simplejson as json
+import json
 from threading import Thread, Event
 from datetime import datetime, timedelta
 from plugins.base import om_expose, background_task, OMPluginBase, PluginConfigChecker
@@ -23,7 +23,7 @@ class Astro(OMPluginBase):
     """
 
     name = 'Astro'
-    version = '1.0.3'
+    version = '1.0.4'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'coordinates',

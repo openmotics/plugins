@@ -19,7 +19,7 @@ RTI plugin
 
 import re
 import serial
-import simplejson as json
+import json
 import six
 import time
 from contextlib import contextmanager
@@ -36,7 +36,7 @@ class RTI(OMPluginBase):
     """
 
     name = 'RTI'
-    version = '0.0.2'
+    version = '0.0.3'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'serial_device',

@@ -5,7 +5,7 @@ A plugin to let two Gateways work together
 import six
 import time
 import requests
-import simplejson as json
+import json
 from threading import Thread
 from plugins.base import om_expose, output_status, OMPluginBase, PluginConfigChecker, background_task
 import logging
@@ -19,7 +19,7 @@ class Syncer(OMPluginBase):
     """
 
     name = 'Syncer'
-    version = '0.0.3'
+    version = '0.0.4'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'gateway_ip',

@@ -6,7 +6,7 @@ An Statful plugin, for sending metrics to Statful (adapted from InfluxDB plugin)
 import six
 import time
 import requests
-import simplejson as json
+import json
 from threading import Thread
 from collections import deque
 from plugins.base import om_expose, OMPluginBase, PluginConfigChecker, om_metric_receive
@@ -21,7 +21,7 @@ class Statful(OMPluginBase):
     """
 
     name = 'Statful'
-    version = '1.0.2'
+    version = '1.0.3'
     url = 'https://api.statful.com/tel/v2.0/metrics'
     interfaces = [('config', '1.0')]
 

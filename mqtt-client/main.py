@@ -9,7 +9,7 @@ import re
 import time
 from datetime import datetime
 import pytz
-import simplejson as json
+import json
 from threading import Thread
 from plugins.base import om_expose, input_status, output_status, OMPluginBase, PluginConfigChecker, receive_events, om_metric_receive, background_task
 from serial_utils import CommunicationTimedOutException
@@ -24,7 +24,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '3.0.2'
+    version = '3.0.3'
     interfaces = [('config', '1.0')]
 
     energy_module_config = {

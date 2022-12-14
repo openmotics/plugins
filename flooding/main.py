@@ -4,7 +4,7 @@ if the current is higher then a threshold for 10 minutes.
 
 from plugins.base import om_expose, background_task, OMPluginBase, \
                          PluginConfigChecker
-import simplejson as json
+import json
 import smtplib
 import time
 import logging
@@ -16,7 +16,7 @@ class Pumpy(OMPluginBase):
     """ Plugin to prevent flooding. """
 
     name = 'Pumpy'
-    version = '1.0.2'
+    version = '1.0.3'
     interfaces = [('config', '1.0')]
 
     config_descr = [

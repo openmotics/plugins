@@ -6,7 +6,7 @@ import six
 import collections
 import time
 import requests
-import simplejson as json
+import json
 from threading import Thread
 from plugins.base import om_expose, input_status, OMPluginBase, PluginConfigChecker
 import logging
@@ -20,7 +20,7 @@ class Pushsafer(OMPluginBase):
     """
 
     name = 'Pushsafer'
-    version = '2.1.2'
+    version = '2.1.3'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'privatekey',
