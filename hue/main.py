@@ -7,7 +7,7 @@ import logging
 import time
 import requests
 import logging
-import simplejson as json
+import json
 from six.moves.queue import Queue, Empty
 from threading import Thread, Lock
 from plugins.base import om_expose, output_status, OMPluginBase, PluginConfigChecker, background_task
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class Hue(OMPluginBase):
 
     name = 'Hue'
-    version = '1.1.3'
+    version = '1.1.4'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_url',

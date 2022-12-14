@@ -5,7 +5,7 @@ A Pushetta (http://www.pushetta.com) plugin for pushing events through Pushetta
 import six
 import requests
 import collections
-import simplejson as json
+import json
 from threading import Thread
 from plugins.base import om_expose, input_status, output_status, OMPluginBase, PluginConfigChecker
 import logging
@@ -19,7 +19,7 @@ class Pushetta(OMPluginBase):
     """
 
     name = 'Pushetta'
-    version = '1.0.14'
+    version = '1.0.15'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_key',

@@ -6,7 +6,7 @@ import six
 import sys
 import time
 import struct
-import simplejson as json
+import json
 from plugins.base import om_expose, OMPluginBase, PluginConfigChecker, background_task
 import logging
 
@@ -19,7 +19,7 @@ class ModbusTCPSensor(OMPluginBase):
     """
 
     name = 'modbusTCPSensor'
-    version = '1.0.19'
+    version = '1.0.20'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'modbus_server_ip',

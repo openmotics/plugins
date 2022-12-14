@@ -6,7 +6,7 @@ import six
 import logging
 import time
 import requests
-import simplejson as json
+import json
 from threading import Thread, Lock
 from six.moves.queue import Queue, Empty
 from plugins.base import om_expose, output_status, OMPluginBase, PluginConfigChecker, background_task, PluginWebResponse
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class SensorDotCommunity(OMPluginBase):
 
     name = 'SensorDotCommunity'
-    version = '1.0.2'
+    version = '1.0.3'
     interfaces = [('config', '1.0')]
 
     config_description = []

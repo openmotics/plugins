@@ -18,7 +18,7 @@ RTD10 plugin
 """
 
 from threading import Thread
-import simplejson as json
+import json
 import six
 import time
 from plugins.base import om_expose, background_task, thermostat_status, OMPluginBase, PluginConfigChecker
@@ -33,7 +33,7 @@ class RTD10(OMPluginBase):
     """
 
     name = 'RTD10'
-    version = '0.1.5'
+    version = '0.1.6'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'thermostats',
