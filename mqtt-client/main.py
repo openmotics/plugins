@@ -360,7 +360,7 @@ class MQTTClient(OMPluginBase):
             self._load_configuration()
             self._try_connect()
         except Exception as ex:
-            self._logger("Error while loading config and trying to connect: {0}".format(ex))
+            logger.error("Error while loading config and trying to connect: {0}".format(ex))
 
     def _load_input_configuration(self):
         input_config_loaded = True
@@ -459,7 +459,7 @@ class MQTTClient(OMPluginBase):
                 result = json.loads(self.webinterface.get_shutter_configurations())
                 if result['success'] is False:
                     shutter_config_loaded = False
-                    self._logger('Failed to load shutter configurations')
+                    logger.error('Failed to load shutter configurations')
                 else:
                     ids = []
                     for config in result['config']:
@@ -481,15 +481,15 @@ class MQTTClient(OMPluginBase):
                     for shutter_id in self._shutters.keys():
                         if shutter_id not in ids:
                             del self._shutters[shutter_id]
-                    self._logger('Configuring {0} shutters'.format(len(ids)))
+                    logger.info('Configuring {0} shutters'.format(len(ids)))
             except Exception as ex:
                 shutter_config_loaded = False
-                self._logger('Error while loading shutter configurations')
+                logger.exception('Error while loading shutter configurations: {0}'.format(ex))
             try:
                 result = json.loads(self.webinterface.get_shutter_status())
                 if result['success'] is False:
                     shutter_config_loaded = False
-                    self._logger('Failed to get shutter status')
+                    logger.error('Failed to get shutter status')
                 else:
                     for id in sorted(result['detail']):
                         shutter_id = int(id)
@@ -498,14 +498,14 @@ class MQTTClient(OMPluginBase):
                         state = result['detail'][id]['state']
                         position = result['detail'][id]['actual_position']
 
-                        self._logger('Shutter {0} state {1}'.format(shutter_id, state))
+                        logger.info('Shutter {0} state {1}'.format(shutter_id, state))
 
                         self._shutters[shutter_id]['state'] = state
                         if position is not None:
                             self._shutters[shutter_id]['position'] = position
             except Exception as ex:
                 shutter_config_loaded = False
-                self._logger('Error getting shutter status: {0}'.format(ex))
+                logger.exception('Error getting shutter status: {0}'.format(ex))
         return shutter_config_loaded
 
     def _load_sensor_configuration(self):
@@ -584,7 +584,7 @@ class MQTTClient(OMPluginBase):
         try:
             result = json.loads(self.webinterface.get_room_configurations())
             if result['success'] is False:
-                self._logger('Failed to load room configurations')
+                logger.error('Failed to load room configurations')
                 room_config_loaded = False
             else:
                 ids = []
@@ -594,9 +594,9 @@ class MQTTClient(OMPluginBase):
                         continue
                     ids.append(room_id)
                     self._rooms[room_id] = config
-                self._logger('Configuring {0} rooms'.format(len(ids)))
+                logger.info('Configuring {0} rooms'.format(len(ids)))
         except Exception as ex:
-            self._logger('Error while loading rooms configurations')
+            logger.exception('Error while loading rooms configurations')
             room_config_loaded = False
         return room_config_loaded
 
@@ -681,7 +681,7 @@ class MQTTClient(OMPluginBase):
     
                     self._process_output_event(output_id, event_status, event_dimmer)
             except Exception as ex:
-                self._logger('Error processing outputs: {0}'.format(ex))
+                logger.exception('Error processing outputs: {0}'.format(ex))
 
     def _process_output_event(self, output_id, event_status, event_dimmer, force_change=False):
         current_output_status = self._outputs
@@ -705,7 +705,8 @@ class MQTTClient(OMPluginBase):
                 level = event_dimmer or dimmer
 
             if not force_change:
-                self._logger('Output {0} ({1}) changed from {2} to {3}'.format(output_id, name, status, event_status), True)
+                self._log('Output {0} ({1}) changed from {2} to {3}'.format(output_id, name, status, event_status))
+                logger.info('Output {0} ({1}) changed from {2} to {3}'.format(output_id, name, status, event_status))
             data = {'id': output_id,
                     'name': name,
                     'value': level,
@@ -736,7 +737,7 @@ class MQTTClient(OMPluginBase):
                         self._process_shutter_event(shutter_id, new_shutter_status[shutter_id])
 
             except Exception as ex:
-                self._logger('Error processing shutters: {0}'.format(ex))
+                logger.exception('Error processing shutters: {0}'.format(ex))
 
     def _process_shutter_event(self, shutter_id, new_shutter_status, force_change=False):
         current_shutter_status = self._shutters
@@ -753,7 +754,8 @@ class MQTTClient(OMPluginBase):
                 )
                 thread.start()
                 if not force_change:
-                    self._logger('Shutter {0} ({1}) changed from {2} to {3}'.format(shutter_id, name, state, new_shutter_status['state']), True)
+                    self._log('Shutter {0} ({1}) changed from {2} to {3}'.format(shutter_id, name, state, new_shutter_status['state']))
+                    logger.info('Shutter {0} ({1}) changed from {2} to {3}'.format(shutter_id, name, state, new_shutter_status['state']))
 
         if (position != new_shutter_status.get('position')) or (force_change is True):
             if new_shutter_status.get('position') is not None:
@@ -765,7 +767,8 @@ class MQTTClient(OMPluginBase):
                 )
                 thread.start()
                 if not force_change:
-                    self._logger('Shutter {0} ({1}) changed from {2} to {3}'.format(shutter_id, name, position, new_shutter_status.get('position')), True)
+                    self._log('Shutter {0} ({1}) changed from {2} to {3}'.format(shutter_id, name, position, new_shutter_status.get('position')))
+                    logger.info('Shutter {0} ({1}) changed from {2} to {3}'.format(shutter_id, name, position, new_shutter_status.get('position')))
 
     @receive_events
     def receive_events(self, event_id):
@@ -910,10 +913,10 @@ class MQTTClient(OMPluginBase):
     def on_connect(self, client, userdata, flags, rc):
         try:
             if rc != 0:
-                self._logger('Error connecting: rc={0}', rc)
+                logger.error('Error connecting: rc={0}', rc)
                 return
 
-            self._logger('Connected to MQTT broker {0}:{1}'.format(self._hostname, self._port))
+            logger.info('Connected to MQTT broker {0}:{1}'.format(self._hostname, self._port))
 
             # load initial output status
             current_output_status = self._outputs
@@ -937,7 +940,6 @@ class MQTTClient(OMPluginBase):
 
             # load home assistant discovery
             homeassistant = HomeAssistant(
-                self._logger,
                 client,
                 self._config,
                 self._outputs,
@@ -951,27 +953,27 @@ class MQTTClient(OMPluginBase):
             if self._output_command_topic:
                 try:
                     self.client.subscribe(self._output_command_topic)
-                    self._logger('Subscribed to {0}'.format(self._output_command_topic))
+                    logger.info('Subscribed to {0}'.format(self._output_command_topic))
                 except Exception as ex:
-                    self._logger('Could not subscribe to {0}: {1}'.format(self._output_command_topic, ex))
+                    logger.exception('Could not subscribe to {0}: {1}'.format(self._output_command_topic, ex))
 
             # subscribe to shutter command topic if provided
             if self._shutter_command_topic:
                 try:
                     self.client.subscribe(self._shutter_command_topic)
-                    self._logger('Subscribed to {0}'.format(self._shutter_command_topic))
+                    logger.info('Subscribed to {0}'.format(self._shutter_command_topic))
                 except Exception as ex:
-                    self._logger('Could not subscribe to {0}: {1}'.format(self._shutter_command_topic, ex))
+                    logger.exception('Could not subscribe to {0}: {1}'.format(self._shutter_command_topic, ex))
         except Exception as ex:
-            self._logger('Error when handling connection: {0}'.format(ex))
+            logger.exception('Error when handling connection: {0}'.format(ex))
 
         # subscribe to shutter position command topic if provided
         if self._shutter_position_command_topic:
             try:
                 self.client.subscribe(self._shutter_position_command_topic)
-                self._logger('Subscribed to {0}'.format(self._shutter_position_command_topic))
+                logger.info('Subscribed to {0}'.format(self._shutter_position_command_topic))
             except Exception as ex:
-                self._logger('Could not subscribe to {0}: {1}'.format(self._shutter_position_command_topic, ex))
+                logger.exception('Could not subscribe to {0}: {1}'.format(self._shutter_position_command_topic, ex))
 
     def on_message(self, client, userdata, msg):
         output_regexp = self._output_command_topic.replace('+', '(\d+)')
@@ -1055,7 +1057,7 @@ class MQTTClient(OMPluginBase):
                 result = json.loads(self.webinterface.do_shutter_stop(id=shutter_id))
 
             if result['success'] is False:
-                self._logger('Failed to set shutter {0} to up: {1}'.format(shutter_id, result.get('msg', 'Unknown error')))
+                logger.error('Failed to set shutter {0} to up: {1}'.format(shutter_id, result.get('msg', 'Unknown error')))
         except Exception as ex:
             self.logger('Error calling shutter up web service: {0}'.format(ex))
 
@@ -1099,12 +1101,7 @@ class MQTTClient(OMPluginBase):
                 self._log(log_message)
                 self.logger(log_message)
         except Exception as ex:
-            self._logger('Error calling shutter position web service: {0}'.format(ex))
-
-    def _logger(self, message, mqtt_logging=False):
-        if mqtt_logging:
-            self._log(message)
-        self.logger(message)
+            logger.exception('Error calling shutter position web service: {0}'.format(ex))
 
     @om_expose
     def get_config_description(self):

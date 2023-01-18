@@ -6,6 +6,9 @@ HomeAssistant MQTT Discovery
 from enums import OutputType, HardwareType
 from threading import Thread
 import simplejson as json
+import logging
+
+logger = logging.getLogger(__name__)
 
 class HomeAssistant():
     """
@@ -24,8 +27,7 @@ class HomeAssistant():
                        OutputType.SHUTTER_RELAY: 'shutter',
                        OutputType.LIGHT: 'light'}
 
-    def __init__(self, logger, client, config, outputs, shutters, power_modules, sensors, rooms):
-        self._logger = logger
+    def __init__(self, client, config, outputs, shutters, power_modules, sensors, rooms):
         self._config = config
         self._enabled = self._config.get('homeassistant_discovery_enabled')
         self._qos = int(self._config.get('homeassistant_qos'))
@@ -40,7 +42,7 @@ class HomeAssistant():
     def start_discovery(self):
         if self._enabled:
             try:
-                self._logger('HomeAssistant Discovery started...')
+                logger.info('HomeAssistant Discovery started...')
                 
                 self._output_discovery()
                 self._shutter_discovery()
@@ -48,9 +50,9 @@ class HomeAssistant():
                 self._power_discovery()
                 self._sensor_discovery()
 
-                self._logger('HomeAssistant Discovery finished.')
+                logger.info('HomeAssistant Discovery finished.')
             except Exception as ex:
-                self._logger('Error while loading HomeAssistant components discovery: {0}'.format(ex))
+                logger.exception('Error while loading HomeAssistant components discovery: {0}'.format(ex))
 
     def _output_discovery(self):
         if self._config.get('output_status_enabled'):
@@ -493,4 +495,4 @@ class HomeAssistant():
         try:
             self._client.publish(topic, payload=json.dumps(data), qos=qos, retain=retain)
         except Exception as ex:
-            self._logger('Error sending data to topic {0}'.format(topic), True)
+            logger.exception('Error sending data to topic {0}'.format(topic), True)
