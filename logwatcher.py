@@ -29,14 +29,14 @@ def watch(ip, username, password, plugin):
                             parsed_ts = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S.%f')
                             if lastlog is None or parsed_ts > lastlog:
                                 lastlog = parsed_ts
-                                print '{0} - {1}'.format(timestamp, entry)
+                                print('{0} - {1}'.format(timestamp, entry))
                 else:
-                    print 'Could not find plugin {0}. Available plugins are: {1}'.format(plugin, ', '.join(logs.keys()))
+                    print('Could not find plugin {0}. Available plugins are: {1}'.format(plugin, ', '.join(logs.keys())))
                     sys.exit(1)
             if response.status_code == 403:
                 token = None
         except Exception as ex:
-            print 'Error fetching logs: {0}'.format(ex)
+            print('Error fetching logs: {0}'.format(ex))
             sys.exit(1)
         time.sleep(1)
 
@@ -50,14 +50,15 @@ def connect(ip, username, password):
                                 verify=False)
         if response.status_code == 200:
             return response.json()['token']
-        print 'Invalid username/password'
+        print('Invalid username/password')
     except Exception as ex:
-        print 'Error logging in: {0}'.format(ex)
+        print('Error logging in: {0}'.format(ex))
     sys.exit(1)
+
 
 if __name__ == '__main__':
     if len(sys.argv) < 4:
-        print 'Usage: ./logwatcher.py <ip/hostname of gateway> <username> <plugin> <password>'
+        print('Usage: ./logwatcher.py <ip/hostname of gateway> <username> <plugin> <password>')
         sys.exit(1)
     try:
         _ip = sys.argv[1]
@@ -68,5 +69,5 @@ if __name__ == '__main__':
             warnings.simplefilter("ignore", exceptions.InsecureRequestWarning)
             watch(_ip, _username, _password, _plugin)
     except KeyboardInterrupt:
-        print ''
+        prin('')
         pass
