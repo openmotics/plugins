@@ -27,7 +27,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '3.1.0'
+    version = '3.1.2'
     interfaces = [('config', '1.0')]
 
     energy_module_config = {
@@ -238,7 +238,11 @@ class MQTTClient(OMPluginBase):
         #logger.info("Default configuration '{0}'".format(self._config))
         self._config_checker = PluginConfigChecker(MQTTClient.config_description)
 
-        paho_mqtt_wheel = '/opt/openmotics/python/plugins/MQTTClient/paho_mqtt-1.5.0-py2-none-any.whl'
+        if sys.version_info.major == 2:
+            paho_mqtt_wheel = '/opt/openmotics/python/plugins/MQTTClient/paho_mqtt-1.5.0-py2-none-any.whl'
+        else:
+            paho_mqtt_wheel = '/opt/openmotics/python/plugins/MQTTClient/paho_mqtt-1.6.1-py3-none-any.whl'
+            
         if paho_mqtt_wheel not in sys.path:
             sys.path.insert(0, paho_mqtt_wheel)
 
