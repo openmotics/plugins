@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Sensor:
     serial: str
+    code: str
     name: str
     description: str
     physical_quantity: str
@@ -27,14 +28,14 @@ class SMADevice:
     def get_sensors(self):
         sensors = []
         data = self._read_data()
-        for key, info in constants.FIELD_MAPPING.items():
+        for code, info in constants.FIELD_MAPPING.items():
             name = info['name']
             description = info['description']
             physical_quantity = info['physical_quantity']
             unit = info['unit']
-            if key in data:
+            if code in data:
                 value = None
-                values = self._extract_values(key, data[key], info['factor'])
+                values = self._extract_values(code, data[code], info['factor'])
                 if len(values) == 0:
                     logger.debug('* {0}: No values'.format(name))
                 elif len(values) == 1:
@@ -51,17 +52,18 @@ class SMADevice:
                     elif len(values) > 1:
                         value = sum(values) / len(values)
                 sensors.append(Sensor(serial=self._serial,
+                                      code=code,
                                       name=name,
                                       description=description,
                                       physical_quantity=physical_quantity,
                                       unit=unit,
                                       value=value))
             else:
-                logger.debug('* Missing key: {0}'.format(key))
+                logger.debug('* Missing code: {0}'.format(code))
         # explicitly log missing but expected values
-        for key in data:
-            if key not in constants.FIELD_MAPPING.keys():
-                logger.debug('* Unknown key {0}: {1}'.format(key, data[key]))
+        for code in data:
+            if code not in constants.FIELD_MAPPING.keys():
+                logger.debug('* Unknown key {0}: {1}'.format(code, data[code]))
         return sensors
 
     def _read_data(self):

@@ -31,7 +31,7 @@ class SMASensors(OMPluginBase):
     """
 
     name = 'SMASensors'
-    version = '1.0.0'
+    version = '1.0.1'
     interfaces = [('config', '1.0'), ('metrics', '1.0')]
     default_config = {}
     config_description = [{
@@ -103,7 +103,7 @@ class SMASensors(OMPluginBase):
             if external_id not in self._sensor_dtos and sensor.value is not None:
                 try:
                     # Register the sensor on the gateway
-                    name = f'SMA {sensor.description}'
+                    name = f'{sensor.description} (SMA {sensor.serial} - SENSOR {sensor.code})'
                     sensor_dto = self.connector.sensor.register(external_id=external_id,
                                                                 name=name,
                                                                 physical_quantity=sensor.physical_quantity,
