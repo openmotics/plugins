@@ -100,7 +100,7 @@ class SMASensors(OMPluginBase):
     def _populate_sensors(self, sensors: List[Sensor]):
         for sensor in sensors:
             external_id = f'smasensor_{sensor.serial}_{sensor.name}'
-            if external_id not in self._sensor_dtos:
+            if external_id not in self._sensor_dtos and sensor.value is not None:
                 try:
                     # Register the sensor on the gateway
                     name = f'SMA {sensor.description}'
@@ -113,10 +113,12 @@ class SMASensors(OMPluginBase):
                 except Exception:
                     logger.exception('Error registering sensor %s' % sensor)
             try:
-                sensor_dto = self._sensor_dtos[external_id]
-                value = round(sensor.value, 2) if sensor.value is not None else None
-                self.connector.sensor.report_state(sensor=sensor_dto,
-                                                   value=value)
+                sensor_dto = self._sensor_dtos.get(external_id)
+                # only update sensor value if the sensor is known on the gateway
+                if sensor_dto is not None:
+                    value = round(sensor.value, 2) if sensor.value is not None else None
+                    self.connector.sensor.report_state(sensor=sensor_dto,
+                                                       value=value)
             except Exception:
                 logger.exception('Error while reporting sensor state')
 
