@@ -19,7 +19,7 @@ class Syncer(OMPluginBase):
     """
 
     name = 'Syncer'
-    version = '0.0.4'
+    version = '0.0.5'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'gateway_ip',
