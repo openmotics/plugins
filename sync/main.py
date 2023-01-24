@@ -96,8 +96,8 @@ class Syncer(OMPluginBase):
                 continue
             try:
                 # Sync sensor values:
-                data_humidities = json.loads(self.webinterface.get_sensor_humidity_status(None))
-                data_temperatures = json.loads(self.webinterface.get_sensor_temperature_status(None))
+                data_humidities = json.loads(self.webinterface.get_sensor_humidity_status())
+                data_temperatures = json.loads(self.webinterface.get_sensor_temperature_status())
                 if data_humidities['success'] is True and data_temperatures['success'] is True:
                     for sensor_id in range(len(data_temperatures['status'])):
                         if sensor_id not in self._sensor_mapping:
