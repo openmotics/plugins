@@ -161,7 +161,8 @@ class Syncer(OMPluginBase):
             response = requests.get(self._endpoint.format('login'),
                                     params={'username': self._username,
                                             'password': self._password,
-                                            'accept_terms': '1'},
+                                            'accept_terms': '1',
+                                            'timeout': 60 * 60 * 24 * 30},
                                     headers=self._headers)
             response_data = json.loads(response.text)
             if response_data.get('success', False) is False:
