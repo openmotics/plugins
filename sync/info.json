@@ -1,0 +1,6 @@
+{
+	"version" : "0.0.5",
+	"description" : "Sync",
+	"metric_source"  : "Sync",
+	"metric_type" : "Sync"
+}
