@@ -16,7 +16,7 @@ from plugins.base import om_expose, input_status, output_status, shutter_status,
 from serial_utils import CommunicationTimedOutException
 import logging
 from enums import HardwareType
-from homeassistant import HomeAssistant
+from .homeassistant import HomeAssistant
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '3.1.6'
+    version = '3.1.7'
     interfaces = [('config', '1.0')]
 
     energy_module_config = {
