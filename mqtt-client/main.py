@@ -27,7 +27,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '3.1.2'
+    version = '3.1.6'
     interfaces = [('config', '1.0')]
 
     energy_module_config = {
@@ -998,7 +998,7 @@ class MQTTClient(OMPluginBase):
             self._shutter_position_command(shutter_id, msg)
         else:
             self._log('Message with topic {0} ignored'.format(msg.topic))
-            self.logger('Message with topic {0} ignored'.format(msg.topic))
+            logger.info('Message with topic {0} ignored'.format(msg.topic))
 
     def _output_command(self, output_id, msg):
         try:
@@ -1018,11 +1018,11 @@ class MQTTClient(OMPluginBase):
                 if result['success'] is False:
                     log_message = 'Failed to set output {0} to {1}: {2}'.format(output_id, value, result.get('msg', 'Unknown error'))
                     self._log(log_message)
-                    self.logger(log_message)
+                    logger.error(log_message)
                 else:
                     log_message = 'Message for output {0} with payload {1}'.format(output_id, value)
                     self._log(log_message)
-                    self.logger(log_message)
+                    logger.info(log_message)
             else:
                 self._log('Unknown output: {0}'.format(output_id))
         except Exception as ex:
@@ -1045,7 +1045,7 @@ class MQTTClient(OMPluginBase):
                 else:
                     log_message = 'Failed to set shutter {0} to {1}'.format(shutter_id, value)
                     self._log(log_message)
-                    self.logger(log_message)
+                    logger.error(log_message)
             else:
                 self._log('Unknown shutter: {0}'.format(shutter_id))
         except Exception as ex:
@@ -1063,13 +1063,13 @@ class MQTTClient(OMPluginBase):
             if result['success'] is False:
                 logger.error('Failed to set shutter {0} to up: {1}'.format(shutter_id, result.get('msg', 'Unknown error')))
         except Exception as ex:
-            self.logger('Error calling shutter up web service: {0}'.format(ex))
+            logger.error('Error calling shutter up web service: {0}'.format(ex))
 
     def _shutter_position_command(self, shutter_id, msg):
         try:
             log_message = 'Execute shutter position command on shutter {0}'.format(shutter_id)
             self._log(log_message)
-            self.logger(log_message)
+            logger.info(log_message)
 
             if shutter_id in self._shutters:
                 shutter = self._shutters[shutter_id]
@@ -1086,7 +1086,7 @@ class MQTTClient(OMPluginBase):
                 else:
                     log_message = 'Failed to set shutter {0} to {1}'.format(shutter_id, value)
                     self._log(log_message)
-                    self.logger(log_message)
+                    logger.error(log_message)
             else:
                 self._log('Unknown shutter: {0}'.format(shutter_id))
         except Exception as ex:
@@ -1099,11 +1099,11 @@ class MQTTClient(OMPluginBase):
             if result['success'] is False:
                 log_message = 'Failed to set shutter {0} to position {1}: {2}'.format(shutter_id, position, result.get('msg', 'Unknown error'))
                 self._log(log_message)
-                self.logger(log_message)
+                logger.error(log_message)
             else:
                 log_message = 'Message for shutter {0} with payload {1}'.format(shutter_id, position)
                 self._log(log_message)
-                self.logger(log_message)
+                logger.info(log_message)
         except Exception as ex:
             logger.exception('Error calling shutter position web service: {0}'.format(ex))
 
