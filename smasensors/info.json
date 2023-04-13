@@ -1,5 +1,5 @@
 {
-	"version" : "1.0.3",
+	"version" : "1.0.4",
 	"description" : "SMASensors",
 	"metric_source"  : "smasensors",
 	"metric_type" : "smasensors",
