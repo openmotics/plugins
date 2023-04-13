@@ -90,8 +90,8 @@ class SMADevice:
         return_data = []
         if len(values) == 1:
             for weird_sma_index in ['1', '9']:
-                values = values.get(weird_sma_index, [])
-                for raw_value in values:
+                data_values = values.get(weird_sma_index, [])
+                for raw_value in data_values:
                     value = self._clean_value(key, raw_value, factor)
                     if value is not None:
                         return_data.append(value)

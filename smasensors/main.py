@@ -31,7 +31,7 @@ class SMASensors(OMPluginBase):
     """
 
     name = 'SMASensors'
-    version = '1.0.2'
+    version = '1.0.3'
     interfaces = [('config', '1.0'), ('metrics', '1.0')]
     default_config = {}
     config_description = [{
