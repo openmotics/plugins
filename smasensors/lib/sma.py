@@ -108,7 +108,7 @@ class SMADevice:
         if isinstance(value, float) or isinstance(value, int):
             return float(value) / factor
         else:
-            logger.error('* value {0} is not a number'.format(value))
+            logger.debug('* key {0} value {1} is not a number'.format(key, value))
             return None
 
     def _login(self):
