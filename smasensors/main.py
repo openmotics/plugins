@@ -31,7 +31,7 @@ class SMASensors(OMPluginBase):
     """
 
     name = 'SMASensors'
-    version = '1.0.1'
+    version = '1.0.4'
     interfaces = [('config', '1.0'), ('metrics', '1.0')]
     default_config = {}
     config_description = [{
@@ -62,7 +62,7 @@ class SMASensors(OMPluginBase):
 
     def __init__(self, webinterface, connector):
         super(SMASensors, self).__init__(webinterface=webinterface, connector=connector)
-        logger.info(f'Starting {self.name} plugin...')
+        logger.info(f'Starting {self.name} plugin (v{self.version})...')
         self._config = self.read_config(SMASensors.default_config)
         self._config_checker = PluginConfigChecker(self.config_description)
         self._metrics_queue = deque()

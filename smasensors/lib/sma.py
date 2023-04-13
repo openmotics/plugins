@@ -86,30 +86,30 @@ class SMADevice:
         logger.debug('Read values {0}:'.format(self))
         return data
 
-    def _extract_values(self, key, values, factor):
-        if len(values) != 1 or '1' not in values:
-            logger.error('* Unexpected structure for {0}: {1}'.format(key, values))
-            return []
-        values = values['1']
-        if len(values) == 0:
-            return []
-        if len(values) == 1:
-            return [self._clean_value(key, values[0], factor)]
+    def _extract_values(self, key: str, values: dict, factor: float):
         return_data = []
-        for raw_value in values:
-            value = self._clean_value(key, raw_value, factor)
-            if value is not None:
-                return_data.append(value)
+        if len(values) == 1:
+            for weird_sma_index in ['1', '9']:
+                data_values = values.get(weird_sma_index, [])
+                for raw_value in data_values:
+                    value = self._clean_value(key, raw_value, factor)
+                    if value is not None:
+                        return_data.append(value)
+        else:
+            logger.error('* Unexpected structure for {0}: {1}'.format(key, values))
         return return_data
 
-    def _clean_value(self, key, value_container, factor):
+    @staticmethod
+    def _clean_value(key: str, value_container: dict, factor: float):
         if 'val' not in value_container:
             logger.error('* Unexpected structure for {0}: {1}'.format(key, value_container))
             return None
-        value = value_container['val']
-        if value is None:
+        value = value_container.get('val')
+        if isinstance(value, float) or isinstance(value, int):
+            return float(value) / factor
+        else:
+            logger.debug('* key {0} value {1} is not a number'.format(key, value))
             return None
-        return float(value) / factor
 
     def _login(self):
         endpoint = '{0}/dyn/login.json'.format(self._ip)
