@@ -186,8 +186,8 @@ class Dummy(OMPluginBase):
                 unit = self.connector.hot_water.register(
                         external_id="hotwater1",
                         name="boiler",
-                        min_temp=30,
-                        max_temp=70)
+                        min_temp=30.0,
+                        max_temp=70.0)
                 logger.info('Registered %s' % unit)
                 self._hot_water = unit
             except Exception:
@@ -231,7 +231,8 @@ class Dummy(OMPluginBase):
             except Exception:
                 logger.exception('Error while reporting sensor state')
             try:
-                self.hot_water_publish_state()
+                if self._hot_water:
+                    self.hot_water_publish_state()
             except Exception:
                 logger.exception('Error while reporting hot water state')
             try:
