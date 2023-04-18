@@ -185,7 +185,9 @@ class Dummy(OMPluginBase):
             try:
                 unit = self.connector.hot_water.register(
                         external_id="hotwater1",
-                        name="boiler")
+                        name="boiler",
+                        min_temp=30,
+                        max_temp=70)
                 logger.info('Registered %s' % unit)
                 self._hot_water = unit
             except Exception:
