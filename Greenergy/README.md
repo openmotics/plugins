@@ -1,5 +1,5 @@
 # Greenergy plugin
-A plugin for sending/receiving data to/from zigbee using an MQTT broker.
+A plugin for the interaction to the Greenergy home battery
 
 ## Work in progress
 
