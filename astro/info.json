@@ -2,5 +2,6 @@
 	"version" : "1.0.4",
 	"description" : "Astro",
 	"metric_source"  : "astro",
-	"metric_type" : "astro"
+	"metric_type" : "astro",
+	"python_version": 3
 }
