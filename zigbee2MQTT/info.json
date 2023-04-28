@@ -1,0 +1,7 @@
+{
+    "version" : "1.0.0",
+    "description" : "zigbee2MQTT",
+    "metric_source"  : "zigbe2MQTT",
+    "metric_type" : "zigbee2MQTT",
+    "python_version": 3
+}
