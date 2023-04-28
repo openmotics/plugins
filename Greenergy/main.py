@@ -5,6 +5,7 @@ import time
 import six
 import sys
 from collections import deque
+from dataclasses import dataclass
 
 from plugins.base import om_expose, output_status, background_task, \
     OMPluginBase, PluginConfigChecker, om_metric_data
@@ -13,6 +14,16 @@ logger = logging.getLogger(__name__)
 
 class NoConsumptionException(Exception):
     pass
+
+@dataclass
+class Sensor:
+    serial: str
+    code: str
+    name: str
+    description: str
+    physical_quantity: str
+    unit: str
+    value: float
 
 class Greenergy(OMPluginBase):
 
@@ -160,6 +171,7 @@ class Greenergy(OMPluginBase):
                       'grid_capacitor': 998,
                       'battery_state_output': 999}
 
+
     def __init__(self, webinterface, connector):
         """
         @param webinterface : Interface to call local gateway APIs, called on runtime
@@ -178,8 +190,9 @@ class Greenergy(OMPluginBase):
             sys.path.insert(0, eggs)
 
         self.client = None
+        self._sensor_dtos = {}
         self._read_config()
-        logger.info("Started plugin")
+        logger.info(f"Started {self.name} plugin")
 
     def _read_config(self):
         self._broker_ip = self._config.get('broker_ip', Greenergy.default_config['broker_ip'])
@@ -375,6 +388,31 @@ class Greenergy(OMPluginBase):
                     logger.info("Error sending data to broker: {0}".format(ex))
 
             time.sleep(self._update_bms_frequency)
+
+    def _populate_sensors(self, sensors: List[Sensor]):
+        for sensor in sensors:
+            external_id = f'greenergysensor_{sensor.serial}_{sensor.name}'
+            if external_id not in self._sensor_dtos and sensor.value is not None:
+                try:
+                    # Register the sensor on the gateway
+                    name = f'{sensor.description} (greenergy {sensor.serial} - SENSOR {sensor.code})'
+                    sensor_dto = self.connector.sensor.register(external_id=external_id,
+                                                                name=name,
+                                                                physical_quantity=sensor.physical_quantity,
+                                                                unit=sensor.unit)
+                    logger.info('Registered %s' % sensor)
+                    self._sensor_dtos[external_id] = sensor_dto
+                except Exception:
+                    logger.exception('Error registering sensor %s' % sensor)
+            try:
+                sensor_dto = self._sensor_dtos.get(external_id)
+                # only update sensor value if the sensor is known on the gateway
+                if sensor_dto is not None:
+                    value = round(sensor.value, 2) if sensor.value is not None else None
+                    self.connector.sensor.report_state(sensor=sensor_dto,
+                                                       value=value)
+            except Exception:
+                logger.exception('Error while reporting sensor state')
 
     @om_expose
     def get_config_description(self):
