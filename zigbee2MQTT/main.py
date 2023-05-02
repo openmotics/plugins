@@ -18,7 +18,7 @@ class zigbee2MQTT(OMPluginBase):
     """
 
     name = 'zigbee2MQTT'
-    version = '0.0.26'
+    version = '0.0.27'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
@@ -183,8 +183,9 @@ class zigbee2MQTT(OMPluginBase):
         if self._config.get('sensor_mapping', False):
             logger.info('Registering sensors...')
             try:
-                external_id = 0
+                #Grouping in the frontend is done using the external id
                 for sensor_config in self._config.get('sensor_mapping'):
+                    external_id = sensor_config['om_friendly_name']
                     dto_name = '{0}-{1}'.format(sensor_config['device_type'], sensor_config['om_friendly_name'])
                     if sensor_config['device_type'] == 'temperature':
                         sensor = self.connector.sensor.register_temperature_celcius(external_id=external_id, name=sensor_config['om_friendly_name'])
@@ -197,7 +198,6 @@ class zigbee2MQTT(OMPluginBase):
                     elif sensor_config['device_type'] == 'illuminance_lux':
                         sensor = self.connector.sensor.register(external_id=external_id, physical_quantity='brightness', unit='lux', name=sensor_config['om_friendly_name'])
                     self._sensor_dto[dto_name] = sensor
-                    external_id += 1
             except Exception:
                 logger.exception('Error registering sensor')
                 #self._sensor_dto = None
