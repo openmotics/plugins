@@ -21,7 +21,7 @@ class Dummy(OMPluginBase):
     """
 
     name = 'Dummy'
-    version = '1.1.0'
+    version = '1.2.0'
     interfaces = [('config', '1.0')]
 
     default_config = {}

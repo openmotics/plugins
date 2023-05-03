@@ -24,12 +24,12 @@ class Hue(OMPluginBase):
     version = '1.1.4'
     interfaces = [('config', '1.0')]
 
-    config_description = [{'name': 'api_url',
+    config_description = [{'name': 'bridge_ip',
                            'type': 'str',
-                           'description': 'The API URL of the Hue Bridge device. E.g. http://192.168.1.2/api'},
+                           'description': 'Bridge IP address'},
                           {'name': 'username',
                            'type': 'str',
-                           'description': 'Hue Bridge generated username.'},
+                           'description': 'Hue Bridge generated username. Leave blank if unknown.'},
                           {'name': 'poll_frequency',
                            'type': 'int',
                            'description': 'The frequency used to pull the status of all outputs from the Hue bridge in seconds (0 means never)'},
@@ -40,7 +40,7 @@ class Hue(OMPluginBase):
                            'content': [{'name': 'output_id', 'type': 'int'},
                                        {'name': 'hue_output_id', 'type': 'int'}]}]
 
-    default_config = {'api_url': 'http://hue/api', 'username': '', 'poll_frequency': 60}
+    default_config = {'bridge_ip': '10.91.115.140', 'username': 'GAkG94U-8gdB3azBpHDnPjqZD4BqFxLeIBhpBmg0', 'poll_frequency': 60}
 
     def __init__(self, webinterface, connector):
         super(Hue, self).__init__(webinterface=webinterface,
@@ -62,16 +62,20 @@ class Hue(OMPluginBase):
 
 
     def _read_config(self):
-        self._api_url = self._config['api_url']
+        self._bridge_ip = self._config['bridge_ip']
         self._output_mapping = self._config.get('output_mapping', [])
         self._output = self._create_output_object()
         self._hue = self._create_hue_object()
         self._username = self._config['username']
         self._poll_frequency = self._config['poll_frequency']
+        self._enabled = False
+        if self._username == '':
+            username = requests.post("http://{0}/api".format(self._bridge_ip), json={'devicetype': 'my_hue_app#openmotics'.format()})
+        if requests.get('http://{}/api/{}'.format(self._bridge_ip, self._username).json()['status_code'] != 200):
+            self._enabled = True
+        self._endpoint = 'http://{0}/api/{1}/{{0}}'.format(self._bridge_ip, self._username)
 
-        self._endpoint = '{0}/{1}/{{0}}'.format(self._api_url, self._username)
-
-        self._enabled = self._api_url != '' and self._username != ''
+        logger.info('token: {}'.format(username))
         logger.info('Hue is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     def _create_output_object(self):
