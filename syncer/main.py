@@ -1,9 +1,9 @@
 """
 A plugin to let two Gateways work together
 """
-import threading
 
 import six
+import copy
 import time
 import requests
 import json
@@ -27,7 +27,7 @@ class Syncer(OMPluginBase):
     config_description = [{
         'name': 'local_name',
         'type': 'str',
-        'description': 'Optional name field of the local GW'
+        'description': 'Optional name field of the local GW.'
     },
         {
             'name': 'polling_interval',
@@ -43,28 +43,28 @@ class Syncer(OMPluginBase):
             'content': [{
                 'name': 'gateway_ip',
                 'type': 'str',
-                'description': 'The IP address of the other Gateway'
+                'description': 'The IP address of the other Gateway.'
             },
                 {
                     'name': 'remote_name',
                     'type': 'str',
-                    'description': 'Optional name field of the remote GW'
+                    'description': 'Optional name field of the remote GW.'
                 },
                 {
                     'name': 'username',
                     'type': 'str',
-                    'description': 'The (local) username for the other Gateway'
+                    'description': 'The (local) username for the other Gateway.'
                 },
                 {
                     'name': 'password',
                     'type': 'str',
-                    'description': 'The (local) password for the other Gateway'
+                    'description': 'The (local) password for the other Gateway.'
                 },
                 {
                     'name': 'sensors',
                     'type': 'section',
                     'description': "Mapping between local sensors and remote sensors. \nThe "
-                                   "remote sensor should exist",
+                                   "remote sensor should exist.\n Remote updates local.",
                     'repeat': True,
                     'min': 0,
                     'content': [
@@ -77,7 +77,7 @@ class Syncer(OMPluginBase):
                 {
                     'name': 'outputs',
                     'type': 'section',
-                    'description': 'Mapping between local outputs and remote outputs.\nLocal updates remote',
+                    'description': 'Mapping between local outputs and remote outputs.\nLocal updates remote.',
                     'repeat': True,
                     'min': 0,
                     'content': [{
@@ -92,7 +92,7 @@ class Syncer(OMPluginBase):
                 {
                     'name': 'shutters',
                     'type': 'section',
-                    'description': 'Mapping between local shutters and remote shutter. \nLocal updates remote',
+                    'description': 'Mapping between local shutters and remote shutter. \nLocal updates remote.',
                     'repeat': True,
                     'min': 0,
                     'content': [{
@@ -133,7 +133,7 @@ class Syncer(OMPluginBase):
         self._output_mapping = {}
         self._shutter_mapping = {}
         self._enabled = False
-        thread = Thread(target=self._read_config)
+        thread = Thread(target=self._process_config)
         thread.start()
 
         self.connector.output.subscribe_status_event(handler=self.handle_output_status, version=2)
@@ -141,7 +141,7 @@ class Syncer(OMPluginBase):
 
         logger.info("Started Syncer plugin")
 
-    def _read_config(self):
+    def _process_config(self):
         self._enabled = False
         self._polling_interval = self._config.get('polling_interval', 60)
         self._name = self._config.get('local_name', '')
@@ -165,7 +165,7 @@ class Syncer(OMPluginBase):
             }
             endpoint = 'https://{0}'.format(ip)
 
-            enabled = ip != '' and username != '' and password != ''
+            enabled = '' not in [ip, username, password]
             # If one GW is enabled, then the plugin will be enabled as well. But this is done after gathering all the
             # config of the other GWs.
             if enabled:
@@ -180,140 +180,158 @@ class Syncer(OMPluginBase):
                 'enabled': enabled
             }
             try:
-                if len(gateway.get('sensors', [])) > 0:
-                    remote_sensor_conf = self._call_remote('get_sensor_configurations', self._gateways[ip]).get(
-                        'config')
-                else:
-                    remote_sensor_conf = []
-                if len(gateway.get('outputs', [])) > 0:
-                    remote_output_conf = self._call_remote('get_output_configurations', self._gateways[ip]).get(
-                        'config')
-                else:
-                    remote_output_conf = []
-                if len(gateway.get('shutters', [])) > 0:
-                    remote_shutter_conf = self._call_remote('get_shutter_configurations', self._gateways[ip]).get(
-                        'config')
-                else:
-                    remote_shutter_conf = []
+                self._call_remote("get_status", self._gateways[ip])
             except Exception as ex:
-                raise RuntimeError(f"Couldn't connect to GW {ip}: {ex}")
+                logger.info(f"Could not connect to GW {ip}: {ex}")
 
-            # Specific for each remote GW as this is remote 2 local. A loop over every remote GW will occur and this
-            # will give our local sensor_dto if a value has changed.
-            sensor_mapping = {}
-            for entry in gateway.get('sensors', []):
-                try:
-                    remote_sensor_id = entry.get('remote_sensor_id', -1)
-                    if remote_sensor_id < 0:
-                        raise RuntimeError("Please give valid sensor ids")
-                    external_id = f"syncer/{ip}/{remote_sensor_id}"
-                    for remote_sensor in remote_sensor_conf:
-                        if remote_sensor.get('id') == remote_sensor_id:
-                            sensor = self.connector.sensor.register(external_id=external_id,
-                                                                    physical_quantity=remote_sensor.get(
-                                                                        'physical_quantity'),
-                                                                    unit=remote_sensor.get('unit'),
-                                                                    name=f"{gw_name}/{remote_sensor.get('name')}")
-                            sensor_mapping[remote_sensor_id] = sensor
-                except Exception as ex:
-                    logger.exception(f'Could not load sensor mapping for GW with ip {ip}: {ex}')
-
-            self._gateways[ip]["sensor_mapping"] = sensor_mapping
-
-            # Global output_mapping variable because this is local 2 remote, thus if local output changes -> mapping to
-            # remote outputs will happen. One specific local output changes to different remote output changes
-            local_output_conf = json.loads(self.webinterface.get_output_configurations()).get('config')
-
-            for entry in gateway.get('outputs', []):
-                try:
-                    # Organise local output data and their mapping with one or more remote outputs by making use of a dict
-                    local_id = int(entry.get('local_output_id', -1))
-                    remote_id = int(entry.get('remote_output_id', -1))
-                    if local_id < 0 or remote_id < 0:
-                        raise RuntimeError("Please give valid output ids")
-                    if local_output_conf[local_id].get("type") == 127:
-                        raise RuntimeError(
-                            f"Skipped because {local_id} is a shutter, please include it in the shutter config instead")
-
-                    state = json.loads(self.webinterface.get_output_status()).get("status")[local_id]
-                    config = local_output_conf[local_id]
-                    if local_id not in output_mapping.keys():
-                        output_mapping[local_id] = {
-                            'remote_outputs': [],
-                            'config': config,
-                            'state': state
-                        }
-                    local_name = config.get('name') if config.get("name") != "" else local_id
-
-                    output_mapping[local_id]['remote_outputs'].append({
-                        'remote': remote_id,
-                        'gw': ip,
-                        'name': f"{self._name}/{local_name}"
-                    })
-
-                except Exception as ex:
-                    logger.exception(f'Could not load output mapping for GW with ip {ip}: {ex}')
-                    continue
-
-                try:
-                    self.update_remote_output_config_and_state(ip, remote_id, state, remote_output_conf=remote_output_conf, local_output_name=local_name)
-                except Exception as ex:
-                    logger.info(f"Error while reading plugin output configuration: {ex}")
-                    continue
-
-            # Global shutter mapping
-            local_shutter_confs = json.loads(self.webinterface.get_shutter_configurations()).get('config')
-
-            for entry in gateway.get('shutters', []):
-                # Organise local shutter data and their mapping with one or more remote shutters by making use of a dict
-                try:
-                    local_id = int(entry.get('local_shutter_id', -1))
-                    remote_id = int(entry.get('remote_shutter_id', -1))
-                    is_shutter_group = bool(entry.get('is_shutter_group', False))
-                    if local_id < 0 or remote_id < 0:
-                        raise RuntimeError("Please give valid shutter ids")
-                    if local_output_conf[local_id * 2].get("type") != 127 or local_output_conf[local_id * 2 + 1].get(
-                            "type") != 127:
-                        raise RuntimeError(
-                            f"Skipped because {local_id} is not a shutter, please include it in the output config instead")
-
-                    config = local_shutter_confs[local_id]
-                    local_state = json.loads(self.webinterface.get_shutter_status()).get("status")[local_id]
-                    if local_id not in shutter_mapping.keys():
-                        shutter_mapping[local_id] = {
-                            'remote_shutters': [],
-                            'config': config,
-                            'state': local_state
-                        }
-
-                    local_name = config.get("name") if config.get("name") != "" else local_id
-
-                    shutter_mapping[local_id]['remote_shutters'].append({
-                        'remote': remote_id,
-                        'gw': ip,
-                        'name': f"{self._name}/{local_name}",
-                        'reversed': entry.get("reversed"),
-                        'is_shutter_group': is_shutter_group
-                    })
-                except Exception as ex:
-                    logger.exception(f'Could not load shutter mapping for GW with ip {ip}: {ex}')
-                    continue
-
-                self.update_remote_shutter_config_and_state(ip, local_name, remote_shutter_conf, remote_id, is_shutter_group, local_state, entry.get("reverse"))
-
+            if 'sensors' in gateway:
+                self.process_sensor_config(gateway)
+            if 'outputs' in gateway:
+                output_mapping = self.process_output_config(gateway, output_mapping)
+            if 'shutters' in gateway:
+                shutter_mapping = self.process_shutter_config(gateway, shutter_mapping)
 
         self._output_mapping = output_mapping
         logger.info(f"Output  mapping: {self._output_mapping}")
         self._shutter_mapping = shutter_mapping
         logger.info(f"Shutter mapping: {self._shutter_mapping}")
-        logger.info(f"Gateways: {self._gateways}")
+        _gateways = copy.deepcopy(self._gateways)
+        for gateway in _gateways.values():
+            gateway.pop("headers")
+        logger.info(f"Gateways: {_gateways}")
+        del _gateways
 
         self._enabled = _enabled
         logger.info('Syncer is {0}'.format('enabled' if self._enabled else 'disabled'))
 
+    def process_sensor_config(self, gateway):
+        ip = gateway.get('gateway_ip')
+        gw_name = gateway.get('name')
+        remote_sensor_conf = self._call_remote('get_sensor_configurations', self._gateways[ip]).get('config')
+
+        # Specific for each remote GW as this is remote 2 local. A loop over every remote GW will occur and this
+        # will give our local sensor_dto if a value has changed.
+        sensor_mapping = {}
+        for entry in gateway.get('sensors', []):
+            try:
+                remote_sensor_id = entry.get('remote_sensor_id', -1)
+                if remote_sensor_id < 0:
+                    raise RuntimeError("Please give valid sensor ids")
+                external_id = f"syncer/{ip}/{remote_sensor_id}"
+                for remote_sensor in remote_sensor_conf:
+                    if remote_sensor.get('id') == remote_sensor_id:
+                        sensor = self.connector.sensor.register(external_id=external_id,
+                                                                physical_quantity=remote_sensor.get(
+                                                                    'physical_quantity'),
+                                                                unit=remote_sensor.get('unit'),
+                                                                name=f"{gw_name}/{remote_sensor.get('name')}")
+                        sensor_mapping[remote_sensor_id] = sensor
+            except Exception as ex:
+                logger.exception(f'Could not load sensor mapping for GW with ip {ip}: {ex}')
+        self._gateways[ip]["sensor_mapping"] = sensor_mapping
+
+    def process_output_config(self, gateway, output_mapping):
+        ip = gateway.get('gateway_ip')
+        remote_output_conf = self._call_remote('get_output_configurations', self._gateways[ip]).get('config')
+
+        # Global output_mapping variable because this is local 2 remote, thus if local output changes -> mapping to
+        # remote outputs will happen. One specific local output changes to different remote output changes
+        local_output_conf = json.loads(self.webinterface.get_output_configurations()).get('config')
+
+        for entry in gateway.get('outputs', []):
+            try:
+                # Organise local output data and their mapping with one or more remote outputs by making use of a dict
+                local_id = int(entry.get('local_output_id', -1))
+                remote_id = int(entry.get('remote_output_id', -1))
+                if local_id < 0 or remote_id < 0:
+                    raise RuntimeError("Please give valid output ids")
+                if local_output_conf[local_id].get("type") == 127:
+                    raise RuntimeError(
+                        f"Skipped because {local_id} is a shutter, please include it in the shutter config instead")
+
+                state = json.loads(self.webinterface.get_output_status()).get("status")[local_id]
+                config = local_output_conf[local_id]
+                if local_id not in output_mapping.keys():
+                    output_mapping[local_id] = {
+                        'remote_outputs': [],
+                        'config': config,
+                        'state': state
+                    }
+                local_name = config.get('name') if config.get("name") != "" else local_id
+
+                output_mapping[local_id]['remote_outputs'].append({
+                    'remote': remote_id,
+                    'gw': ip,
+                    'name': f"{self._name}/{local_name}"
+                })
+
+            except Exception as ex:
+                logger.exception(f'Could not load output mapping for GW with ip {ip}: {ex}')
+                continue
+
+            try:
+                self.update_remote_output_config_and_state(ip, remote_id, state, remote_output_conf=remote_output_conf,
+                                                           local_output_name=local_name)
+            except Exception as ex:
+                logger.info(f"Error while updating remote output config and state: {ex}")
+                continue
+
+        return output_mapping
+
+    def process_shutter_config(self, gateway, shutter_mapping):
+        ip = gateway.get("gateway_ip")
+        remote_shutter_conf = self._call_remote('get_shutter_configurations', self._gateways[ip]).get('config')
+
+        # Global shutter mapping
+        local_shutter_confs = json.loads(self.webinterface.get_shutter_configurations()).get('config')
+        local_output_conf = json.loads(self.webinterface.get_output_configurations()).get('config')
+
+        for entry in gateway.get('shutters', []):
+            # Organise local shutter data and their mapping with one or more remote shutters by making use of a dict
+            try:
+                local_id = int(entry.get('local_shutter_id', -1))
+                remote_id = int(entry.get('remote_shutter_id', -1))
+                is_shutter_group = bool(entry.get('is_shutter_group', False))
+                if local_id < 0 or remote_id < 0:
+                    raise RuntimeError("Please give valid shutter ids")
+                if local_output_conf[local_id * 2].get("type") != 127 or local_output_conf[local_id * 2 + 1].get(
+                        "type") != 127:
+                    raise RuntimeError(
+                        f"Skipped because {local_id} is not a shutter, please include it in the output config instead")
+
+                config = local_shutter_confs[local_id]
+                local_state = json.loads(self.webinterface.get_shutter_status()).get("status")[local_id]
+                if local_id not in shutter_mapping.keys():
+                    shutter_mapping[local_id] = {
+                        'remote_shutters': [],
+                        'config': config,
+                        'state': local_state
+                    }
+
+                local_name = config.get("name") if config.get("name") != "" else local_id
+
+                shutter_mapping[local_id]['remote_shutters'].append({
+                    'remote': remote_id,
+                    'gw': ip,
+                    'name': f"{self._name}/{local_name}",
+                    'reversed': entry.get("reversed"),
+                    'is_shutter_group': is_shutter_group
+                })
+            except Exception as ex:
+                logger.exception(f'Could not load shutter mapping for GW with ip {ip}: {ex}')
+                continue
+
+            try:
+                self.update_remote_shutter_config_and_state(ip, local_name, remote_shutter_conf, remote_id,
+                                                            is_shutter_group, local_state, entry.get("reverse"))
+            except Exception as ex:
+                logger.info(f"Error while updating remote shutter config and state: {ex}")
+                continue
+
+        return shutter_mapping
+
     def update_remote_output_config_and_state(self, ip, remote_id, state, state_only=False, remote_output_conf=None, local_output_name=None):
         # Set configuration and state of remote output according to local output
-
         if not state_only:
             try:
                 old_name = remote_output_conf[remote_id]['name']
@@ -399,63 +417,68 @@ class Syncer(OMPluginBase):
                 # Sync sensor values:
                 for gateway in self._gateways.values():
                     sensor_mapping = gateway.get('sensor_mapping')
-                    if sensor_mapping != {}:
-                        sensor_status = self._call_remote('get_sensor_status', gateway).get('status')
-                        for sensor in sensor_status:
-                            sensor_tdo = sensor_mapping.get(sensor.get('id'), None)
-                            if sensor_tdo is not None:
-                                self.connector.sensor.report_state(sensor=sensor_tdo,
-                                                                   value=sensor.get('value'))
-                                logger.info(
-                                    f"Updated {sensor_tdo.name} with value {sensor.get('value')} from remote sensor ({gateway.get('ip')}) with id {sensor.get('id')}")
+                    if sensor_mapping == {}:
+                        continue
+                    sensor_status = self._call_remote('get_sensor_status', gateway).get('status')
+                    for sensor in sensor_status:
+                        sensor_tdo = sensor_mapping.get(sensor.get('id'), None)
+                        if sensor_tdo is None:
+                            continue
+                        self.connector.sensor.report_state(sensor=sensor_tdo,
+                                                           value=sensor.get('value'))
+                        logger.info(
+                            f"Updated {sensor_tdo.name} with value {sensor.get('value')} from remote sensor ({gateway.get('ip')}) with id {sensor.get('id')}")
             except Exception as ex:
                 logger.exception('Error while syncing sensors: {0}'.format(ex))
             time.sleep(self._polling_interval)
 
     def handle_shutter_status(self, minimal_event, full_event):
-        if self._enabled:
-            for key, value in self._shutter_mapping.items():
-                if value.get('state') != minimal_event[key]:
-                    state = minimal_event[key]
-                    self._shutter_mapping[key]['state'] = state
-                    try:
-                        for remote_shutter in value.get('remote_shutters'):
-                            ip = remote_shutter.get('gw')
-                            remote_id = remote_shutter.get('remote')
-                            reverse = remote_shutter.get('reversed')
-                            is_shutter_group = remote_shutter.get('is_shutter_group')
-                            self.update_remote_shutter_state(ip=ip, remote_id=remote_id, state=state, reverse=reverse, is_shutter_group=is_shutter_group)
-                    except Exception as ex:
-                        logger.exception(f"Error processing shutter event {state} of shutter {key}: {ex}")
+        if not self._enabled:
+            return
+        for key, value in self._shutter_mapping.items():
+            if value.get('state') != minimal_event[key]:
+                state = minimal_event[key]
+                self._shutter_mapping[key]['state'] = state
+                try:
+                    for remote_shutter in value.get('remote_shutters'):
+                        ip = remote_shutter.get('gw')
+                        remote_id = remote_shutter.get('remote')
+                        reverse = remote_shutter.get('reversed')
+                        is_shutter_group = remote_shutter.get('is_shutter_group')
+                        self.update_remote_shutter_state(ip=ip, remote_id=remote_id, state=state, reverse=reverse, is_shutter_group=is_shutter_group)
+                except Exception as ex:
+                    logger.exception(f"Error processing shutter event {state} of shutter {key}: {ex}")
 
     def handle_output_status(self, event):
-        if self._enabled and event.get('id') in self._output_mapping:
-            local_id = event.get('id')
-            state = {'status': event.get('status').get('on'),
-                     'dimmer': event.get('status').get('value', "")}
+        if not self._enabled or event.get('id') not in self._output_mapping:
+            return
+        local_id = event.get('id')
+        state = {'status': event.get('status').get('on'),
+                 'dimmer': event.get('status').get('value', "")}
 
-            self._output_mapping[local_id]["state"] = state
-            remote_outputs = self._output_mapping.get(local_id).get('remote_outputs')
-            try:
-                for remote_output in remote_outputs:
-                    logger.info(remote_output)
-                    ip = remote_output.get('gw')
-                    remote_id = remote_output.get('remote')
-                    self.update_remote_output_config_and_state(ip=ip, remote_id=remote_id, state=state, state_only=True)
-            except Exception as ex:
-                logger.exception(f"Error processing output event {event}: {ex}")
+        self._output_mapping[local_id]["state"] = state
+        remote_outputs = self._output_mapping.get(local_id).get('remote_outputs')
+        try:
+            for remote_output in remote_outputs:
+                logger.info(remote_output)
+                ip = remote_output.get('gw')
+                remote_id = remote_output.get('remote')
+                self.update_remote_output_config_and_state(ip=ip, remote_id=remote_id, state=state, state_only=True)
+        except Exception as ex:
+            logger.exception(f"Error processing output event {event}: {ex}")
 
-    def _call_remote(self, api_call, gateway, params=None):
+    def _call_remote(self, api_call, gateway, params=None, method="GET"):
         # TODO: If there's an invalid_token error, call self._login() and try this call again
         retries = 0
         while retries < 3:
             try:
-                if gateway.get("headers").get("Authorization") is None:
+                if gateway.get("headers", {}).get("Authorization") is None:
                     self._login(gateway)
-                response = requests.get(f"{gateway.get('endpoint')}/{api_call}",
-                                        params=params,
-                                        verify=False,
-                                        headers=gateway.get('headers'))
+                response = requests.request(method=method,
+                                            url=f"{gateway.get('endpoint')}/{api_call}",
+                                            params=params,
+                                            verify=False,
+                                            headers=gateway.get('headers'))
                 response_data = json.loads(response.text)
                 if response_data.get('success', False) is False:
                     if response_data.get('msg') == 'invalid_token':
@@ -508,7 +531,7 @@ class Syncer(OMPluginBase):
                 config[key] = str(config[key])
         self._config_checker.check_config(config)
         self._config = config
-        thread = Thread(target=self._read_config)
+        thread = Thread(target=self._process_config)
         thread.start()
         self.write_config(config)
         return json.dumps({
