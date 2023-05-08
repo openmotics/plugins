@@ -155,10 +155,11 @@ class Syncer(OMPluginBase):
             username = gateway.get('username', '')
             password = gateway.get('password', '')
 
-            if gateway.get('remote_name', '') == '':
+            gw_name = gateway.get('remote_name')
+
+            if gw_name in ['', None]:
                 gw_name = ip
-            else:
-                gw_name = gateway.get('remote_name')
+
 
             headers = {
                 'X-Requested-With': 'OpenMotics plugin: Syncer'
@@ -192,13 +193,13 @@ class Syncer(OMPluginBase):
                 shutter_mapping = self.process_shutter_config(gateway, shutter_mapping)
 
         self._output_mapping = output_mapping
-        logger.info(f"Output  mapping: {self._output_mapping}")
+        logger.debug(f"Output  mapping: {self._output_mapping}")
         self._shutter_mapping = shutter_mapping
-        logger.info(f"Shutter mapping: {self._shutter_mapping}")
+        logger.debug(f"Shutter mapping: {self._shutter_mapping}")
         _gateways = copy.deepcopy(self._gateways)
         for gateway in _gateways.values():
             gateway.pop("headers")
-        logger.info(f"Gateways: {_gateways}")
+        logger.debug(f"Gateways: {_gateways}")
         del _gateways
 
         self._enabled = _enabled
@@ -273,7 +274,7 @@ class Syncer(OMPluginBase):
                 self.update_remote_output_config_and_state(ip, remote_id, state, remote_output_conf=remote_output_conf,
                                                            local_output_name=local_name)
             except Exception as ex:
-                logger.info(f"Error while updating remote output config and state: {ex}")
+                logger.exception(f"Error while updating remote output config and state: {ex}")
                 continue
 
         return output_mapping
@@ -325,7 +326,7 @@ class Syncer(OMPluginBase):
                 self.update_remote_shutter_config_and_state(ip, local_name, remote_shutter_conf, remote_id,
                                                             is_shutter_group, local_state, entry.get("reverse"))
             except Exception as ex:
-                logger.info(f"Error while updating remote shutter config and state: {ex}")
+                logger.exception(f"Error while updating remote shutter config and state: {ex}")
                 continue
 
         return shutter_mapping
@@ -350,8 +351,9 @@ class Syncer(OMPluginBase):
                 "dimmer": state.get('dimmer', ""),
                 "timer": state.get('ctimer', "")
             }, gateway=self._gateways[ip])
+            logger.info(f"Updated remote output {remote_id} on GW {self._gateways[ip].get('name')} to {'on' if state.get('status') == 1 else 'off'} {'(' + str(state.get('dimmer')) + '%)' if state.get('dimmer') != '' else ''}")
         except Exception as ex:
-            raise RuntimeError(f'Could not set state of remote output {ip}/{remote_id}: {ex}')
+            raise RuntimeError(f"Could not set state of remote output {self._gateways[ip].get('name')}/{remote_id}: {ex}")
 
     def update_remote_shutter_config_and_state(self, ip, local_name, remote_shutter_conf, remote_id, is_shutter_group, local_state, reverse):
         self.update_remote_shutter_config(ip, remote_shutter_conf=remote_shutter_conf, local_shutter_name=local_name, remote_id=remote_id, is_shutter_group=is_shutter_group)
@@ -403,9 +405,10 @@ class Syncer(OMPluginBase):
                 self._call_remote(api_call=f"do_shutter_{group}{remote_state}", params={
                     "id": remote_id
                 }, gateway=self._gateways[ip])
+            logger.info(f"Updated remote shutter{group[:-1]} {remote_id} on GW {self._gateways[ip].get('name')} to {remote_state}")
         except Exception as ex:
             raise RuntimeError(
-                f'Could not set state of remote shutter{"group" if is_shutter_group else ""} {ip}/{remote_id}: {ex}')
+                f"Could not set state of remote shutter{'group' if is_shutter_group else ''} {self._gateways[ip].get('name')}/{remote_id}: {ex}")
 
     @background_task
     def run(self):
@@ -439,6 +442,8 @@ class Syncer(OMPluginBase):
             if value.get('state') != minimal_event[key]:
                 state = minimal_event[key]
                 self._shutter_mapping[key]['state'] = state
+                logger.info(f"Shutter change detected: {key} {state}")
+                logger.debug(f"Updating remote shutters... {value.get('remote_shutters')}")
                 try:
                     for remote_shutter in value.get('remote_shutters'):
                         ip = remote_shutter.get('gw')
@@ -458,9 +463,11 @@ class Syncer(OMPluginBase):
 
         self._output_mapping[local_id]["state"] = state
         remote_outputs = self._output_mapping.get(local_id).get('remote_outputs')
+        logger.info(f"Output change detected: {local_id} {'on' if state.get('status') else 'off'} {'(' + str(state.get('dimmer')) + '%)' if state.get('dimmer') != '' else ''}")
+        logger.debug(f"Updating remote outputs... {remote_outputs}")
+
         try:
             for remote_output in remote_outputs:
-                logger.info(remote_output)
                 ip = remote_output.get('gw')
                 remote_id = remote_output.get('remote')
                 self.update_remote_output_config_and_state(ip=ip, remote_id=remote_id, state=state, state_only=True)
@@ -482,16 +489,16 @@ class Syncer(OMPluginBase):
                 response_data = json.loads(response.text)
                 if response_data.get('success', False) is False:
                     if response_data.get('msg') == 'invalid_token':
-                        logger.info('Token expired')
+                        logger.debug('Token expired')
                         gateway["headers"]["Authorization"] = None
                         retries += 1
                         continue
                     else:
-                        logger.info('Could not execute API call {0}: {1}'.format(api_call, response_data.get('msg',
+                        raise RuntimeError('Could not execute API call {0}: {1}'.format(api_call, response_data.get('msg',
                                                                                                              'Unknown error')))
                 return response_data
             except Exception as ex:
-                logger.info('Unexpected error during API call {0}: {1}'.format(api_call, ex))
+                logger.exception('Unexpected error during API call {0}: {1}'.format(api_call, ex))
                 return None
 
     def _login(self, gateway):
