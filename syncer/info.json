@@ -1,6 +1,7 @@
 {
-	"version" : "0.0.5",
+	"version" : "0.0.7",
 	"description" : "Syncer",
 	"metric_source"  : "syncer",
-	"metric_type" : "syncer"
+	"metric_type" : "syncer",
+	"python_version": 3
 }
