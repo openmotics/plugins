@@ -61,58 +61,70 @@ class Syncer(OMPluginBase):
                     'description': 'The (local) password for the other Gateway.'
                 },
                 {
-                    'name': 'sensors',
+                    'name': 'mappings',
                     'type': 'section',
-                    'description': "Mapping between local sensors and remote sensors. \nThe "
-                                   "remote sensor should exist.\n Remote updates local.",
                     'repeat': True,
-                    'min': 0,
-                    'content': [
-                        {
-                            'name': 'remote_sensor_id',
-                            'type': 'int'
-                        }
-                    ]
-                },
-                {
-                    'name': 'outputs',
-                    'type': 'section',
-                    'description': 'Mapping between local outputs and remote outputs.\nLocal updates remote.',
-                    'repeat': True,
-                    'min': 0,
+                    'min': 1,
                     'content': [{
-                        'name': 'local_output_id',
-                        'type': 'int'
-                    },
-                        {
-                            'name': 'remote_output_id',
-                            'type': 'int'
-                        }]
-                },
-                {
-                    'name': 'shutters',
-                    'type': 'section',
-                    'description': 'Mapping between local shutters and remote shutter. \nLocal updates remote.',
-                    'repeat': True,
-                    'min': 0,
-                    'content': [{
-                        'name': 'local_shutter_id',
-                        'type': 'int'
-                    },
-                        {
-                            'name': 'remote_shutter_id',
-                            'type': 'int'
-                        },
-                        {
-                            'name': 'is_shutter_group',
-                            'type': 'bool',
-                            'description': 'True => remote_shutter_id refers to the id of a shutter group\nFalse => remote_shutter_id refers to the id of a shutter (default False)'
-                        },
-                        {
-                            'name': 'reversed',
-                            'type': 'bool',
-                            'description': 'True => up=up, down=down\nFalse => up=down, down=up (default True)'
-                        }]
+                                    'name': 'type',
+                                    'type': 'nested_enum',
+                                    'choices': [{
+                                        'value': 'sensor',
+                                        'content': [{
+                                            'name': 'remote_sensor_id',
+                                            'description': "Mapping between local sensors and remote sensors. \nThe "
+                                                           "remote sensor should exist.\n Remote updates local.",
+                                            'type': 'int'
+                                        }]
+                                    },
+                                        {
+                                            'value': 'output',
+                                            'content': [{
+                                                'name': 'local_output_id',
+                                                'type': 'int'
+                                            },
+                                                {
+                                                    'name': 'remote_output_id',
+                                                    'description': 'Mapping between local outputs and remote outputs.\nLocal updates remote.',
+                                                    'type': 'int'
+                                                }]
+                                        },
+                                        {
+                                            'value': 'input',
+                                            'content': [{
+
+                                                'name': 'local_input_id',
+                                                'type': 'int'
+                                            },
+                                                {
+                                                    'name': 'remote_input_id',
+                                                    'description': 'Mapping between local inputs and remote inputs.\nLocal updates remote.',
+                                                    'type': 'int'
+                                                }]
+                                        },
+                                        {
+                                            'value': 'shutters',
+                                            'content': [{
+                                                'name': 'local_shutter_id',
+                                                'type': 'int'
+                                            },
+                                                {
+                                                    'name': 'remote_shutter_id',
+                                                    'description': 'Mapping between local shutters and remote shutter. \nLocal updates remote.',
+                                                    'type': 'int'
+                                                },
+                                                {
+                                                    'name': 'is_shutter_group',
+                                                    'type': 'bool',
+                                                    'description': 'True => remote_shutter_id refers to the id of a shutter group\nFalse => remote_shutter_id refers to the id of a shutter (default False)'
+                                                },
+                                                {
+                                                    'name': 'reversed',
+                                                    'type': 'bool',
+                                                    'description': 'True => up=up, down=down\nFalse => up=down, down=up (default True)'
+                                                }]
+                                        }]
+                                    }]
                 }]
         }]
 
@@ -130,14 +142,13 @@ class Syncer(OMPluginBase):
         self._polling_interval = 60
         self._gateways = {}
         self._name = ''
-        self._output_mapping = {}
-        self._shutter_mapping = {}
+        self._mappings = {}
         self._enabled = False
-        thread = Thread(target=self._process_config)
-        thread.start()
-
-        self.connector.output.subscribe_status_event(handler=self.handle_output_status, version=2)
-        self.connector.shutter.subscribe_status_event(handler=self.handle_shutter_status, version=2)
+        # thread = Thread(target=self._process_config)
+        # thread.start()
+        #
+        # self.connector.output.subscribe_status_event(handler=self.handle_output_status, version=2)
+        # self.connector.shutter.subscribe_status_event(handler=self.handle_shutter_status, version=2)
 
         logger.info("Started Syncer plugin")
 
@@ -146,64 +157,70 @@ class Syncer(OMPluginBase):
         self._polling_interval = self._config.get('polling_interval', 60)
         self._name = self._config.get('local_name', '')
         self._gateways = {}
-        output_mapping = {}
-        shutter_mapping = {}
-        _enabled = False
+        mappings = {}
+
         for gateway in self._config.get('gateways', ''):
+            ip = self.process_gw_config(gateway)
 
-            ip = gateway.get('gateway_ip', '')
-            username = gateway.get('username', '')
-            password = gateway.get('password', '')
-
-            gw_name = gateway.get('remote_name')
-
-            if gw_name in ['', None]:
-                gw_name = ip
-
-
-            headers = {
-                'X-Requested-With': 'OpenMotics plugin: Syncer'
-            }
-            endpoint = 'https://{0}'.format(ip)
-
-            enabled = '' not in [ip, username, password]
-            # If one GW is enabled, then the plugin will be enabled as well. But this is done after gathering all the
-            # config of the other GWs.
-            if enabled:
-                _enabled = True
-            self._gateways[ip] = {
-                'ip': ip,
-                'name': gw_name,
-                'username': username,
-                'password': password,
-                'headers': headers,
-                'endpoint': endpoint,
-                'enabled': enabled
-            }
             try:
                 self._call_remote("get_status", self._gateways[ip])
             except Exception as ex:
                 logger.info(f"Could not connect to GW {ip}: {ex}")
 
-            if 'sensors' in gateway:
-                self.process_sensor_config(gateway)
-            if 'outputs' in gateway:
-                output_mapping = self.process_output_config(gateway, output_mapping)
-            if 'shutters' in gateway:
-                shutter_mapping = self.process_shutter_config(gateway, shutter_mapping)
+            mappings = self.process_mapping_config(gateway)
 
-        self._output_mapping = output_mapping
-        logger.debug(f"Output  mapping: {self._output_mapping}")
-        self._shutter_mapping = shutter_mapping
-        logger.debug(f"Shutter mapping: {self._shutter_mapping}")
+
+        self._mappings = mappings
+        logger.debug(f"Output  mapping: {self._mappings.get('outputs')}")
+        logger.debug(f"Shutter mapping: {self._shutter_mapping.get('shutters')}")
         _gateways = copy.deepcopy(self._gateways)
         for gateway in _gateways.values():
             gateway.pop("headers")
+            if gateway.get("enabled"):
+                self._enabled = True
         logger.debug(f"Gateways: {_gateways}")
         del _gateways
 
-        self._enabled = _enabled
         logger.info('Syncer is {0}'.format('enabled' if self._enabled else 'disabled'))
+
+    def process_gw_config(self, gw):
+        ip = gw.get('gateway_ip', '')
+        username = gw.get('username', '')
+        password = gw.get('password', '')
+
+        gw_name = gw.get('remote_name')
+
+        if gw_name in ['', None]:
+            gw_name = ip
+
+        headers = {
+            'X-Requested-With': 'OpenMotics plugin: Syncer'
+        }
+        endpoint = 'https://{0}'.format(ip)
+
+        enabled = '' not in [ip, username, password]
+
+        self._gateways[ip] = {
+            'ip': ip,
+            'name': gw_name,
+            'username': username,
+            'password': password,
+            'headers': headers,
+            'endpoint': endpoint,
+            'enabled': enabled
+        }
+        return ip
+
+
+    def process_mapping_config(self, gw):
+        ip = gw.get("gateway_ip")
+        remote_confs = {}
+        first_timers = {"sensor": True, "output": True, "input": True, "shutters": True}
+        for entry in gw.get("mappings", []):
+            type = entry.get("type")[0]
+            if first_timers.get(type):
+                remote_confs[type] = self._call_remote(f"get_{type}_configurations", self._gateways[ip]).get('config')
+            data =
 
     def process_sensor_config(self, gateway):
         ip = gateway.get('gateway_ip')
@@ -331,7 +348,8 @@ class Syncer(OMPluginBase):
 
         return shutter_mapping
 
-    def update_remote_output_config_and_state(self, ip, remote_id, state, state_only=False, remote_output_conf=None, local_output_name=None):
+    def update_remote_output_config_and_state(self, ip, remote_id, state, state_only=False, remote_output_conf=None,
+                                              local_output_name=None):
         # Set configuration and state of remote output according to local output
         if not state_only:
             try:
@@ -351,12 +369,16 @@ class Syncer(OMPluginBase):
                 "dimmer": state.get('dimmer', ""),
                 "timer": state.get('ctimer', "")
             }, gateway=self._gateways[ip])
-            logger.info(f"Updated remote output {remote_id} on GW {self._gateways[ip].get('name')} to {'on' if state.get('status') == 1 else 'off'} {'(' + str(state.get('dimmer')) + '%)' if state.get('dimmer') != '' else ''}")
+            logger.info(
+                f"Updated remote output {remote_id} on GW {self._gateways[ip].get('name')} to {'on' if state.get('status') == 1 else 'off'} {'(' + str(state.get('dimmer')) + '%)' if state.get('dimmer') != '' else ''}")
         except Exception as ex:
-            raise RuntimeError(f"Could not set state of remote output {self._gateways[ip].get('name')}/{remote_id}: {ex}")
+            raise RuntimeError(
+                f"Could not set state of remote output {self._gateways[ip].get('name')}/{remote_id}: {ex}")
 
-    def update_remote_shutter_config_and_state(self, ip, local_name, remote_shutter_conf, remote_id, is_shutter_group, local_state, reverse):
-        self.update_remote_shutter_config(ip, remote_shutter_conf=remote_shutter_conf, local_shutter_name=local_name, remote_id=remote_id, is_shutter_group=is_shutter_group)
+    def update_remote_shutter_config_and_state(self, ip, local_name, remote_shutter_conf, remote_id, is_shutter_group,
+                                               local_state, reverse):
+        self.update_remote_shutter_config(ip, remote_shutter_conf=remote_shutter_conf, local_shutter_name=local_name,
+                                          remote_id=remote_id, is_shutter_group=is_shutter_group)
         self.update_remote_shutter_state(ip, remote_id, local_state, reverse, is_shutter_group)
 
     def update_remote_shutter_config(self, ip, remote_shutter_conf, local_shutter_name, remote_id, is_shutter_group):
@@ -405,7 +427,8 @@ class Syncer(OMPluginBase):
                 self._call_remote(api_call=f"do_shutter_{group}{remote_state}", params={
                     "id": remote_id
                 }, gateway=self._gateways[ip])
-            logger.info(f"Updated remote shutter{group[:-1]} {remote_id} on GW {self._gateways[ip].get('name')} to {remote_state}")
+            logger.info(
+                f"Updated remote shutter{group[:-1]} {remote_id} on GW {self._gateways[ip].get('name')} to {remote_state}")
         except Exception as ex:
             raise RuntimeError(
                 f"Could not set state of remote shutter{'group' if is_shutter_group else ''} {self._gateways[ip].get('name')}/{remote_id}: {ex}")
@@ -450,7 +473,8 @@ class Syncer(OMPluginBase):
                         remote_id = remote_shutter.get('remote')
                         reverse = remote_shutter.get('reversed')
                         is_shutter_group = remote_shutter.get('is_shutter_group')
-                        self.update_remote_shutter_state(ip=ip, remote_id=remote_id, state=state, reverse=reverse, is_shutter_group=is_shutter_group)
+                        self.update_remote_shutter_state(ip=ip, remote_id=remote_id, state=state, reverse=reverse,
+                                                         is_shutter_group=is_shutter_group)
                 except Exception as ex:
                     logger.exception(f"Error processing shutter event {state} of shutter {key}: {ex}")
 
@@ -458,12 +482,15 @@ class Syncer(OMPluginBase):
         if not self._enabled or event.get('id') not in self._output_mapping:
             return
         local_id = event.get('id')
-        state = {'status': event.get('status').get('on'),
-                 'dimmer': event.get('status').get('value', "")}
+        state = {
+            'status': event.get('status').get('on'),
+            'dimmer': event.get('status').get('value', "")
+            }
 
         self._output_mapping[local_id]["state"] = state
         remote_outputs = self._output_mapping.get(local_id).get('remote_outputs')
-        logger.info(f"Output change detected: {local_id} {'on' if state.get('status') else 'off'} {'(' + str(state.get('dimmer')) + '%)' if state.get('dimmer') != '' else ''}")
+        logger.info(
+            f"Output change detected: {local_id} {'on' if state.get('status') else 'off'} {'(' + str(state.get('dimmer')) + '%)' if state.get('dimmer') != '' else ''}")
         logger.debug(f"Updating remote outputs... {remote_outputs}")
 
         try:
@@ -494,8 +521,9 @@ class Syncer(OMPluginBase):
                         retries += 1
                         continue
                     else:
-                        raise RuntimeError('Could not execute API call {0}: {1}'.format(api_call, response_data.get('msg',
-                                                                                                             'Unknown error')))
+                        raise RuntimeError(
+                            'Could not execute API call {0}: {1}'.format(api_call, response_data.get('msg',
+                                                                                                     'Unknown error')))
                 return response_data
             except Exception as ex:
                 logger.exception('Unexpected error during API call {0}: {1}'.format(api_call, ex))
@@ -538,8 +566,9 @@ class Syncer(OMPluginBase):
                 config[key] = str(config[key])
         self._config_checker.check_config(config)
         self._config = config
-        thread = Thread(target=self._process_config)
-        thread.start()
+        logger.info(self._config)
+        # thread = Thread(target=self._process_config)
+        # thread.start()
         self.write_config(config)
         return json.dumps({
             'success': True
