@@ -8,10 +8,12 @@ import random
 import time
 import six
 from collections import deque
+from .hotwater import HotWaterDummy
 
 from plugins.base import OMPluginBase, PluginConfigChecker, background_task, \
     om_expose, ventilation_status, om_metric_receive, om_metric_data, hot_water_status
-    
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,7 +23,7 @@ class Dummy(OMPluginBase):
     """
 
     name = 'Dummy'
-    version = '1.1.0'
+    version = '1.3.0'
     interfaces = [('config', '1.0')]
 
     default_config = {}
@@ -100,15 +102,15 @@ class Dummy(OMPluginBase):
         self.connector.ventilation.attach_set_manual(self.ventilation_set_manual, version=1)
         self.connector.sensor.subscribe_status_event(Dummy.handle_sensor_status, version=2)
         self.connector.hot_water.subscribe_status_event(self.handle_hot_water_status, version=1)
-        self.connector.hot_water.attach_set_state(self.hot_water_state, version=1)
-        self.connector.hot_water.attach_set_setpoint(self.hot_water_setpoint, version=1)
+        self.connector.hot_water.attach_set_state(self.handle_hot_water_set_state, version=1)
+        self.connector.hot_water.attach_set_setpoint(self.handle_hot_water_set_setpoint, version=1)
 
         self._metrics_queue = deque()
         self._sensor_dtos = []
         self._ventilation_id = None
         self._wants_registration = True
         self._hot_water = None
-
+        self._hot_water_dummy = None
 
         logger.info('Started Dummy plugin {0}'.format(Dummy.version))
 
@@ -190,26 +192,31 @@ class Dummy(OMPluginBase):
                         max_temp=70.0)
                 logger.info('Registered %s' % unit)
                 self._hot_water = unit
+                self._hot_water_dummy = HotWaterDummy(unit, report_status=self.report_hot_water_status)
+                self._hot_water_dummy.start()
             except Exception:
                 logger.exception('Error registering hot_water')
                 self._hot_water = None
 
-    def hot_water_publish_state(self):
-        logger.info("publish hot_water state")
-        steering_power = random.randint(0, 100)
-        current_temperature = random.randint(0, 80)
-        self.connector.hot_water.report_status(id=self._hot_water.id, steering_power=100, current_temperature=10)
-
-    def hot_water_state(self, external_id, state):
-        logger.info("set hot water of external_id {} with state {}".format(external_id, state))
-
-    def hot_water_setpoint(self, external_id, setpoint):
+    def handle_hot_water_set_setpoint(self, external_id, setpoint):
         logger.info("set hot water of external_id {} to setpoint {}".format(external_id, setpoint))
+        self._hot_water_dummy.set_setpoint(setpoint)
+
+    def handle_hot_water_set_state(self, external_id, state):
+        logger.info("set hot water of external_id {} with state {}".format(external_id, state))
+        self._hot_water_dummy.set_state(state)
+
+    def report_hot_water_status(self, id, steering_power, current_temperature):
+        logger.info("publish hot_water state: {} {}".format(steering_power,
+                                                            current_temperature))
+        self.connector.hot_water.report_status(id=id,
+                                               steering_power=steering_power,
+                                               current_temperature=current_temperature)
 
     @hot_water_status(version=1)
     def hot_water_status(self, status):
         logger.info("new hot water status: {}".format(status))
-
+        self._hot_water_dummy.state = status
 
     @background_task
     def loop(self):
@@ -230,11 +237,6 @@ class Dummy(OMPluginBase):
                                                        value=value)
             except Exception:
                 logger.exception('Error while reporting sensor state')
-            try:
-                if self._hot_water:
-                    self.hot_water_publish_state()
-            except Exception:
-                logger.exception('Error while reporting hot water state')
             try:
                 if self._config.get('notification', False):
                     self.connector.notification.send(topic='dummy',
