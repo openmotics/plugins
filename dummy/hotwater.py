@@ -6,9 +6,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class HotWaterDummy:
+class MockHotWater:
 
-    def __init__(self, unit, report_status):
+    def __init__(self, unit, report_status, update_interval=5):
         self.unit = unit
 
         self.steering_power = 0
@@ -19,6 +19,7 @@ class HotWaterDummy:
         self.report_status = report_status
 
         self.thread = Thread(target=self.simulation)
+        self.update_interval = update_interval
         self._running = False
         self.lock = Lock()
 
@@ -39,7 +40,7 @@ class HotWaterDummy:
                 changed |= self.update_current_temperature()
                 if changed:
                     self.report_status(self.unit.id, self.steering_power, self.current_temperature)
-            time.sleep(5)
+            time.sleep(self.update_interval)
 
     def set_state(self, state):
         with self.lock:

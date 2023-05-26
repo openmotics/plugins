@@ -8,7 +8,7 @@ import random
 import time
 import six
 from collections import deque
-from .hotwater import HotWaterDummy
+from .hotwater import MockHotWater
 
 from plugins.base import OMPluginBase, PluginConfigChecker, background_task, \
     om_expose, ventilation_status, om_metric_receive, om_metric_data, hot_water_status
@@ -23,7 +23,7 @@ class Dummy(OMPluginBase):
     """
 
     name = 'Dummy'
-    version = '1.3.0'
+    version = '1.3.1'
     interfaces = [('config', '1.0')]
 
     default_config = {}
@@ -110,7 +110,7 @@ class Dummy(OMPluginBase):
         self._ventilation_id = None
         self._wants_registration = True
         self._hot_water = None
-        self._hot_water_dummy = None
+        self._hot_water_mock = None
 
         logger.info('Started Dummy plugin {0}'.format(Dummy.version))
 
@@ -192,8 +192,10 @@ class Dummy(OMPluginBase):
                         max_temp=70.0)
                 logger.info('Registered %s' % unit)
                 self._hot_water = unit
-                self._hot_water_dummy = HotWaterDummy(unit, report_status=self.report_hot_water_status)
-                self._hot_water_dummy.start()
+                if self._hot_water_mock is not None:
+                    self._hot_water_mock.stop()
+                self._hot_water_mock = MockHotWater(unit, report_status=self.report_hot_water_status)
+                self._hot_water_mock.start()
             except Exception:
                 logger.exception('Error registering hot_water')
                 self._hot_water = None
