@@ -21,7 +21,7 @@ class Syncer(OMPluginBase):
     """
 
     name = 'Syncer'
-    version = '0.0.7'
+    version = '0.0.8'
     interfaces = [('config', '1.0')]
 
     config_description = [{
@@ -145,47 +145,63 @@ class Syncer(OMPluginBase):
         self._mappings = {}
         self._local_confs = {}
         self._enabled = False
+        self._old_conf_deleted = True
         thread = Thread(target=self._process_config)
         thread.start()
-        #
+
         self.connector.input.subscribe_status_event(handler=self.handle_input_status, version=2)
         self.connector.output.subscribe_status_event(handler=self.handle_output_status, version=2)
-        # self.connector.shutter.subscribe_status_event(handler=self.handle_shutter_status, version=2)
+        self.connector.shutter.subscribe_status_event(handler=self.handle_shutter_status, version=2)
 
         logger.info("Started Syncer plugin")
 
     def _process_config(self):
-        self._enabled = False
-        self._polling_interval = self._config.get('polling_interval', 60)
-        self._name = self._config.get('local_name', '')
-        self._gateways = {}
-        self._mappings = {
-            "output": {},
-            "input": {},
-            "shutter": {}
-            }
+        while True:
+            if not self._old_conf_deleted:
+                time.sleep(5)
+                continue
+            self._enabled = False
+            self._polling_interval = self._config.get('polling_interval', 60)
+            self._name = self._config.get('local_name', '')
+            self._gateways = {}
+            self._mappings = {
+                "output": {},
+                "input": {},
+                "shutter": {}
+                }
 
-        for type in ["input", "output", "shutter"]:
-            method = f"get_{type}_configurations"
-            self._local_confs[type] = json.loads(getattr(self.webinterface, method)()).get("config")
+            for obj_type in ["input", "output", "shutter"]:
+                method = f"get_{obj_type}_configurations"
+                local_conf = json.loads(getattr(self.webinterface, method)()).get("config")
+                short_local_conf = []
+                for obj in local_conf:
+                    short_obj = {
+                        "id": obj.get("id"),
+                        "name": obj.get("name")
+                        }
+                    if obj_type == "output":
+                        short_obj["type"] = obj.get("type")
+                    short_local_conf.append(short_obj)
+                self._local_confs[obj_type] = short_local_conf
 
-        for gateway in self._config.get('gateways', ''):
-            self.process_gw_config(gateway)
-            self.process_mapping_config(gateway)
+            for gateway in self._config.get('gateways', ''):
+                self.process_gw_config(gateway)
+                self.process_mapping_config(gateway)
 
-        for type in ["input", "output", "shutter"]:
-            logger.info(f"{type.capitalize()}  mapping: {self._mappings.get(type)}")
+            for obj_type in ["input", "output", "shutter"]:
+                logger.info(f"{obj_type.capitalize()}  mapping: {self._mappings.get(obj_type)}")
 
-        _gateways = copy.deepcopy(self._gateways)
-        for gateway in _gateways.values():
-            gateway.pop("headers")
-            gateway.pop("remote_confs")
-            if gateway.get("enabled"):
-                self._enabled = True
-        logger.info(f"Gateways: {_gateways}")
-        del _gateways
+            _gateways = copy.deepcopy(self._gateways)
+            for gateway in _gateways.values():
+                gateway.pop("headers")
+                gateway.pop("remote_confs")
+                if gateway.get("enabled"):
+                    self._enabled = True
+            logger.info(f"Gateways: {_gateways}")
+            del _gateways
 
-        logger.info('Syncer is {0}'.format('enabled' if self._enabled else 'disabled'))
+            logger.info('Syncer is {0}'.format('enabled' if self._enabled else 'disabled'))
+            break
 
     def process_gw_config(self, gw):
         ip = gw.get('gateway_ip', '')
@@ -222,19 +238,39 @@ class Syncer(OMPluginBase):
     def process_mapping_config(self, gw):
         ip = gw.get('gateway_ip')
         remote_confs = {}
-        for type in ["shutter", "sensor", "output", "input"]:
-            remote_confs[type] = self._call_remote(f'get_{type}_configurations', self._gateways[ip]).get('config')
+        for obj_type in ["shutter", "sensor", "output", "input"]:
+            remote_conf = self._call_remote(f'get_{obj_type}_configurations', self._gateways[ip]).get('config')
+            short_remote_conf = []
+            for obj in remote_conf:
+                short_obj = {"id": obj.get("id"),
+                             "initial_name": obj.get("name")}
+                if obj_type == "sensor":
+                    short_obj.update({"external_id": obj.get("external_id"),
+                                      "physical_quantity": obj.get("physical_quantity"),
+                                      "unit": obj.get("unit"),
+                                      "name": obj.get("name")})
+                elif obj_type == "shutter":
+                    short_obj.update({"group_1": obj.get("group_1"),
+                                      "group_2": obj.get("group_2")})
+                elif obj_type == "output":
+                    short_obj["type"] = obj.get("type")
+                short_remote_conf.append(short_obj)
+            remote_confs[obj_type] = short_remote_conf
         self._gateways[ip]["remote_confs"] = remote_confs
 
         sensor_mapping = {}
         for entry in gw.get("mappings", []):
             try:
-                type = entry.get("type")[0]
+                obj_type = entry.get("type")[0]
                 pi_conf = entry.get("type")[1]
-                if type == "sensor":
+                if obj_type == "sensor":
                     sensor_mapping = self.process_sensor_config(pi_conf, ip, sensor_mapping)
-                elif type in ["output", "input", "shutter"]:
-                    method = f"process_{type}_config"
+                elif obj_type in [
+                    "output",
+                    "input",
+                    "shutter"
+                                  ]:
+                    method = f"process_{obj_type}_config"
                     getattr(self, method)(pi_conf, ip)
 
             except Exception as ex:
@@ -252,15 +288,15 @@ class Syncer(OMPluginBase):
             remote_sensor_id = pi_sensor_conf.get('remote_sensor_id', -1)
             if remote_sensor_id < 0:
                 raise RuntimeError("Please give valid sensor ids")
-            external_id = f"syncer/{ip}/{remote_sensor_id}"
             for remote_sensor in remote_sensor_conf:
                 if remote_sensor.get('id') == remote_sensor_id:
+                    external_id = f"syncer/{ip}/{remote_sensor.get('external_id')}"
                     sensor = self.connector.sensor.register(external_id=external_id,
                                                             physical_quantity=remote_sensor.get(
                                                                 'physical_quantity'),
                                                             unit=remote_sensor.get('unit'),
                                                             name=f"{gw_name}/{remote_sensor.get('name')}")
-                    current_mapping[remote_sensor_id] = sensor
+                    current_mapping[remote_sensor_id] = {"sensor_dto": sensor}
         except Exception as ex:
             logger.exception(f'Could not load sensor mapping for GW with ip {ip}: {ex}')
         return current_mapping
@@ -271,53 +307,53 @@ class Syncer(OMPluginBase):
     def process_input_config(self, pi_input_conf, ip):
         self.process_io_config(pi_input_conf, ip, 'input')
 
-    def process_io_config(self, pi_io_conf, ip, type):
+    def process_io_config(self, pi_io_conf, ip, obj_type):
         # Global output_mapping variable because this is local 2 remote, thus if local output changes -> mapping to
         # remote outputs will happen. One specific local output changes to different remote output changes
-        local_io_conf = self._local_confs.get(type)
-        mapping = self._mappings.get(type)
+        local_io_conf = self._local_confs.get(obj_type)
+        mapping = self._mappings.get(obj_type)
 
         # Organise local output data and their mapping with one or more remote outputs by making use of a dict
         try:
-            local_id = int(pi_io_conf.get(f'local_{type}_id', -1))
-            remote_id = int(pi_io_conf.get(f'remote_{type}_id', -1))
+            local_id = int(pi_io_conf.get(f'local_{obj_type}_id', -1))
+            remote_id = int(pi_io_conf.get(f'remote_{obj_type}_id', -1))
             if local_id < 0 or remote_id < 0:
-                raise RuntimeError(f"Please give valid {type} ids")
-            if local_io_conf[local_id].get("type", "") == 127 and type == "output":
+                raise RuntimeError(f"Please give valid {obj_type} ids")
+            if local_io_conf[local_id].get("type", "") == 127 and obj_type == "output":
                 raise RuntimeError(
                     f"Skipped because {local_id} is a shutter, please include it in the shutter config instead")
-            method = f"get_{type}_status"
+            method = f"get_{obj_type}_status"
             state = json.loads(getattr(self.webinterface, method)()).get("status")[local_id]
             config = local_io_conf[local_id]
             if local_id not in mapping.keys():
                 mapping[local_id] = {
-                    f'remote_{type}s': [],
+                    'remotes': [],
                     'config': config,
                     'state': state
                 }
 
             local_name = config.get('name') if config.get("name") != "" else local_id
 
-            mapping[local_id][f'remote_{type}s'].append({
+            mapping[local_id]['remotes'].append({
                 'remote': remote_id,
                 'gw': ip,
                 'name': f"{self._name}/{local_name}"
             })
 
-            self._mappings[type] = mapping
+            self._mappings[obj_type] = mapping
 
         except Exception as ex:
-            raise RuntimeError(f'Could not load {type} mapping for GW with ip {ip}: {ex}')
-
-        try:
-            self.update_remote_config(type=type, ip=ip, remote_id=remote_id, local_name=local_name)
-        except Exception as ex:
-            raise RuntimeError(f"Error while updating remote {type} config: {ex}")
+            raise RuntimeError(f'Could not load {obj_type} mapping for GW with ip {ip}: {ex}')
 
         try:
-            self.update_remote_io_state(type=type, ip=ip, remote_id=remote_id, state=state)
+            self.update_remote_config(obj_type=obj_type, ip=ip, remote_id=remote_id, local_name=local_name)
         except Exception as ex:
-            raise RuntimeError(f"Error while updating remote {type} state: {ex}")
+            raise RuntimeError(f"Error while updating remote {obj_type} config: {ex}")
+
+        try:
+            self.update_remote_io_state(obj_type=obj_type, ip=ip, remote_id=remote_id, state=state)
+        except Exception as ex:
+            raise RuntimeError(f"Error while updating remote {obj_type} state: {ex}")
 
     def process_shutter_config(self, pi_shutter_conf, ip):
         # Global shutter mapping
@@ -342,14 +378,14 @@ class Syncer(OMPluginBase):
             local_state = json.loads(self.webinterface.get_shutter_status()).get("status")[local_id]
             if local_id not in mapping.keys():
                 mapping[local_id] = {
-                    'remote_shutters': [],
+                    'remotes': [],
                     'config': config,
                     'state': local_state
                 }
 
-            local_name = config.get("name") if config.get("name") != "" else local_id
+            local_name = config.get("name") if config.get("name") not in ["", None] else local_id
 
-            mapping[local_id]['remote_shutters'].append({
+            mapping[local_id]['remotes'].append({
                 'remote': remote_id,
                 'gw': ip,
                 'name': f"{self._name}/{local_name}",
@@ -361,66 +397,81 @@ class Syncer(OMPluginBase):
             raise RuntimeError(f'Could not load shutter mapping for GW with ip {ip}: {ex}')
 
         try:
-            self.update_remote_config(type=f"shutter{'group' if is_shutter_group else ''}",
+            self.update_remote_config(obj_type=f"shutter{'group' if is_shutter_group else ''}",
                                       ip=ip, remote_id=remote_id, local_name=local_name)
         except Exception as ex:
             raise RuntimeError(f"Error while updating remote shutter config: {ex}")
+
         try:
             self.update_remote_shutter_state(ip=ip, remote_id=remote_id, state=local_state, reverse=reverse,
                                              is_shutter_group=is_shutter_group)
         except Exception as ex:
             raise RuntimeError(f"Error while updating remote shutter state: {ex}")
 
-    def update_remote_config(self, type, ip, remote_id, local_name):
+    def update_remote_config(self, obj_type, ip, remote_id, local_name=None, restore=False):
         configs_to_set = []
-        old_type = type
-        if old_type == "shuttergroup":
-            type = "shutter"
-            remote_conf = self._gateways.get(ip).get('remote_confs').get(type)
+        if obj_type == "shuttergroup":
+            obj_type = "shutter"
+            remote_conf = self._gateways.get(ip).get('remote_confs').get(obj_type)
             for shutter in remote_conf:
                 if shutter.get("group_1") == remote_id or shutter.get("group_2") == remote_id:
                     configs_to_set.append(shutter)
-
         else:
-            remote_conf = self._gateways.get(ip).get('remote_confs').get(type)
+            remote_conf = self._gateways.get(ip).get('remote_confs').get(obj_type)
             configs_to_set = [remote_conf[remote_id]]
-        logger.info(f"Confs_to_set: {configs_to_set}")
-        try:
-            for conf in configs_to_set:
-                old_name = conf.get('name')
-                if ' (also controlled by syncer plugin ' in old_name:
-                    old_name = old_name.split(' (also controlled by syncer plugin ')[0]
-                remote_conf[remote_id]['name'] = f"{old_name} (also controlled by syncer plugin {self._name}/{local_name})"
-                self._call_remote(f"set_{type}_configuration?config={json.dumps(remote_conf[remote_id])}",
-                                  gateway=self._gateways[ip])
-        except Exception as ex:
-            raise RuntimeError(f'Could not set configuration of remote {old_type} {ip}/{remote_id}: {ex}')
 
-    def update_remote_io_state(self, type, ip, remote_id, state):
+        logger.debug(f"Confs_to_set: {configs_to_set}")
+
+        for conf in configs_to_set:
+            remote_id = conf.get("id")
+            try:
+                old_name = conf.get('initial_name')
+                initial_name = old_name
+                if ' (also controlled by syncer plugin ' in old_name:
+                    initial_name = old_name.split(' (also controlled by syncer plugin ')[0]
+
+                if not restore:
+                    name_to_set = f"{initial_name} (also controlled by syncer plugin {self._name}/{local_name})"
+
+                else:
+                    name_to_set = initial_name
+
+                remote_conf[remote_id]['name'] = name_to_set
+                config = {'id': remote_id, 'name': name_to_set}
+                if obj_type == "shutter":
+                    config.update({"group_1": conf.get("group_1"), "group_2": conf.get("group_2")})
+                self._call_remote(f"set_{obj_type}_configuration?config={json.dumps(config)}", gateway=self._gateways[ip])
+                logger.debug(f"Set name of remote {obj_type} {ip}/{remote_id} from {old_name} to {name_to_set}")
+            except Exception as ex:
+                raise RuntimeError(f'Could not set configuration of remote {obj_type} {ip}/{remote_id}: {ex}')
+        self._gateways[ip]['remote_confs'][obj_type] = remote_conf
+
+    def update_remote_io_state(self, obj_type, ip, remote_id, state):
         params = {
             "id": remote_id,
             "is_on": state.get('status')
             }
 
-        if type == "output":
+        if obj_type == "output":
             params.update({
                 "dimmer": state.get('dimmer', ""),
-                "timer": state.get('ctimer', "")
             })
 
         try:
-            self._call_remote(api_call=f"set_{type}", params=params, gateway=self._gateways[ip])
+            self._call_remote(api_call=f"set_{obj_type}", params=params, gateway=self._gateways[ip])
             logger.info(
-                f"Updated remote {type} {remote_id} on GW {self._gateways[ip].get('name')} to {'on' if state.get('status') in [1, True] else 'off'} {'' if state.get('dimmer') in ['', None] else '(' + str(state.get('dimmer')) + '%)'}")
+                f"Updated remote {obj_type} {remote_id} on GW {self._gateways[ip].get('name')} to {'on' if state.get('status') in [1, True] else 'off'} {'' if state.get('dimmer') in ['', None] else '(' + str(state.get('dimmer')) + '%)'}")
         except Exception as ex:
             raise RuntimeError(
-                f"Could not set state of remote {type} {self._gateways[ip].get('name')}/{remote_id}: {ex}")
+                f"Could not set state of remote {obj_type} {self._gateways[ip].get('name')}/{remote_id}: {ex}")
 
     def update_remote_shutter_state(self, ip, remote_id, state, reverse, is_shutter_group):
         try:
             do_call = True
+            print_state = ""
             if state == "stopped":
                 remote_state = "stop"
+                print_state = "stopping"
             elif state == "going_up":
                 remote_state = "up" if not reverse else "down"
             elif state == "going_down":
@@ -428,6 +479,9 @@ class Syncer(OMPluginBase):
             else:
                 remote_state = ""
                 do_call = False
+
+            if remote_state in ["up", "down"]:
+                print_state = f"going {remote_state}"
 
             if is_shutter_group:
                 group = "group_"
@@ -438,8 +492,9 @@ class Syncer(OMPluginBase):
                 self._call_remote(api_call=f"do_shutter_{group}{remote_state}", params={
                     "id": remote_id
                 }, gateway=self._gateways[ip])
-            logger.info(
-                f"Updated remote shutter{group[:-1]} {remote_id} on GW {self._gateways[ip].get('name')} to {remote_state}")
+
+                logger.info(
+                    f"Updated remote shutter{group[:-1]} {remote_id} on GW {self._gateways[ip].get('name')} to {print_state}")
         except Exception as ex:
             raise RuntimeError(
                 f"Could not set state of remote shutter{'group' if is_shutter_group else ''} {self._gateways[ip].get('name')}/{remote_id}: {ex}")
@@ -448,7 +503,7 @@ class Syncer(OMPluginBase):
     def run(self):
         while True:
             if not self._enabled:
-                time.sleep(30)
+                time.sleep(10)
                 continue
             try:
                 # Sync sensor values:
@@ -457,14 +512,20 @@ class Syncer(OMPluginBase):
                     if sensor_mapping == {}:
                         continue
                     sensor_status = self._call_remote('get_sensor_status', gateway).get('status')
+
                     for sensor in sensor_status:
-                        sensor_tdo = sensor_mapping.get(sensor.get('id'), None)
-                        if sensor_tdo is None:
+                        local_sensor = sensor_mapping.get(sensor.get('id'), None)
+                        if local_sensor is None:
+                            logger.debug(f"Did not update sensor value because there is remote sensor coupled to this sensor {sensor}")
                             continue
-                        self.connector.sensor.report_state(sensor=sensor_tdo,
+                        if sensor.get('value', None) == local_sensor.get('value'):
+                            logger.debug(f"Did not update sensor value because there is no temperature change")
+                            continue
+                        self.connector.sensor.report_state(sensor=local_sensor.get('sensor_dto'),
                                                            value=sensor.get('value'))
+                        sensor_mapping[sensor['id']]['value'] = sensor.get('value')
                         logger.info(
-                            f"Updated {sensor_tdo.name} with value {sensor.get('value')} from remote sensor ({gateway.get('ip')}) with id {sensor.get('id')}")
+                            f"Updated {local_sensor.get('sensor_dto').name} with value {sensor.get('value')} from remote sensor ({gateway.get('ip')}) with id {sensor.get('id')}")
             except Exception as ex:
                 logger.exception('Error while syncing sensors: {0}'.format(ex))
             time.sleep(self._polling_interval)
@@ -478,12 +539,12 @@ class Syncer(OMPluginBase):
                 state = minimal_event[key]
                 shutter_mapping[key]['state'] = state
                 logger.info(f"Shutter change detected: {key} {state}")
-                logger.info(f"Updating remote shutters... {value.get('remote_shutters')}")
+                logger.info(f"Checking if remote shutters should be updated...")
                 try:
-                    for remote_shutter in value.get('remote_shutters'):
+                    for remote_shutter in value.get('remotes'):
                         ip = remote_shutter.get('gw')
                         remote_id = remote_shutter.get('remote')
-                        reverse = remote_shutter.get('reversed')
+                        reverse = remote_shutter.get('reverse')
                         is_shutter_group = remote_shutter.get('is_shutter_group')
                         self.update_remote_shutter_state(ip=ip, remote_id=remote_id, state=state, reverse=reverse,
                                                          is_shutter_group=is_shutter_group)
@@ -494,31 +555,30 @@ class Syncer(OMPluginBase):
         new_event = {'id': event.get('id'),
                      'status': bool(event.get('status').get('on')),
                      'dimmer': event.get('status').get('value', "")}
-        self.handle_io_status(type="output", event=new_event)
+        self.handle_io_status(obj_type="output", event=new_event)
 
     def handle_input_status(self, event):
         new_event = {'id': event.get('input_id'),
                      'status': bool(event.get('status'))}
-        self.handle_io_status(type="input", event=new_event)
+        self.handle_io_status(obj_type="input", event=new_event)
 
-    def handle_io_status(self, type, event):
-        logger.info(event)
-        if not self._enabled or event.get('id') not in self._mappings.get(type):
+    def handle_io_status(self, obj_type, event):
+        if not self._enabled or event.get('id') not in self._mappings.get(obj_type):
             return
         local_id = event.get('id')
         event.pop("id")
 
-        self._mappings[type][local_id]["state"] = event
-        remote_ios = self._mappings.get(type).get(local_id).get(f'remote_{type}s')
+        self._mappings[obj_type][local_id]["state"] = event
+        remote_ios = self._mappings.get(obj_type).get(local_id).get('remotes')
         logger.info(
-            f"{type.capitalize()} change detected: {local_id} {'on' if event.get('status') in [1, True] else 'off'} {'' if event.get('dimmer') in ['', None] else '(' + str(event.get('dimmer')) + '%)'}")
-        logger.info(f"Updating remote {type}s: {remote_ios}")
+            f"{obj_type.capitalize()} change detected: {local_id} {'on' if event.get('status') in [1, True] else 'off'} {'' if event.get('dimmer') in ['', None] else '(' + str(event.get('dimmer')) + '%)'}")
+        logger.info(f"Updating remote {obj_type}s: {remote_ios}")
 
         try:
             for remote_io in remote_ios:
                 ip = remote_io.get('gw')
                 remote_id = remote_io.get('remote')
-                self.update_remote_io_state(type=type, ip=ip, remote_id=remote_id, state=event)
+                self.update_remote_io_state(obj_type=obj_type, ip=ip, remote_id=remote_id, state=event)
         except Exception as ex:
             logger.exception(f"Error processing output event {event}: {ex}")
 
@@ -581,16 +641,37 @@ class Syncer(OMPluginBase):
     @om_expose
     def set_config(self, config):
         logger.info("Saving configuration")
+        thread = Thread(target=self._delete_old_config)
+        thread.start()
         config = json.loads(config)
         for key in config:
             if isinstance(config[key], six.string_types):
                 config[key] = str(config[key])
         self._config_checker.check_config(config)
         self._config = config
-        logger.info(config)
         thread = Thread(target=self._process_config)
         thread.start()
         self.write_config(config)
         return json.dumps({
             'success': True
         })
+
+    def on_remove(self):
+        self._delete_old_config()
+
+    def _delete_old_config(self):
+        self._old_conf_deleted = False
+        for obj_type, values in self._mappings.items():
+            for local_id, remotes in values.items():
+                for remote in remotes.get("remotes"):
+                    self.update_remote_config(obj_type=f"{obj_type}{'group' if bool(remote.get('is_shutter_group', False)) else ''}",
+                                              ip=remote.get("gw"), remote_id=remote.get("remote"), restore=True)
+        for ip, gw in self._gateways.items():
+            for _, sensor_dto in gw.get('sensor_mapping', {}).items():
+                """
+                TODO: remove sensor_dto, this todo is blocked because removal of connectors is not yet implemented in BE.
+                When removing the plugin, connectors will be deleted in the background, so not necessary in that case.
+                """
+                continue
+
+        self._old_conf_deleted = True
