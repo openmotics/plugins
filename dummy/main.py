@@ -92,15 +92,15 @@ class Dummy(OMPluginBase):
         self._config = self.read_config(Dummy.default_config)
         self._config_checker = PluginConfigChecker(self.config_description)
 
+        self.connector.sensor.subscribe_status_event(
+            self.handle_sensor_status, version=2
+        )
         self.connector.ventilation.subscribe_status_event(
-            Dummy.handle_ventilation_status, version=2
+            self.handle_ventilation_status, version=2
         )
         self.connector.ventilation.attach_set_auto(self.ventilation_set_auto, version=1)
         self.connector.ventilation.attach_set_manual(
             self.ventilation_set_manual, version=1
-        )
-        self.connector.sensor.subscribe_status_event(
-            Dummy.handle_sensor_status, version=2
         )
         self.connector.hot_water.subscribe_status_event(
             self.handle_hot_water_status, version=1
