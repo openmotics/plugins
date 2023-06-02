@@ -27,7 +27,6 @@ class SensorDummy:
     def __init__(self, sensor_dto, report_status, update_interval=5):
         self.sensor_dto = sensor_dto
         self.value = None
-
         self.report_status = report_status
 
         self.thread = Thread(target=self.simulation)
@@ -36,12 +35,12 @@ class SensorDummy:
         self.lock = Lock()
 
     def start(self):
-        logger.info("starting SensorDummy")
+        logger.info("starting SensorDummy {}".format(self.sensor_dto))
         self._running = True
         self.thread.start()
 
     def stop(self):
-        logger.info("stopping SensorDummy")
+        logger.info("stopping SensorDummy{}".format(self.sensor_dto))
         self._running = False
 
     def simulation(self):
@@ -56,7 +55,10 @@ class SensorDummy:
         range_min, range_max = SensorDummy.STATUS_RANGES.get(
             self.sensor_dto.physical_quantity, (20, 25)
         )
-        delta = (range_max - range_min) / 10.0
-        value = self.value + round(random.uniform(-delta, delta), 1)
-        self.value = min(max(range_min, value), range_max)
-        return previous_value != self.value
+        if self.value is None:
+            self.value = range_min + (range_max - range_min) / 2.0
+        else:
+            delta = (range_max - range_min) / 10.0
+            new_value = self.value + round(random.uniform(-delta, delta), 1)
+            self.value = min(max(range_min, new_value), range_max)
+        return self.value != previous_value

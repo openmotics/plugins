@@ -62,12 +62,12 @@ class Dummy(OMPluginBase):
                             {
                                 "name": "physical",
                                 "type": "enum",
-                                "choices": self.connector.sensor.Enums.PhysicalQuantities,
+                                "choices": list(self.connector.sensor.Enums.UNIT_MAPPING.keys()),
                             },
                             {
                                 "name": "unit",
                                 "type": "enum",
-                                "choices": self.connector.sensor.Enums.Units,
+                                "choices": list(set([item for sublist in self.connector.sensor.Enums.UNIT_MAPPING.values() for item in sublist])),
                             },
                         ],
                     },
@@ -193,11 +193,9 @@ class Dummy(OMPluginBase):
                     sensor_dummy = self._sensor_dummies.get(sensor_dto.external_id)
                     if sensor_dummy is not None:
                         sensor_dummy.stop()
-                    sensor_dummy = self._sensor_dummies[
-                        sensor_dto.external_id
-                    ] = SensorDummy(
+                    sensor_dummy = SensorDummy(
                         sensor_dto,
-                        report_status=self.report_hot_water_status,
+                        report_status=self.report_sensor_status,
                         update_interval=30,
                     )
                     self._sensor_dummies[sensor_dto.external_id] = sensor_dummy

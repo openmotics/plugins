@@ -23,12 +23,12 @@ class HotWaterDummy:
         self.lock = Lock()
 
     def start(self):
-        logger.info("starting HotWaterDummy")
+        logger.info("starting HotWaterDummy {}".format(self.hot_water_dto))
         self._running = True
         self.thread.start()
 
     def stop(self):
-        logger.info("stopping HotWaterDummy")
+        logger.info("stopping HotWaterDummy {}".format(self.hot_water_dto))
         self._running = False
 
     def simulation(self):

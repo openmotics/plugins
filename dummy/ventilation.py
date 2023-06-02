@@ -23,12 +23,12 @@ class VentilationDummy:
         self.lock = Lock()
 
     def start(self):
-        logger.info("starting VentilationDummy")
+        logger.info("starting VentilationDummy {}".format(self.ventilation_dto))
         self._running = True
         self.thread.start()
 
     def stop(self):
-        logger.info("stopping VentilationDummy")
+        logger.info("stopping VentilationDummy {}".format(self.ventilation_dto))
         self._running = False
 
     def simulation(self):
