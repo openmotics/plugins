@@ -21,7 +21,7 @@ class Syncer(OMPluginBase):
     """
 
     name = 'Syncer'
-    version = '0.0.7'
+    version = '0.0.8'
     interfaces = [('config', '1.0')]
 
     config_description = [{
@@ -427,8 +427,8 @@ class Syncer(OMPluginBase):
                         sensor_tdo = sensor_mapping.get(sensor.get('id'), None)
                         if sensor_tdo is None:
                             continue
-                        self.connector.sensor.report_state(sensor=sensor_tdo,
-                                                           value=sensor.get('value'))
+                        self.connector.sensor.report_status(sensor=sensor_tdo,
+                                                            value=sensor.get('value'))
                         logger.info(
                             f"Updated {sensor_tdo.name} with value {sensor.get('value')} from remote sensor ({gateway.get('ip')}) with id {sensor.get('id')}")
             except Exception as ex:
