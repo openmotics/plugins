@@ -521,7 +521,7 @@ class Syncer(OMPluginBase):
                         if sensor.get('value', None) == local_sensor.get('value'):
                             logger.debug(f"Did not update sensor value because there is no temperature change")
                             continue
-                        self.connector.sensor.report_state(sensor=local_sensor.get('sensor_dto'),
+                        self.connector.sensor.report_status(sensor=local_sensor.get('sensor_dto'),
                                                            value=sensor.get('value'))
                         sensor_mapping[sensor['id']]['value'] = sensor.get('value')
                         logger.info(

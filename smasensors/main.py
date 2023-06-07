@@ -31,7 +31,7 @@ class SMASensors(OMPluginBase):
     """
 
     name = 'SMASensors'
-    version = '1.0.4'
+    version = '1.0.5'
     interfaces = [('config', '1.0'), ('metrics', '1.0')]
     default_config = {}
     config_description = [{
@@ -117,8 +117,8 @@ class SMASensors(OMPluginBase):
                 # only update sensor value if the sensor is known on the gateway
                 if sensor_dto is not None:
                     value = round(sensor.value, 2) if sensor.value is not None else None
-                    self.connector.sensor.report_state(sensor=sensor_dto,
-                                                       value=value)
+                    self.connector.sensor.report_status(sensor=sensor_dto,
+                                                        value=value)
             except Exception:
                 logger.exception('Error while reporting sensor state')
 
