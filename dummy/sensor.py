@@ -45,9 +45,12 @@ class SensorDummy:
 
     def simulation(self):
         while self._running:
-            changed = self.update_value()
-            if changed:
-                self.report_status(self.sensor_dto, self.value)
+            try:
+                changed = self.update_value()
+                if changed:
+                    self.report_status(self.sensor_dto, self.value)
+            except Exception:
+                logger.exception("An error in updating the sensor simulation occured")
             time.sleep(self.update_interval)
 
     def update_value(self):

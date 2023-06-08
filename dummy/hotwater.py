@@ -33,16 +33,19 @@ class HotWaterDummy:
 
     def simulation(self):
         while self._running:
-            changed = self.update_steering_power()
-            changed |= self.update_current_temperature()
-            if changed:
-                self.report_status(
-                    self.hot_water_dto,
-                    self.steering_power,
-                    self.current_temperature,
-                    self.setpoint,
-                    self.state,
-                )
+            try:
+                changed = self.update_steering_power()
+                changed |= self.update_current_temperature()
+                if changed:
+                    self.report_status(
+                        self.hot_water_dto,
+                        self.steering_power,
+                        self.current_temperature,
+                        self.setpoint,
+                        self.state,
+                    )
+            except Exception:
+                logger.exception("An error in updating the hotwater simulation occured")
             time.sleep(self.update_interval)
 
     def set_state(self, state):
