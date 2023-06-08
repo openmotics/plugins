@@ -33,11 +33,14 @@ class VentilationDummy:
 
     def simulation(self):
         while self._running:
-            changed = self.update()
-            if changed:
-                self.report_status(
-                    self.ventilation_dto, self.mode, self.level, self.remaining_time
-                )
+            try:
+                changed = self.update()
+                if changed:
+                    self.report_status(
+                        self.ventilation_dto, self.mode, self.level, self.remaining_time
+                    )
+            except Exception:
+                logger.exception("An error in updating the ventilation simulation occured")
             time.sleep(self.update_interval)
 
     def set_auto(self):
