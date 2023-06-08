@@ -60,7 +60,7 @@ class HotWaterDummy:
         if self.state == "on":
             if self.current_temperature >= self.setpoint:
                 new_steering_power = 0
-            elif self.current_temperature >= self.setpoint - 10:
+            elif self.current_temperature >= max(self.setpoint - 10, self.hot_water_dto.min_temp):
                 new_steering_power = self.steering_power  # keep going
             else:
                 new_steering_power = 100
