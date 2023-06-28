@@ -10,6 +10,7 @@ from collections import deque
 from .hotwater import HotWaterDummy
 from .sensor import SensorDummy
 from .ventilation import VentilationDummy
+from .measurement_counter import MeasurementCounterDummy
 
 from plugins.base import (
     OMPluginBase,
@@ -32,7 +33,7 @@ class Dummy(OMPluginBase):
     """
 
     name = "Dummy"
-    version = "2.0.1"
+    version = "2.0.2"
     interfaces = [("config", "1.0")]
 
     default_config = {}
@@ -79,6 +80,30 @@ class Dummy(OMPluginBase):
                 "description": "Register a dummy hot water unit",
             },
             {
+                "name": "measurement_counters",
+                "type": "section",
+                "description": "Add measurement counters here",
+                "repeat": True,
+                "min": 0,
+                "content": [
+                    {
+                        "name": "name",
+                        "type": "str",
+                        "description": "The name for the measurement counter",
+                    },
+                    {
+                        "name": "type",
+                        "type": "enum",
+                        "choices": self.connector.measurement_counter.Enums.Types.ALL,
+                    },
+                    {
+                        "name": "category",
+                        "type": "enum",
+                        "choices": self.connector.measurement_counter.Enums.Categories.ALL,
+                    },
+                ],
+            },
+            {
                 "name": "ventilation",
                 "type": "bool",
                 "description": "Register a dummy ventilation unit",
@@ -115,7 +140,9 @@ class Dummy(OMPluginBase):
         self._metrics_queue = deque()
         self._wants_registration = True
         self._sensor_dtos = []
+        self._mc_dtos = []
         self._sensor_dummies = {}
+        self._mc_dummies = {}
         self._ventilation_dto = None
         self._ventilation_dummy = None
         self._hot_water_dto = None
@@ -248,12 +275,41 @@ class Dummy(OMPluginBase):
                 self._hot_water_dto = None
         else:
             self._hot_water_dto = None
+        # register measurement counters
+        mcs = self._config.get("measurement_counters", [])
+        logger.info("Registering measurement counters...")
+        for mc in mcs:
+            mc_name = mc["name"]
+            mc_type = mc["type"]
+            mc_category = mc['category']
+            try:
+                external_id = f"dummy/{mc_name}"
+                mc_dto = self.connector.measurement_counter.register(
+                    external_id=external_id,
+                    name=f"{mc_name}",
+                    type=mc_type,
+                    category=mc_category
+                )
+                logger.info("Registered %s" % mc_dto)
+                self._mc_dtos.append(mc_dto)
+                mc_dummy = self._mc_dummies.get(mc_dto.external_id)
+                if mc_dummy is not None:
+                    mc_dummy.stop()
+                mc_dummy = MeasurementCounterDummy(
+                    mc_dto,
+                    report_status=self.report_mc_status,
+                    update_interval=30
+                )
+                self._mc_dummies[mc_dto.external_id] = mc_dummy
+                mc_dummy.start()
+            except Exception:
+                logger.exception("Error registering sensor %s" % mc)
 
     # sensors
 
     def report_sensor_status(self, sensor_dto, value):
         logger.info("publish sensor value for {}: {}".format(sensor_dto, value))
-        self.connector.sensor.report_status(sensor=sensor_dto, value=value)
+        self.connector.sensor.report_state(sensor=sensor_dto, value=value)
 
     @sensor_status(version=1)
     def sensor_status(self, status):
@@ -266,6 +322,23 @@ class Dummy(OMPluginBase):
                 event.data["id"], event.data["value"]
             )
         )
+
+    # Measurement Counters
+    def report_mc_status(self, mc_dto, parameter_id, value):
+        logger.info("publish measurementCounter value for {}: [{}] = {}".format(mc_dto, parameter_id, value))
+        self.connector.measurement_counter.report_state(measurement_counter=mc_dto, parameter_id=parameter_id, value=value)
+
+    # @measurement_counter_status(version=1)
+    # def measurement_counter_status(self, status):
+    #     logger.info("new measurement counter status from gateway: {}".format(status))
+    #
+    # @staticmethod
+    # def handle_measurement_counter_status(event):
+    #     logger.info(
+    #         "Received measurement status from gateway: {0} {1}".format(
+    #             event.data["id"], event.data["value"]
+    #         )
+    #     )
 
     # ventilation units
 
