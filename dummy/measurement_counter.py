@@ -52,7 +52,7 @@ class MeasurementCounterDummy:
                 changed = self.update_value()
                 if changed:
                     for param_id, value in self.values.items():
-                        logger.info("Report change: MeasurementCounter: value: [{}] = {}".format(param_id, value))
+                        logger.info("Report change: MeasurementCounter [{}]: value: [{}] = {}".format(self.measurement_counter_dto.name, param_id, value))
                         self.report_status(self.measurement_counter_dto, param_id, value)
             except Exception:
                 logger.exception("An error in updating the measurement_counter simulation occurred")

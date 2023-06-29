@@ -19,6 +19,7 @@ from plugins.base import (
     om_expose,
     ventilation_status,
     sensor_status,
+    measurement_counter_status,
     hot_water_status,
     om_metric_receive,
     om_metric_data,
@@ -135,6 +136,10 @@ class Dummy(OMPluginBase):
         )
         self.connector.hot_water.attach_set_setpoint(
             self.handle_hot_water_set_setpoint, version=1
+        )
+
+        self.connector.measurement_counter.subscribe_status_event(
+            self.handle_measurement_counter_status, version=2
         )
 
         self._metrics_queue = deque()
@@ -328,17 +333,17 @@ class Dummy(OMPluginBase):
         logger.info("publish measurementCounter value for {}: [{}] = {}".format(mc_dto, parameter_id, value))
         self.connector.measurement_counter.report_state(measurement_counter=mc_dto, parameter_id=parameter_id, value=value)
 
-    # @measurement_counter_status(version=1)
-    # def measurement_counter_status(self, status):
-    #     logger.info("new measurement counter status from gateway: {}".format(status))
-    #
-    # @staticmethod
-    # def handle_measurement_counter_status(event):
-    #     logger.info(
-    #         "Received measurement status from gateway: {0} {1}".format(
-    #             event.data["id"], event.data["value"]
-    #         )
-    #     )
+    @measurement_counter_status(version=1)
+    def measurement_counter_status(self, status):
+        logger.info("new measurement counter status from gateway: {}".format(status))
+
+    @staticmethod
+    def handle_measurement_counter_status(event):
+        logger.info(
+            "Received measurement status from gateway: {0} {1}".format(
+                event.data["id"], event.data["value"]
+            )
+        )
 
     # ventilation units
 
