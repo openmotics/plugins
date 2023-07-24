@@ -17,7 +17,7 @@ class OpenWeatherMap(OMPluginBase):
     """
 
     name = 'OpenWeatherMap'
-    version = '2.0.1'
+    version = '2.0.2'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_key',
