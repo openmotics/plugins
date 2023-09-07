@@ -17,7 +17,7 @@ class OpenWeatherMap(OMPluginBase):
     """
 
     name = 'OpenWeatherMap'
-    version = '2.0.0'
+    version = '2.0.1'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_key',
@@ -165,8 +165,8 @@ class OpenWeatherMap(OMPluginBase):
                     try:
                         if self._sensor_dto:
                             logger.info(f"Setting virtual sensor to: {values[0]}")
-                            self.connector.sensor.report_state(sensor=self._sensor_dto,
-                                                            value=values[0])
+                            self.connector.sensor.report_status(sensor=self._sensor_dto,
+                                                                value=values[0])
                     except Exception:
                         logger.exception('Error while reporting sensor state')
 

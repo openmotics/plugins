@@ -1,0 +1,7 @@
+{
+    "version" : "2.1.0",
+    "description" : "dummy",
+    "metric_source"  : "dummy",
+    "metric_type" : "dummy",
+    "python_version": 3
+}
