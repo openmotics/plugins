@@ -1032,7 +1032,7 @@ class MQTTClient(OMPluginBase):
         try:
             if shutter_id in self._shutters:
                 shutter = self._shutters[shutter_id]
-                value = msg.payload
+                value = str(msg.payload, "utf-8")
                 if value.lower() in ['up', 'down', 'stop']:
                     thread = Thread(
                         target=self._execute_shutter_command,
