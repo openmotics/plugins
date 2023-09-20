@@ -95,12 +95,12 @@ class Dummy(OMPluginBase):
                     {
                         "name": "type",
                         "type": "enum",
-                        "choices": self.connector.measurement_counter.Enums.Types.ALL,
+                        "choices": self.connector.measurement_counter.Enums.Types.list_values(),
                     },
                     {
                         "name": "category",
                         "type": "enum",
-                        "choices": self.connector.measurement_counter.Enums.Categories.ALL,
+                        "choices": self.connector.measurement_counter.Enums.Categories.list_values(),
                     },
                 ],
             },
@@ -329,9 +329,9 @@ class Dummy(OMPluginBase):
         )
 
     # Measurement Counters
-    def report_mc_status(self, mc_dto, parameter_id, value):
-        logger.info("publish measurementCounter value for {}: [{}] = {}".format(mc_dto, parameter_id, value))
-        self.connector.measurement_counter.report_state(measurement_counter=mc_dto, parameter_id=parameter_id, value=value)
+    def report_mc_status(self, mc_dto, total_consumed, total_injected):
+        logger.info("publish measurementCounter value for {}: consumed = {}; injected = {}".format(mc_dto, total_consumed, total_injected))
+        self.connector.measurement_counter.report_state(measurement_counter=mc_dto, total_consumed=total_consumed, total_injected=total_injected)
 
     @measurement_counter_status(version=1)
     def measurement_counter_status(self, status):
