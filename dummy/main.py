@@ -228,7 +228,7 @@ class Dummy(OMPluginBase):
                     sensor_dummy = SensorDummy(
                         sensor_dto,
                         report_status=self.report_sensor_status,
-                        update_interval=2,
+                        update_interval=30,
                     )
                     self._sensor_dummies[sensor_dto.external_id] = sensor_dummy
                     sensor_dummy.start()
