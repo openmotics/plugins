@@ -34,7 +34,7 @@ class Dummy(OMPluginBase):
     """
 
     name = "Dummy"
-    version = "2.1.0"
+    version = "2.1.1"
     interfaces = [("config", "1.0")]
 
     default_config = {}
@@ -228,7 +228,7 @@ class Dummy(OMPluginBase):
                     sensor_dummy = SensorDummy(
                         sensor_dto,
                         report_status=self.report_sensor_status,
-                        update_interval=30,
+                        update_interval=2,
                     )
                     self._sensor_dummies[sensor_dto.external_id] = sensor_dummy
                     sensor_dummy.start()
@@ -329,9 +329,10 @@ class Dummy(OMPluginBase):
         )
 
     # Measurement Counters
-    def report_mc_status(self, mc_dto, total_consumed, total_injected):
-        logger.info("publish measurementCounter value for {}: consumed = {}; injected = {}".format(mc_dto, total_consumed, total_injected))
-        self.connector.measurement_counter.report_state(measurement_counter=mc_dto, total_consumed=total_consumed, total_injected=total_injected)
+    def report_mc_status(self, mc_dto, total_consumed, total_injected, realtime):
+        logger.info("publish measurementCounter value for {}: consumed = {}; injected = {}; realtime={}".format(mc_dto, total_consumed, total_injected, realtime))
+        self.connector.measurement_counter.report_counter_state(measurement_counter=mc_dto, total_consumed=total_consumed, total_injected=total_injected)
+        self.connector.measurement_counter.report_realtime_state(measurement_counter=mc_dto, value=realtime)
 
     @measurement_counter_status(version=1)
     def measurement_counter_status(self, status):

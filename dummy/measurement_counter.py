@@ -20,9 +20,10 @@ class MeasurementCounterDummy:
         "electric": [
             'total_consumed',
             'total_injected',
+            'realtime'
         ],
-        "water": ['total_consumed'],
-        "gas": ['total_consumed'],
+        "water": ['total_consumed', 'realtime'],
+        "gas": ['total_consumed', 'realtime'],
     }
 
     def __init__(self, measurement_counter_dto, report_status, update_interval=5):
@@ -51,18 +52,26 @@ class MeasurementCounterDummy:
                 if changed:
                     consumed = self.values.get('total_consumed', 0)
                     injected = self.values.get('total_injected', 0)
-                    logger.info("Report change: MeasurementCounter [{}]: consumed = {}; injected = {}".format(self.measurement_counter_dto.name, consumed, injected))
-                    self.report_status(self.measurement_counter_dto, consumed, injected)
+                    realtime = self.values.get('realtime', 0)
+                    # logger.info("Report change: MeasurementCounter [{}]: consumed = {}; injected = {}; realtime = {}".format(self.measurement_counter_dto.name, consumed, injected, realtime))
+                    self.report_status(self.measurement_counter_dto, consumed, injected, realtime)
             except Exception:
                 logger.exception("An error in updating the measurement_counter simulation occurred")
             time.sleep(self.update_interval)
 
     def update_values(self):
         for key, value in self.values.items():
-            range_min, range_max = MeasurementCounterDummy.STATUS_RANGES.get(
-                self.measurement_counter_dto.type, (20, 25)
-            )
-            offset = random.randint(range_min, range_max)
-            value += offset
-            self.values[key] = value
+            if key != 'realtime':
+                range_min, range_max = MeasurementCounterDummy.STATUS_RANGES.get(
+                    self.measurement_counter_dto.type, (20, 25)
+                )
+                offset = random.randint(range_min, range_max)
+                value += offset
+                self.values[key] = value
+            else:
+                range_min, range_max = MeasurementCounterDummy.STATUS_RANGES.get(
+                    self.measurement_counter_dto.type, (20, 25)
+                )
+                value = random.randint(range_min, range_max)
+                self.values[key] = value
         return True
