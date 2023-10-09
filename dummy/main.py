@@ -293,7 +293,8 @@ class Dummy(OMPluginBase):
                     external_id=external_id,
                     name=f"{mc_name}",
                     type=mc_type,
-                    category=mc_category
+                    category=mc_category,
+                    has_realtime=True
                 )
                 logger.info("Registered %s" % mc_dto)
                 self._mc_dtos.append(mc_dto)
