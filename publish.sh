@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 if [ $# -ne 3 ]
 then
   echo "Usage: ./`basename $0` <package> <ip/hostname of gateway> <username>"
@@ -12,7 +12,10 @@ else
     sedcmd='sed -r'
   fi
 
-  read -s -p "Enter password: " password
+  if [[ -z "$password" ]] ;
+  then
+    read -s -p "Enter password: " password
+  fi
   echo
   login=`curl -sk -X GET "https://$2/login?username=$3&password=$password"`
   success=`echo $login | $sedcmd 's/(.+)"success": *([a-z]+)(.+)/\2/'`
