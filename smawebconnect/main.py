@@ -128,7 +128,8 @@ class SMAWebConnect(OMPluginBase):
             external_id = f'smawebconnect_{mapping.get_external_id()}'
 
             # sensor population
-            if mapping.sensor_key is not None and mapping.sensor_mapping is not None:
+            if mapping.sensor_key is not None and mapping.sensor_mapping is not None \
+                    and mapping.counter_key is None and mapping.counter_mapping is None:
                 logger.debug(f"Processing mapping: Sensor: {mapping.sensor_mapping.name}; value = {mapping.sensor_mapping.value}")
                 if external_id not in self._sensor_dtos and mapping.sensor_mapping.value is not None:
                     try:
@@ -179,6 +180,12 @@ class SMAWebConnect(OMPluginBase):
                             total_consumed=value if not mapping.counter_mapping.is_injection else 0,
                             total_injected=value if mapping.counter_mapping.is_injection else 0,
                         )
+                        if mapping.sensor_key is not None:
+                            value = round(mapping.sensor_mapping.value, 2) if mapping.sensor_mapping.value is not None else None
+                            self.connector.measurement_counter.report_realtime_state(
+                                measurement_counter=counter_dto,
+                                value=value
+                            )
                 except Exception:
                     logger.exception('Error while reporting sensor state')
 
