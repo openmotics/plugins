@@ -1,14 +1,11 @@
 import copy
-from dataclasses import dataclass
 import requests
 from . import constants
 import logging
-import typing
 from typing import Dict, List
 
 
 logger = logging.getLogger(__name__)
-
 
 
 class SMADevice:
