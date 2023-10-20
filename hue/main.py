@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class Hue(OMPluginBase):
 
     name = 'Hue'
-    version = '1.1.4'
+    version = '1.1.5'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_url',
@@ -118,7 +118,7 @@ class Hue(OMPluginBase):
         try:
             start = time.time()
             response = requests.get(url=self._endpoint.format('lights/{0}').format(hue_light_id))
-            if response.status_code is 200:
+            if response.status_code == 200:
                 hue_light = response.json()
                 logger.info('Getting output state for hue id: %s took %ss', hue_light_id, round(time.time() - start, 2))
                 return hue_light
@@ -132,7 +132,7 @@ class Hue(OMPluginBase):
         try:
             start = time.time()
             response = requests.put(url=self._endpoint.format('lights/{0}/state').format(hue_light_id), data=json.dumps(state))
-            if response.status_code is 200:
+            if response.status_code == 200:
                 result = response.json()
                 if result[0].get('success')is None:
                     logger.info('Setting output state for Hue output {0} returned unexpected result. Response: {1} ({2})'.format(hue_light_id, response.text, response.status_code))
@@ -201,7 +201,7 @@ class Hue(OMPluginBase):
     def _getAllSensorsState(self):
         hue_sensors = {}
         response = requests.get(url=self._endpoint.format('sensors'))
-        if response.status_code is 200:
+        if response.status_code == 200:
             for hue_sensor_id, data in response.json().items():
                 if data.get('type') == 'ZLLTemperature':
                     hue_sensors[hue_sensor_id] = self._parseSensorObject(hue_sensor_id, data, sensor_type='temperature')
@@ -212,7 +212,7 @@ class Hue(OMPluginBase):
     def _getAllLightsState(self):
         hue_lights = {}
         response = requests.get(url=self._endpoint.format('lights'))
-        if response.status_code is 200:
+        if response.status_code == 200:
             for hue_light_id, data in response.json().items():
                 hue_lights[hue_light_id] = self._parseLightObject(hue_light_id, data)
         else:
@@ -329,7 +329,7 @@ class Hue(OMPluginBase):
                 try:
                     start = time.time()
                     response = requests.get(url=self._endpoint.format('lights/{0}').format(hue_light_id))
-                    if response.status_code is 200:
+                    if response.status_code == 200:
                         hue_light = response.json()
                         logger.info('Getting output state for hue id: %s took %ss', hue_light_id,
                                     round(time.time() - start, 2))
@@ -343,7 +343,7 @@ class Hue(OMPluginBase):
     def discover_hue_bridges(self):
         try:
             response = requests.get(url='https://discovery.meethue.com/')
-            if response.status_code is 200:
+            if response.status_code == 200:
                 hue_bridge_data = response.json()
                 for hue_bridge in hue_bridge_data:
                     logger.info('Discovered hue bridge %s @ %s',
