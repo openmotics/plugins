@@ -4,7 +4,6 @@ An astronomical plugin, for providing the system with astronomical data (e.g. wh
 
 import six
 import re
-import sys
 import time
 import requests
 import logging
@@ -23,7 +22,7 @@ class Astro(OMPluginBase):
     """
 
     name = 'Astro'
-    version = '1.0.4'
+    version = '1.0.5'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'coordinates',
@@ -75,10 +74,6 @@ class Astro(OMPluginBase):
 
         self._config = self.read_config(Astro.default_config)
         self._config_checker = PluginConfigChecker(Astro.config_description)
-
-        pytz_egg = '/opt/openmotics/python/plugins/Astro/pytz-2017.2-py2.7.egg'
-        if pytz_egg not in sys.path:
-            sys.path.insert(0, pytz_egg)
 
         self._latitude = None
         self._longitude = None
