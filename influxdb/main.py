@@ -19,7 +19,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '2.0.64'
+    version = '2.0.65'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -45,7 +45,7 @@ class InfluxDB(OMPluginBase):
 
     def __init__(self, webinterface, connector):
         super(InfluxDB, self).__init__(webinterface=webinterface,
-                                connector=connector)
+                                       connector=connector)
 
         logger.info('Starting InfluxDB plugin...')
 
