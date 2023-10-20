@@ -1,0 +1,7 @@
+{
+    "version" : "2.0.21",
+    "description" : "Fibaro",
+    "metric_source"  : "fibaro",
+    "metric_type" : "fibaro",
+    "python_version": 3
+}
