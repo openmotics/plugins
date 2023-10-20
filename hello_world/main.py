@@ -18,7 +18,7 @@ class HelloWorldPlugin(OMPluginBase):
     Hello world plugin to demonstrate minimal requirements of a plugin
     """
     name = 'HelloWorldPlugin'
-    version = '1.0.4'
+    version = '1.0.5'
     interfaces = [('config', '1.0')]
 
     # configuration
