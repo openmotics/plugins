@@ -55,7 +55,7 @@ class Greenergy(OMPluginBase):
     }
     """
     name = 'Greenergy'
-    version = '0.0.19'
+    version = '0.0.20'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
@@ -240,7 +240,7 @@ class Greenergy(OMPluginBase):
                 # Should end up being like [['5', 1], '+', ['5', 5], '+', ['5', 2], '-', ['3', 11]]
 
         self._connected = False
-        self._mqtt_enabled = self._broker_ip is not None and self._broker_port is not None and not bool(self._serial_number) and len(self._net_consumption_formula) > 0
+        self._mqtt_enabled = self._broker_ip is not None and self._broker_port is not None and bool(self._serial_number) and len(self._net_consumption_formula) > 0
         logger.info("MQTTClient is {0}".format("enabled" if self._mqtt_enabled else "disabled"))
 
         logger.info("Saving a data point every {} seconds".format(self._data_frequency))
