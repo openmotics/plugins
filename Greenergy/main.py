@@ -4,6 +4,7 @@ import random
 import time
 import six
 import sys
+from typing import List
 from collections import deque
 from dataclasses import dataclass
 
@@ -17,8 +18,6 @@ class NoConsumptionException(Exception):
 
 @dataclass
 class Sensor:
-    serial: str
-    code: str
     name: str
     description: str
     physical_quantity: str
@@ -46,13 +45,17 @@ class Greenergy(OMPluginBase):
             "5minBattKwh":0,
             "invPinAc": 0,
             "invPoutAc": '0'
+            'isHealthy': True,
+            'isCANRunning': True,
+            'isInverterRunning': True,
+            'isP1Connected': True,
+            'ExtPVPower': 0
         }
     }
     }
     """
-
     name = 'Greenergy'
-    version = '0.0.11'
+    version = '0.0.19'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
@@ -106,6 +109,21 @@ class Greenergy(OMPluginBase):
                                        {'name': 'pGridSet',
                                         'description': 'Grid capacity setting',
                                         'type': 'gauge', 'unit': 'W'},
+                                       {'name': 'isHealthy',
+                                        'description': 'Battery healthy',
+                                        'type': 'gauge', 'unit': ''},
+                                       {'name': 'isCANRunning',
+                                        'description': 'CAN running',
+                                        'type': 'gauge', 'unit': ''},
+                                       {'name': 'isInverterRunning',
+                                        'description': 'Inverter running',
+                                        'type': 'gauge', 'unit': ''},
+                                       {'name': 'isP1Connected',
+                                        'description': 'P1 connected',
+                                        'type': 'gauge', 'unit': ''},
+                                       {'name': 'ExtPVPower',
+                                        'description': 'Externel PV power',
+                                        'type': 'gauge', 'unit': 'W'}
                                        ]}]
 
     metric_mappings = {'Pbatt': 'batteryPower',
@@ -120,8 +138,22 @@ class Greenergy(OMPluginBase):
                        'Whcount': 'energyCounter',
                        'Psolar': 'solarPower',
                        'invPinAc': 'invPinAc',
-                       'invPoutAc': 'invPoutAc'
+                       'invPoutAc': 'invPoutAc',
+                       'isHealthy': 'isHealthy',
+                       'isCANRunning': 'isCANRunning',
+                       'isInverterRunning': 'isInverterRunning',
+                       'isP1Connected': 'isP1Connected',
+                       'ExtPVPower': 'ExtPVPower'
                        }
+
+
+    #Dict containing values to register as a sensor with their physical quantity
+    sensors_to_register = {'Pbatt': 'power',
+                           '5minGridKwh': 'energy',
+                           '5minBattKwh': 'energy',
+                           'invPinAc': 'power',
+                           'invPoutAc': 'power',
+                           }
 
     config_description = [{'name': 'broker_ip',
                            'type': 'str',
@@ -129,15 +161,9 @@ class Greenergy(OMPluginBase):
                           {'name': 'broker_port',
                            'type': 'int',
                            'description': 'Port of the MQTT broker. Default: 1883'},
-                          {'name': 'writing_topic_power_delivered',
+                          {'name': 'serial_number',
                            'type': 'str',
-                           'description': 'Broker topic the gateway is publishing power delivered to'},
-                          {'name': 'writing_topic_power_returned',
-                           'type': 'str',
-                           'description': 'Broker topic the gateway is publishing power returnedto'},
-                          {'name': 'reading_topic_bms',
-                           'type': 'str',
-                           'description': 'Broker topic the gateway is subscribing to'},
+                           'description': 'Greenergy serial number. eg. SNxxxx'},
                           {'name': 'update_bms_frequency',
                            'type': 'int',
                            'description': 'Frequency with which to push power date to BMS[sec]'},
@@ -153,23 +179,15 @@ class Greenergy(OMPluginBase):
                           {'name': 'grid_capacitor',
                            'type': 'int',
                            'description': 'Id of the 0/1-10V Control to balance the grid capacity(in W)'},
-                          {'name': 'battery_state_output',
-                           'type': 'int',
-                           'description': 'Output indicating the battery state(On: Auto, Off: Idle)'},
                           ]
 
     default_config = {'broker_ip': '',
                       'broker_port': 1883,
-                      'writing_topic_power_delivered': 'DSMR-API/power_delivered',
-                      'writing_topic_power_returned': 'DSMR-API/power_returned',
-                      'writing_topic_pgridset': '$aws/things/LF2SN0012/shadow/name/EMS/update',
-                      'reading_topic_bms': 'LF2/SN0012/actual',
-                      'reading_topic_ems': '$aws/things/LF2SN0012/shadow/name/EMS/update',
+                      'serial_number': '',
                       'update_bms_frequency': 2,
                       'data_frequency': 120,
                       'grid_capacity': 0,
-                      'grid_capacitor': 998,
-                      'battery_state_output': 999}
+                      'grid_capacitor': 998}
 
 
     def __init__(self, webinterface, connector):
@@ -177,11 +195,13 @@ class Greenergy(OMPluginBase):
         @param webinterface : Interface to call local gateway APIs, called on runtime
         @param logger : A logger helper, called on runtime
         """
-        super(Greenergy, self).__init__(webinterface, logger)
+        super(Greenergy, self).__init__(webinterface=webinterface, connector=connector)
         logger.info('Starting plugin...')
 
         self._config = self.read_config(Greenergy.default_config)
         self._config_checker = PluginConfigChecker(Greenergy.config_description)
+
+        self._read_config()
 
         self.last_data_save_reading = 0
         self._metrics_queue = deque()
@@ -189,19 +209,20 @@ class Greenergy(OMPluginBase):
         if eggs not in sys.path:
             sys.path.insert(0, eggs)
 
+        self._writing_topic_power_delivered = 'DSMR-API/power_delivered'
+        self._writing_topic_power_returned = 'DSMR-API/power_returned'
+        self._reading_topic_bms = 'LF2/{0}/actual'.format(self._serial_number)
+        self._writing_topic_pgridset = '$aws/things/LF2{0}/shadow/name/EMS/update'.format(self._serial_number)
+
         self.client = None
         self._sensor_dtos = {}
-        self._read_config()
+
         logger.info(f"Started {self.name} plugin")
 
     def _read_config(self):
         self._broker_ip = self._config.get('broker_ip', Greenergy.default_config['broker_ip'])
         self._broker_port = self._config.get('broker_port', Greenergy.default_config['broker_port'])
-        self._writing_topic_power_delivered = self._config.get('writing_topic_power_delivered', Greenergy.default_config['writing_topic_power_delivered'])
-        self._writing_topic_power_returned = self._config.get('writing_topic_power_returned', Greenergy.default_config['writing_topic_power_returned'])
-        self._writing_topic_pgridset = Greenergy.default_config['writing_topic_pgridset']
-        self._reading_topic_bms = self._config.get('reading_topic_bms', Greenergy.default_config['reading_topic_bms'])
-        self._reading_topic_ems = self._config.get('reading_topic_ems', Greenergy.default_config['reading_topic_ems'])
+        self._serial_number = self._config.get('serial_number', Greenergy.default_config['serial_number'])
         self._update_bms_frequency = self._config.get('update_bms_frequency', Greenergy.default_config['update_bms_frequency'])
         self._data_frequency = self._config.get('data_frequency', Greenergy.default_config['data_frequency'])
         self._grid_capacity = self._config.get('grid_capacity', Greenergy.default_config['grid_capacity'])
@@ -219,7 +240,7 @@ class Greenergy(OMPluginBase):
                 # Should end up being like [['5', 1], '+', ['5', 5], '+', ['5', 2], '-', ['3', 11]]
 
         self._connected = False
-        self._mqtt_enabled = self._broker_ip is not None and self._broker_port is not None and len(self._net_consumption_formula) > 0
+        self._mqtt_enabled = self._broker_ip is not None and self._broker_port is not None and not bool(self._serial_number) and len(self._net_consumption_formula) > 0
         logger.info("MQTTClient is {0}".format("enabled" if self._mqtt_enabled else "disabled"))
 
         logger.info("Saving a data point every {} seconds".format(self._data_frequency))
@@ -291,11 +312,11 @@ class Greenergy(OMPluginBase):
         # Yield all metrics in the Queue
         try:
             if self._metrics_queue:
-                logger.info("Sending data to cloud: {0}".format(self._metrics_queue))
+                logger.debug("Sending data to cloud: {0}".format(self._metrics_queue))
                 while True:
                     yield self._metrics_queue.pop()
             else:
-                logger.info("No data to send to cloud")
+                logger.debug("No data to send to cloud")
         except IndexError:
             pass
         except Exception as ex:
@@ -333,14 +354,62 @@ class Greenergy(OMPluginBase):
             battery_data_payload = json.loads(msg.payload)
             try:
                 battery_data = battery_data_payload['state']['reported']
-                logger.info('battery_data is: {0}'.format(battery_data))
+                logger.debug('battery_data is: {0}'.format(battery_data))
                 #update keys
                 battery_data = {self.metric_mappings.get(k): float(v) for k, v in battery_data.items()}
+                #Remove battery values which are stored in sensors
                 self._enqueue_metrics(tags={'device': 'greenergy'}, values=battery_data)
+                # Create and/or update sensors
+                sensors = self._get_sensors(battery_data)
+                self._populate_sensors(sensors)
             except Exception as ex:
                 logger.info('Error queuing metrics (reading topic): {0}'.format(ex))
 
             self.last_data_save_reading = int(time.time())
+
+    #Temp hack...
+    quantity_unit_hack = {'energy': 'kilo_watt_hour',
+                          'power': 'watt'
+                          }
+
+    def _get_sensors(self, battery_data):
+        sensors = []
+        metrics_definitions = self.metric_definitions[0]['metrics']
+        for metric, name in self.metric_mappings.items():
+            if metric in self.sensors_to_register.keys():
+                for definition in metrics_definitions:
+                    if definition['name'] == metric:
+                        sensors.append(Sensor(name=definition['name'],
+                                            description=definition['description'],
+                                            physical_quantity=self.sensors_to_register[metric],
+                                            unit=definition['unit'],
+                                            value=battery_data[metric]))
+        return sensors
+
+    def _populate_sensors(self, sensors: List[Sensor]):
+        for sensor in sensors:
+            external_id = f'greenergysensor_{sensor.name}'
+            if external_id not in self._sensor_dtos and sensor.value is not None:
+                try:
+                    # Register the sensor on the gateway
+                    name = f'{sensor.description} (greenergy {sensor.description})'
+                    sensor_dto = self.connector.sensor.register(external_id=external_id,
+                                                                name=name,
+                                                                physical_quantity=sensor.physical_quantity,
+                                                                unit=self.quantity_unit_hack[sensor.physical_quantity])
+                    logger.info('Registered %s' % sensor)
+                    self._sensor_dtos[external_id] = sensor_dto
+                except Exception:
+                    logger.exception('Error registering sensor %s' % sensor)
+            try:
+                sensor_dto = self._sensor_dtos.get(external_id)
+                # only update sensor value if the sensor is known on the gateway
+                if sensor_dto is not None:
+                    value = round(sensor.value, 2) if sensor.value is not None else None
+                    self.connector.sensor.report_status(sensor=sensor_dto,
+                                                       value=value)
+            except Exception:
+                logger.exception('Error while reporting sensor state')
 
     @background_task
     def control_battery(self):
@@ -372,9 +441,7 @@ class Greenergy(OMPluginBase):
                 # Publish to broker
                 try:
                     self.client.publish(self._writing_topic_power_delivered, json.dumps({"power_delivered":net_consumption['power_delivered']}), retain=False)
-                    # logger.info("Sending data to BMS {0}".format(self._writing_topic_power_delivered))
                     self.client.publish(self._writing_topic_power_returned, json.dumps({"power_returned":net_consumption['power_returned']}), retain=False)
-                    # logger.info("Sending data to BMS {0}".format(self._writing_topic_power_returned))
                     if time.time() - awsLastTime > 120:
                         self.client.publish(self._writing_topic_pgridset, json.dumps({"state":net_capacity}), retain=False)
                         logger.info("Sending {1} to BMS {0}".format(self._writing_topic_pgridset, net_capacity))
@@ -384,35 +451,11 @@ class Greenergy(OMPluginBase):
                                                'powerReturned': float(net_consumption['power_returned'][0]['value']),
                                                'pGridSet': float(self._PGridSet)}
                     self._enqueue_metrics(tags={'device': 'greenergy'}, values=calculated_battery_data)
+
                 except Exception as ex:
                     logger.info("Error sending data to broker: {0}".format(ex))
 
             time.sleep(self._update_bms_frequency)
-
-    def _populate_sensors(self, sensors: List[Sensor]):
-        for sensor in sensors:
-            external_id = f'greenergysensor_{sensor.serial}_{sensor.name}'
-            if external_id not in self._sensor_dtos and sensor.value is not None:
-                try:
-                    # Register the sensor on the gateway
-                    name = f'{sensor.description} (greenergy {sensor.serial} - SENSOR {sensor.code})'
-                    sensor_dto = self.connector.sensor.register(external_id=external_id,
-                                                                name=name,
-                                                                physical_quantity=sensor.physical_quantity,
-                                                                unit=sensor.unit)
-                    logger.info('Registered %s' % sensor)
-                    self._sensor_dtos[external_id] = sensor_dto
-                except Exception:
-                    logger.exception('Error registering sensor %s' % sensor)
-            try:
-                sensor_dto = self._sensor_dtos.get(external_id)
-                # only update sensor value if the sensor is known on the gateway
-                if sensor_dto is not None:
-                    value = round(sensor.value, 2) if sensor.value is not None else None
-                    self.connector.sensor.report_state(sensor=sensor_dto,
-                                                       value=value)
-            except Exception:
-                logger.exception('Error while reporting sensor state')
 
     @om_expose
     def get_config_description(self):

@@ -15,4 +15,3 @@ This is a work in progress, but has already been extensively tested in a real ho
 * port: MQTT broker port. Default: 1883.
 * username: MQTT broker username. Default: openmotics.
 * password: MQTT broker password.
-
