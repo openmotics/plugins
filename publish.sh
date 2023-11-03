@@ -1,9 +1,9 @@
-#!/bin/sh
+#!/bin/bash
 if [ $# -ne 3 ]
 then
   echo "Usage: ./`basename $0` <package> <ip/hostname of gateway> <username>"
 else
-  if [ $(uname -s) == 'Darwin' ]
+  if [ $(uname -s) = 'Darwin' ]
   then
     checksum=`md5 $1 | cut -d ' ' -f 4`
     sedcmd='sed -E'
