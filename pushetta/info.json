@@ -1,0 +1,7 @@
+{
+    "version" : "1.0.16",
+    "description" : "Pushetta",
+    "metric_source"  : "pushetta",
+    "metric_type" : "pushetta",
+    "python_version": 3
+}
