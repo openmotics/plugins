@@ -5,6 +5,7 @@ For more info: https://github.com/openmotics/plugins/blob/master/mqtt-client/REA
 
 import six
 import sys
+import os
 import re
 import time
 from datetime import datetime
@@ -12,8 +13,17 @@ import pytz
 import json
 from threading import Thread
 from plugins.base import om_expose, input_status, output_status, OMPluginBase, PluginConfigChecker, receive_events, om_metric_receive, background_task
-from serial_utils import CommunicationTimedOutException
 import logging
+
+try:
+    this_dir = os.path.realpath(os.path.dirname(__file__))
+    for lib in os.listdir(os.path.join(this_dir, 'lib')):
+        lib_path = os.path.join(this_dir, 'lib', lib)
+        sys.path.insert(0, lib_path)
+
+    import paho.mqtt.client as client
+except Exception as ex:
+    raise ImportError(f"Could not import library: {ex}")
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +34,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '3.0.3'
+    version = '3.0.4'
     interfaces = [('config', '1.0')]
 
     energy_module_config = {
@@ -185,10 +195,6 @@ class MQTTClient(OMPluginBase):
         self._config = self.read_config(MQTTClient.default_config)
         #logger.info("Default configuration '{0}'".format(self._config))
         self._config_checker = PluginConfigChecker(MQTTClient.config_description)
-
-        paho_mqtt_wheel = '/opt/openmotics/python/plugins/MQTTClient/paho_mqtt-1.5.0-py2-none-any.whl'
-        if paho_mqtt_wheel not in sys.path:
-            sys.path.insert(0, paho_mqtt_wheel)
 
         self.client = None
         self._sensor_config = {}
@@ -430,7 +436,6 @@ class MQTTClient(OMPluginBase):
     def _try_connect(self):
         if self._enabled is True:
             try:
-                import paho.mqtt.client as client
                 self.client = client.Client()
                 if self._username is not None:
                     logger.info("MQTTClient is using username '{0}' and password".format(self._username))
