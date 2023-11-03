@@ -17,7 +17,7 @@ class OpenWeatherMap(OMPluginBase):
     """
 
     name = 'OpenWeatherMap'
-    version = '2.0.1'
+    version = '2.0.2'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_key',
@@ -38,7 +38,7 @@ class OpenWeatherMap(OMPluginBase):
                            'type': 'int',
                            'description': 'Not yet implemented, set to -1\nSensor ID for storing the UV index (the UV index will be set as temperature). -1 if not needed.'}]
 
-    default_config = {'api_key': '', 'uv_sensor_id': -1}
+    default_config = {'api_key': '', 'uv_sensor_id': -1, 'time_offset': 0}
 
     def __init__(self, webinterface, connector):
         super(OpenWeatherMap, self).__init__(webinterface=webinterface,
@@ -203,7 +203,7 @@ class OpenWeatherMap(OMPluginBase):
         try:
             sensor = self.connector.sensor.register_temperature_celcius(external_id='222222',
                                                                         name='OWM-temp-sensor')
-            logger.info('Registered {sensor}')
+            logger.info(f'Registered {sensor}')
             self._sensor_dto = sensor
         except Exception:
             logger.exception('Error registering sensor')
