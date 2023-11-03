@@ -1,0 +1,7 @@
+{
+    "version" : "0.0.4",
+    "description" : "RTI",
+    "metric_source"  : "rti",
+    "metric_type" : "rti",
+    "python_version": 3
+}
