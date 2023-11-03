@@ -1,0 +1,7 @@
+{
+    "version" : "1.0.21",
+    "description" : "modbusTCPSensor",
+    "metric_source"  : "modbustcpsensor",
+    "metric_type" : "modbustcpsensor",
+    "python_version": 3
+}
