@@ -20,7 +20,7 @@ class Pushsafer(OMPluginBase):
     """
 
     name = 'Pushsafer'
-    version = '2.1.3'
+    version = '2.1.4'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'privatekey',
