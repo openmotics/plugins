@@ -1,0 +1,7 @@
+{
+    "version" : "1.0.5",
+    "description" : "hello_world",
+    "metric_source"  : "hello_world",
+    "metric_type" : "hello_world",
+    "python_version": 3
+}
