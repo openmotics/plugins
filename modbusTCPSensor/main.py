@@ -151,7 +151,7 @@ class ModbusTCPSensor(OMPluginBase):
         if self._debug == 1:
             logger.debug('The sensors values are: {0}'.format(om_sensors))
 
-        for sensor_id, values in om_sensors.iteritems():
+        for sensor_id, values in om_sensors.items():
             result = json.loads(self.webinterface.set_virtual_sensor(sensor_id, **values))
             if result['success'] is False:
                 logger.error('Error when updating virtual sensor {0}: {1}'.format(sensor_id, result['msg']))
