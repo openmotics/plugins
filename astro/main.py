@@ -69,7 +69,7 @@ class Astro(OMPluginBase):
     default_config = {}
 
     def __init__(self, webinterface, connector):
-        super(Astro, self).__init__(webinterface, connector)
+        super(Astro, self).__init__(webinterface=webinterface, connector=connector)
         logger.info('Starting Astro plugin...')
 
         self._config = self.read_config(Astro.default_config)

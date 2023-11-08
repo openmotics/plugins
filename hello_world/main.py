@@ -32,9 +32,10 @@ class HelloWorldPlugin(OMPluginBase):
                                                 connector=connector)
         logger.info('Starting %s plugin %s ...', self.name, self.version)
 
-        # set config on default config and instantiate a validator
-        self._config = self.default_config
-        self._config_checker = PluginConfigChecker(self.config_description)
+        # Use base-class to read the config file, returns default_config if there is no config file
+        self._config = self.read_config(HelloWorldPlugin.default_config)
+        #  Instantiate a validator
+        self._config_checker = PluginConfigChecker(HelloWorldPlugin.config_description)
 
         logger.info("%s plugin started", self.name)
 
@@ -75,3 +76,4 @@ class HelloWorldPlugin(OMPluginBase):
     def say_hello(self):
         name = self._config['first_name']
         logger.info(f" welcome {name}")
+
