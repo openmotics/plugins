@@ -160,6 +160,25 @@ class RTI(OMPluginBase):
                                          temperature=setpoint)
                         continue
                 with self._process_message(command=command, identifier=identifier,
+                                           regex=r'^thermostat\.(\d+)\.setpoint(up|down)$=([\d.]+)$') as matches:
+                    if matches is not None:
+                        thermostat_id = int(matches[0])
+                        updown = str(matches[1])
+                        delta = float(matches[2])
+                        setpoint = entry['setpoint_temperature'] + (delta if updown == 'up' else -1.0 * delta)
+                        status = RTI._execute_api(function=self.webinterface.get_thermostat_group_status).get('status', [])
+                        for group_entry in status:
+                            for entry in group_entry['thermostats']:
+                                RTI._execute_api(function=self.webinterface.set_thermostat,
+                                                 thermostat_id=entry['id'],
+                                                 temperature=setpoint)
+                                self.thermostat_status({'id': entry['id'],
+                                                        'status': {'preset': entry['preset'],
+                                                                   'state': entry['state'],
+                                                                   'current_setpoint': setpoint,
+                                                                   'actual_temperature': entry['actual_temperature']}})
+                        continue
+                with self._process_message(command=command, identifier=identifier,
                                            regex=r'^thermostat\.(\d+)\.state=(on|off)$') as matches:
                     if matches is not None:
                         thermostat_id = int(matches[0])
