@@ -1,7 +1,0 @@
-{
-	"version" : "1.0.4",
-	"description" : "SMASensors",
-	"metric_source"  : "smasensors",
-	"metric_type" : "smasensors",
-	"python_version": 3
-}

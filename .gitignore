@@ -7,3 +7,7 @@
 
 # Editors
 .idea
+
+
+# allows to create a local symlink to the gateway source folder for ide import resolutions
+gateway_src

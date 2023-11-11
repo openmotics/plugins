@@ -1,6 +1,6 @@
-# SMA Sensors plugin
+# SMA WebConnect plugin
 
-This plugin reads out a SunnyBoy SMA inverter and registers various sensors in the gateway that can then be used throughout the OpenMotics ecosystem (e.g. automations).
+This plugin reads out a SunnyBoy SMA inverter and pushes various metrics.
 
 ### Requirements
 
@@ -16,15 +16,15 @@ password later.
 
 ### Plugin configuration
 
-First of all, a sample rate needs to be configured. This is how frequent the plugin should
-poll the inverter(s) for data. A typical value is somewhere around `60`s or `900`s.
+First, a sample rate needs to be configured. This is how frequent the plugin should
+poll the inverter for data. A typical value is somewhere between `30` and `120` (seconds).
 
-Furthermore, one or more inverters can be added. You need the ip address of the inverter (as used above, but without `https://`)
+Second, debug logging can be enabled/disabled.
+
+Then, one or more inverters can be added. You need the ip address of the inverter (as used above, but without `https://`)
 together with the password mentioned above.
 
-In conclusion, the logging level can be set for further troubleshooting if needed.
-
-After saving the configuration, the plugin wil start registering the sensors and populating the sensor values in the gateway.
+After saving the configuration, the plugin wil start reading data.
 
 ### Notice
 

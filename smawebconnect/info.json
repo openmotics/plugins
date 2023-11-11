@@ -1,0 +1,7 @@
+{
+	"version" : "1.0.5",
+	"description" : "SMAWebConnect",
+	"metric_source"  : "smawebconnect",
+	"metric_type" : "smawebconnect",
+	"python_version": 3
+}
