@@ -16,7 +16,7 @@ class Pumpy(OMPluginBase):
     """ Plugin to prevent flooding. """
 
     name = 'Pumpy'
-    version = '1.0.3'
+    version = '1.0.4'
     interfaces = [('config', '1.0')]
 
     config_descr = [
@@ -34,7 +34,7 @@ class Pumpy(OMPluginBase):
 
     def __init__(self, webinterface, connector):
         """ Default constructor, called by the plugin manager. """
-        OMPluginBase.__init__(self, webinterface, connector)
+        super(Pumpy, self).__init__(webinterface=webinterface, connector=connector)
         self.__last_energy = None
 
         # The list containing whether the pump was on the last 10 minutes

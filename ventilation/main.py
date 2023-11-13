@@ -22,7 +22,7 @@ class Ventilation(OMPluginBase):
     """
 
     name = 'Ventilation'
-    version = '2.0.18'
+    version = '2.0.19'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 

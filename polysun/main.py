@@ -40,7 +40,7 @@ class Polysun(OMPluginBase):
         DOWN = 'down'
 
     name = 'Polysun'
-    version = '0.1.8'
+    version = '0.1.9'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'mapping',

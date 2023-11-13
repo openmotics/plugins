@@ -18,7 +18,7 @@ class Fibaro(OMPluginBase):
     """
 
     name = 'Fibaro'
-    version = '2.0.20'
+    version = '2.0.21'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
@@ -61,7 +61,7 @@ class Fibaro(OMPluginBase):
     default_config = {'ip': '', 'username': '', 'password': ''}
 
     def __init__(self, webinterface, connector):
-        super(Fibaro, self).__init__(webinterface, connector)
+        super(Fibaro, self).__init__(webinterface=webinterface, connector=connector)
         logger.info('Starting Fibaro plugin...')
 
         self._config = self.read_config(Fibaro.default_config)
@@ -117,7 +117,7 @@ class Fibaro(OMPluginBase):
     def _send(self, action, data):
         try:
             url = self._endpoint.format(action)
-            params = '&'.join(['{0}={1}'.format(key, value) for key, value in data.iteritems()])
+            params = '&'.join(['{0}={1}'.format(key, value) for key, value in data.items()])
             logger.info('Calling {0}?{1}'.format(url, params))
             response = requests.get(url=url,
                                     params=data,
@@ -161,7 +161,7 @@ class Fibaro(OMPluginBase):
                                         limit = float(sensor.get('fibaro_brightness_max', 500))
                                         value = float(device['properties']['value'])
                                         sensor_values[sensor_id][2] = max(0.0, min(100.0, value / limit * 100))
-                        for sensor_id, values in sensor_values.iteritems():
+                        for sensor_id, values in sensor_values.items():
                             result = json.loads(self.webinterface.set_virtual_sensor(None, sensor_id, *values))
                             if result['success'] is False:
                                 logger.error('Error when updating virtual sensor {0}: {1}'.format(sensor_id, result['msg']))

@@ -1,0 +1,7 @@
+{
+    "version" : "1.0.4",
+    "description" : "Pumpy",
+    "metric_source"  : "pumpy",
+    "metric_type" : "pumpy",
+    "python_version": 3
+}

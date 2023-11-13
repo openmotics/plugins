@@ -2,5 +2,6 @@
 	"version" : "0.1.6",
 	"description" : "RTD10",
 	"metric_source"  : "rtd10",
-	"metric_type" : "rtd10"
+	"metric_type" : "rtd10",
+	"python_version": 3
 }

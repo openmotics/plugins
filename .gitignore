@@ -7,3 +7,6 @@
 
 # Editors
 .idea
+
+# gateway source simlink
+gateway_src

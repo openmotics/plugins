@@ -18,7 +18,7 @@ class TasmotaHTTP(OMPluginBase):
     """
 
     name = 'tasmotaHTTP'
-    version = '1.0.3'
+    version = '1.0.4'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'refresh_interval',
