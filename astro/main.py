@@ -22,7 +22,7 @@ class Astro(OMPluginBase):
     """
 
     name = 'Astro'
-    version = '1.0.5'
+    version = '1.0.6'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'coordinates',
@@ -336,57 +336,66 @@ class Astro(OMPluginBase):
                 self._sleep(time.time() + sleep + 5)
 
     def _build_execution_plan(self, now, date):
-        try:
-            data = requests.get('http://api.sunrise-sunset.org/json?lat={0}&lng={1}&date={2}&formatted=0'.format(
-                self._latitude, self._longitude, date.strftime('%Y-%m-%d')
-            )).json()
-            if data['status'] != 'OK':
-                raise RuntimeError(data['status'])
-            execution_plan = {}
-            field_map = {'solar noon': 'solar_noon',
-                         'sunset': 'sunset',
-                         'civil dusk': 'civil_twilight_end',
-                         'nautical dusk': 'nautical_twilight_end',
-                         'astronomical dusk': 'astronomical_twilight_end',
-                         'astronomical dawn': 'astronomical_twilight_begin',
-                         'nautical dawn': 'nautical_twilight_begin',
-                         'civil dawn': 'civil_twilight_begin',
-                         'sunrise': 'sunrise'}
-            for sun_location in set(self._group_actions.keys()) | set(self._bits.keys()):
-                group_actions = self._group_actions.get(sun_location, [])
-                bits = self._bits.get(sun_location, [])
-                if not group_actions and not bits:
-                    continue
-                date = self._convert(data['results'].get(field_map.get(sun_location, 'x')))
-                if date is None:
-                    continue
-                for entry in group_actions:
-                    entry_date = date + timedelta(minutes=entry['offset'])
-                    if entry_date < now:
+        retries = 5
+        while retries > 0:
+            retries = retries - 1
+            try:
+                req = requests.get('http://api.sunrise-sunset.org/json?lat={0}&lng={1}&date={2}&formatted=0'.format(
+                    self._latitude, self._longitude, date.strftime('%Y-%m-%d')
+                ))
+                if req.status_code != 200:
+                    raise RuntimeError("Invalid request response")
+                data = req.json()
+                if data['status'] != 'OK':
+                    raise RuntimeError(data['status'])
+                execution_plan = {}
+                field_map = {'solar noon': 'solar_noon',
+                            'sunset': 'sunset',
+                            'civil dusk': 'civil_twilight_end',
+                            'nautical dusk': 'nautical_twilight_end',
+                            'astronomical dusk': 'astronomical_twilight_end',
+                            'astronomical dawn': 'astronomical_twilight_begin',
+                            'nautical dawn': 'nautical_twilight_begin',
+                            'civil dawn': 'civil_twilight_begin',
+                            'sunrise': 'sunrise'}
+                for sun_location in set(self._group_actions.keys()) | set(self._bits.keys()):
+                    group_actions = self._group_actions.get(sun_location, [])
+                    bits = self._bits.get(sun_location, [])
+                    if not group_actions and not bits:
                         continue
-                    date_plan = execution_plan.setdefault(entry_date, [])
-                    date_plan.append({'task': 'group_action',
-                                      'source': '{0}{1}'.format(
-                                          sun_location,
-                                          Astro._format_offset(entry['offset'])
-                                      ),
-                                      'data': {'group_action_id': entry['group_action_id']}})
-                for entry in bits:
-                    entry_date = date + timedelta(minutes=entry['offset'])
-                    if entry_date < now:
+                    date = self._convert(data['results'].get(field_map.get(sun_location, 'x')))
+                    if date is None:
                         continue
-                    date_plan = execution_plan.setdefault(entry_date, [])
-                    date_plan.append({'task': 'bit',
-                                      'source': '{0}{1}'.format(
-                                          sun_location,
-                                          Astro._format_offset(entry['offset'])
-                                      ),
-                                      'data': {'action': entry['action'],
-                                               'bit_id': entry['bit_id']}})
-            self._execution_plan = execution_plan
-        except Exception as ex:
-            logger.exception('Could not load data')
-            self._execution_plan = {}
+                    for entry in group_actions:
+                        entry_date = date + timedelta(minutes=entry['offset'])
+                        if entry_date < now:
+                            continue
+                        date_plan = execution_plan.setdefault(entry_date, [])
+                        date_plan.append({'task': 'group_action',
+                                        'source': '{0}{1}'.format(
+                                            sun_location,
+                                            Astro._format_offset(entry['offset'])
+                                        ),
+                                        'data': {'group_action_id': entry['group_action_id']}})
+                    for entry in bits:
+                        entry_date = date + timedelta(minutes=entry['offset'])
+                        if entry_date < now:
+                            continue
+                        date_plan = execution_plan.setdefault(entry_date, [])
+                        date_plan.append({'task': 'bit',
+                                        'source': '{0}{1}'.format(
+                                            sun_location,
+                                            Astro._format_offset(entry['offset'])
+                                        ),
+                                        'data': {'action': entry['action'],
+                                                'bit_id': entry['bit_id']}})
+                self._execution_plan = execution_plan
+                break
+            except Exception as ex:
+                logger.exception('Could not fetch or load data')
+                self._execution_plan = {}
+                logger.info("sleeping 5 seconds and retrying...")
+                time.sleep(5)
 
     @om_expose
     def get_config_description(self):
