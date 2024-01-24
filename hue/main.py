@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class Hue(OMPluginBase):
 
     name = 'Hue'
-    version = '1.1.5'
+    version = '1.1.6'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_url',
@@ -361,7 +361,7 @@ class Hue(OMPluginBase):
             config = {
                 'name': name,
             }
-            response = self.webinterface.sensor.register(external_id = external_id, physical_quantity = 'temperature', unit = 'celcius', config = config)
+            response = self.connector.sensor.register(external_id = external_id, physical_quantity = 'temperature', unit = 'celcius', config = config)
             return response.id
         except Exception as e:
             logger.warning('Failed registering sensor with name %s and external_id %s with exception %s', name, external_id, str(e.message))
@@ -370,7 +370,7 @@ class Hue(OMPluginBase):
 
     def _update_sensor(self, sensor_id, value):
         logger.debug('Updating sensor %s with status %s', sensor_id, value)
-        response = self.webinterface.sensor.set_status(sensor_id = sensor_id, value = value)
+        response = self.connector.sensor.set_status(sensor_id = sensor_id, value = value)
         if response is None:
             logger.warning('Could not set the updated sensor value')
             return False
