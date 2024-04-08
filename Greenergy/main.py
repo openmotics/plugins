@@ -55,7 +55,7 @@ class Greenergy(OMPluginBase):
     }
     """
     name = 'Greenergy'
-    version = '0.0.20'
+    version = '0.0.21'
     interfaces = [('config', '1.0'),
                   ('metrics', '1.0')]
 
@@ -179,6 +179,9 @@ class Greenergy(OMPluginBase):
                           {'name': 'grid_capacitor',
                            'type': 'int',
                            'description': 'Id of the 0/1-10V Control to balance the grid capacity(in W)'},
+                          {'name': 'battery_soc',
+                           'type': 'int',
+                           'description': 'HACK: Id of the 0/1-10V Control to visualise the State of charge of the battery'},
                           ]
 
     default_config = {'broker_ip': '',
@@ -187,7 +190,8 @@ class Greenergy(OMPluginBase):
                       'update_bms_frequency': 2,
                       'data_frequency': 120,
                       'grid_capacity': 0,
-                      'grid_capacitor': 998}
+                      'grid_capacitor': 998,
+                      'battery_soc': ''}
 
 
     def __init__(self, webinterface, connector):
@@ -227,6 +231,7 @@ class Greenergy(OMPluginBase):
         self._data_frequency = self._config.get('data_frequency', Greenergy.default_config['data_frequency'])
         self._grid_capacity = self._config.get('grid_capacity', Greenergy.default_config['grid_capacity'])
         self._capacitor_output = self._config.get('grid_capacitor', Greenergy.default_config['grid_capacitor'])
+        self._soc_output = self._config.get('battery_soc', Greenergy.default_config['battery_soc'])
         self._capacitor_status = 0
         self._PGridSet = 0
 
@@ -355,6 +360,9 @@ class Greenergy(OMPluginBase):
             try:
                 battery_data = battery_data_payload['state']['reported']
                 logger.debug('battery_data is: {0}'.format(battery_data))
+                #Update the SOC output if configured
+                if self._soc_output and 'SOC' in battery_data:
+                    self._update_battery_soc_output(battery_data['SOC'])
                 #update keys
                 battery_data = {self.metric_mappings.get(k): float(v) for k, v in battery_data.items()}
                 #Remove battery values which are stored in sensors
@@ -411,6 +419,17 @@ class Greenergy(OMPluginBase):
             except Exception:
                 logger.exception('Error while reporting sensor state')
 
+    def _update_battery_soc_output(self, soc):
+        try:
+            result = json.loads(self.webinterface.set_output(id=self._soc_output, is_on=True,dimmer=soc))
+            if not result.get('success', False):
+                logger.error('Could not update dimmer {0} to {1}: {2}'.format(self._soc_output,
+                                                                               soc,
+                                                                               result.get('msg', 'Unknown')))
+        except Exception as ex:
+            logger.exception('Unexpected exception setting dimmer {0} to {1}'.format(self._soc_output,
+                                                                                     soc))
+
     @background_task
     def control_battery(self):
         """
@@ -438,6 +457,8 @@ class Greenergy(OMPluginBase):
                     net_consumption, net_capacity = self._calculate_net_consumption()
                 except Exception as ex:
                     logger.info("Error fetching energy data: {0}".format(ex))
+                    time.sleep(3)
+                    return
                 # Publish to broker
                 try:
                     self.client.publish(self._writing_topic_power_delivered, json.dumps({"power_delivered":net_consumption['power_delivered']}), retain=False)
