@@ -9,6 +9,23 @@ logger = logging.getLogger(__name__)
 class SensorDummy:
     STATUS_RANGES = {
         "temperature": (20, 25),
+        "relative_humidity": (0, 100),
+        "relative_brightness": (0, 100),
+        "sound_level": (20, 120),
+        "dust_pm1p0_mass_concentration": (0, 50),
+        "comfort_index": (0, 100),
+        "indoor_air_quality_index": (0, 100),
+        "co2_concentration": (280, 2000),
+        "voc_concentration": (0, 300),
+        "electric_potential": (220, 240),
+        "electric_current": (0, 16),
+        "frequency": (47, 53),
+        "energy": (0, 10**6),
+        "electric_power": (0, 10**4),
+    }
+
+    LEGACY_STATUS_RANGES = {
+        "temperature": (20, 25),
         "humidity": (0, 100),
         "brightness": (0, 100),
         "sound": (20, 120),
@@ -55,9 +72,14 @@ class SensorDummy:
 
     def update_value(self):
         previous_value = self.value
-        range_min, range_max = SensorDummy.STATUS_RANGES.get(
-            self.sensor_dto.physical_quantity, (20, 25)
-        )
+        if hasattr(self.sensor_dto, "parameter"):
+            range_min, range_max = SensorDummy.STATUS_RANGES.get(
+                self.sensor_dto.parameter, (20, 25)
+            )
+        else:
+            range_min, range_max = SensorDummy.LEGACY_STATUS_RANGES.get(
+                self.sensor_dto.physical_quantity, (20, 25)
+            )
         if self.value is None:
             self.value = range_min + (range_max - range_min) / 2.0
         else:
