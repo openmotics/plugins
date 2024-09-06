@@ -1,0 +1,7 @@
+{
+    "version" : "2.0.19",
+    "description" : "Ventilation",
+    "metric_source"  : "ventilation",
+    "metric_type" : "ventilation",
+    "python_version": 3
+}

@@ -34,7 +34,7 @@ class Dummy(OMPluginBase):
     """
 
     name = "Dummy"
-    version = "2.1.0"
+    version = "2.1.1"
     interfaces = [("config", "1.0")]
 
     default_config = {}
@@ -95,12 +95,12 @@ class Dummy(OMPluginBase):
                     {
                         "name": "type",
                         "type": "enum",
-                        "choices": self.connector.measurement_counter.Enums.Types.ALL,
+                        "choices": self.connector.measurement_counter.Enums.Types.list_values(),
                     },
                     {
                         "name": "category",
                         "type": "enum",
-                        "choices": self.connector.measurement_counter.Enums.Categories.ALL,
+                        "choices": self.connector.measurement_counter.Enums.Categories.list_values(),
                     },
                 ],
             },
@@ -293,7 +293,8 @@ class Dummy(OMPluginBase):
                     external_id=external_id,
                     name=f"{mc_name}",
                     type=mc_type,
-                    category=mc_category
+                    category=mc_category,
+                    has_realtime=True
                 )
                 logger.info("Registered %s" % mc_dto)
                 self._mc_dtos.append(mc_dto)
@@ -329,9 +330,10 @@ class Dummy(OMPluginBase):
         )
 
     # Measurement Counters
-    def report_mc_status(self, mc_dto, parameter_id, value):
-        logger.info("publish measurementCounter value for {}: [{}] = {}".format(mc_dto, parameter_id, value))
-        self.connector.measurement_counter.report_state(measurement_counter=mc_dto, parameter_id=parameter_id, value=value)
+    def report_mc_status(self, mc_dto, total_consumed, total_injected, realtime):
+        logger.info("publish measurementCounter value for {}: consumed = {}; injected = {}; realtime={}".format(mc_dto, total_consumed, total_injected, realtime))
+        self.connector.measurement_counter.report_counter_state(measurement_counter=mc_dto, total_consumed=total_consumed, total_injected=total_injected)
+        self.connector.measurement_counter.report_realtime_state(measurement_counter=mc_dto, value=realtime)
 
     @measurement_counter_status(version=1)
     def measurement_counter_status(self, status):

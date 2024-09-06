@@ -36,7 +36,7 @@ class RTI(OMPluginBase):
     """
 
     name = 'RTI'
-    version = '0.0.3'
+    version = '0.0.4'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'serial_device',
@@ -142,30 +142,33 @@ class RTI(OMPluginBase):
                                                            'value': entry['dimmer']}})
                         continue
                 with self._process_message(command=command, identifier=identifier,
-                                           regex=r'^thermostat\.(\d+)\.preset=(away|party|vacation|auto)$') as matches:
+                                           regex=r'^thermostat\.(\d+)\.preset=(away|auto)$') as matches:
                     if matches is not None:
                         thermostat_id = int(matches[0])
                         preset = matches[1]
-                        RTI._execute_api(function=self.webinterface.set_thermostat,
-                                         thermostat_id=thermostat_id,
-                                         preset=preset)
+                        self.connector.thermostat.set_preset(
+                            thermostat_id=thermostat_id,
+                            preset=preset
+                        )
                         continue
                 with self._process_message(command=command, identifier=identifier,
                                            regex=r'^thermostat\.(\d+)\.setpoint=([\d.]+)$') as matches:
                     if matches is not None:
                         thermostat_id = int(matches[0])
                         setpoint = float(matches[1])
-                        RTI._execute_api(function=self.webinterface.set_thermostat,
-                                         thermostat_id=thermostat_id,
-                                         temperature=setpoint)
+                        self.connector.thermostat.set_setpoint(
+                            thermostat_id=thermostat_id,
+                            setpoint=setpoint
+                        )
                         continue
                 with self._process_message(command=command, identifier=identifier,
                                            regex=r'^thermostat\.(\d+)\.state=(on|off)$') as matches:
                     if matches is not None:
                         thermostat_id = int(matches[0])
-                        RTI._execute_api(function=self.webinterface.set_thermostat,
-                                         thermostat_id=thermostat_id,
-                                         state=matches[1])
+                        self.connector.thermostat.set_state(
+                            thermostat_id=thermostat_id,
+                            state=state
+                        )
                         continue
                 with self._process_message(command=command, identifier=identifier,
                                            regex=r'^thermostat=request_current_states$') as matches:
@@ -173,27 +176,33 @@ class RTI(OMPluginBase):
                         status = RTI._execute_api(function=self.webinterface.get_thermostat_group_status).get('status', [])
                         for group_entry in status:
                             for entry in group_entry['thermostats']:
-                                self.thermostat_status({'id': entry['id'],
-                                                        'status': {'preset': entry['preset'],
-                                                                   'state': entry['state'],
-                                                                   'current_setpoint': entry['setpoint_temperature'],
-                                                                   'actual_temperature': entry['actual_temperature']}})
+                                self.connector.thermostat.update_thermostat(
+                                    thermostat=self.connector.thermostat.DTOs.ThermostatDTO(
+                                        id=entry['id'],
+                                        active_preset=entry['preset'],
+                                        state=entry['state'],
+                                        setpoint=entry['setpoint_temperature'],
+                                    )
+                                )
                         continue
                 with self._process_message(command=command, identifier=identifier,
                                            regex=r'^thermostat_group\.(\d+)\.mode=(cooling|heating)$') as matches:
                     if matches is not None:
-                        thermostat_group_id = int(matches[0])
-                        RTI._execute_api(function=self.webinterface.set_thermostat_group,
-                                         thermostat_group_id=thermostat_group_id,
-                                         mode=matches[1])
+                        thermostat_id = int(matches[0])
+                        self.connector.thermostat.set_mode(
+                            thermostat_id=thermostat_id,
+                            mode=matches[1]
+                        )
                         continue
                 with self._process_message(command=command, identifier=identifier,
                                            regex=r'^thermostat_group=request_current_states$') as matches:
                     if matches is not None:
                         status = RTI._execute_api(function=self.webinterface.get_thermostat_group_status).get('status', [])
                         for group_entry in status:
-                            self.thermostat_group_status({'id': group_entry['id'],
-                                                          'status': {'mode': group_entry['mode']}})
+                            self.connector.thermostat.set_mode(
+                                thermostat_id=group_entry['id'],
+                                mode=group_entry['mode']
+                            )
                         continue
                 logger.warning('Unprocessed command: {0}'.format(command))
             except Exception as main_exception:

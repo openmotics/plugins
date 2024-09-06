@@ -1,0 +1,7 @@
+{
+    "version" : "0.1.9",
+    "description" : "Polysun",
+    "metric_source"  : "polysun",
+    "metric_type" : "polysun",
+    "python_version": 3
+}

@@ -19,7 +19,7 @@ class InfluxDB(OMPluginBase):
     """
 
     name = 'InfluxDB'
-    version = '2.0.64'
+    version = '2.0.65'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'url',
@@ -45,7 +45,7 @@ class InfluxDB(OMPluginBase):
 
     def __init__(self, webinterface, connector):
         super(InfluxDB, self).__init__(webinterface=webinterface,
-                                connector=connector)
+                                       connector=connector)
 
         logger.info('Starting InfluxDB plugin...')
 
@@ -109,7 +109,7 @@ class InfluxDB(OMPluginBase):
             tags = {'source': metric['source'].lower()}
             if self._add_custom_tag:
                 tags['custom_tag'] = self._add_custom_tag
-            for tag, tvalue in metric['tags'].iteritems():
+            for tag, tvalue in metric['tags'].items():
                 if isinstance(tvalue, six.string_types):
                     tags[tag] = tvalue.replace(' ', '\ ').replace(',', '\,')
                 else:
@@ -125,12 +125,12 @@ class InfluxDB(OMPluginBase):
     def _build_entry(key, tags, value, timestamp):
         if isinstance(value, dict):
                 values = ','.join('{0}={1}'.format(vname, vvalue)
-                                  for vname, vvalue in value.iteritems())
+                                  for vname, vvalue in value.items())
         else:
             values = 'value={0}'.format(value)
         return '{0},{1} {2}{3}'.format(key,
                                        ','.join('{0}={1}'.format(tname, tvalue)
-                                                for tname, tvalue in tags.iteritems()),
+                                                for tname, tvalue in tags.items()),
                                        values,
                                        '' if timestamp is None else ' {:.0f}'.format(timestamp))
 

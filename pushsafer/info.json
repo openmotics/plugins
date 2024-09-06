@@ -1,0 +1,7 @@
+{
+    "version" : "2.1.4",
+    "description" : "Pushsafer",
+    "metric_source"  : "pushsafer",
+    "metric_type" : "pushsafer",
+    "python_version": 3
+}

@@ -16,20 +16,19 @@ class MeasurementCounterDummy:
         "other": (0, 100),
     }
 
-    CATEGORY_PARAMETER_ID_MAP = {
+    CATEGORY_VALUE_MAP = {
         "electric": [
-            'peak_injection',
-            'peak_consumption',
-            'normal_injection',
-            'normal_consumption',
+            'total_consumed',
+            'total_injected',
+            'realtime'
         ],
-        "water": ['water_volume'],
-        "gas": ['gas_volume'],
+        "water": ['total_consumed', 'realtime'],
+        "gas": ['total_consumed', 'realtime'],
     }
 
     def __init__(self, measurement_counter_dto, report_status, update_interval=5):
         self.measurement_counter_dto = measurement_counter_dto
-        self.values = {k: 0 for k in MeasurementCounterDummy.CATEGORY_PARAMETER_ID_MAP[self.measurement_counter_dto.category]}
+        self.values = {k: 0 for k in MeasurementCounterDummy.CATEGORY_VALUE_MAP[self.measurement_counter_dto.category]}
         self.report_status = report_status
 
         self.thread = Thread(target=self.simulation)
@@ -49,21 +48,30 @@ class MeasurementCounterDummy:
     def simulation(self):
         while self._running:
             try:
-                changed = self.update_value()
+                changed = self.update_values()
                 if changed:
-                    for param_id, value in self.values.items():
-                        logger.info("Report change: MeasurementCounter [{}]: value: [{}] = {}".format(self.measurement_counter_dto.name, param_id, value))
-                        self.report_status(self.measurement_counter_dto, param_id, value)
+                    consumed = self.values.get('total_consumed', 0)
+                    injected = self.values.get('total_injected', 0)
+                    realtime = self.values.get('realtime', 0)
+                    # logger.info("Report change: MeasurementCounter [{}]: consumed = {}; injected = {}; realtime = {}".format(self.measurement_counter_dto.name, consumed, injected, realtime))
+                    self.report_status(self.measurement_counter_dto, consumed, injected, realtime)
             except Exception:
                 logger.exception("An error in updating the measurement_counter simulation occurred")
             time.sleep(self.update_interval)
 
-    def update_value(self):
+    def update_values(self):
         for key, value in self.values.items():
-            range_min, range_max = MeasurementCounterDummy.STATUS_RANGES.get(
-                self.measurement_counter_dto.type, (20, 25)
-            )
-            offset = random.randint(range_min, range_max)
-            value += offset
-            self.values[key] = value
+            if key != 'realtime':
+                range_min, range_max = MeasurementCounterDummy.STATUS_RANGES.get(
+                    self.measurement_counter_dto.type, (20, 25)
+                )
+                offset = random.randint(range_min, range_max)
+                value += offset
+                self.values[key] = value
+            else:
+                range_min, range_max = MeasurementCounterDummy.STATUS_RANGES.get(
+                    self.measurement_counter_dto.type, (20, 25)
+                )
+                value = random.randint(range_min, range_max)
+                self.values[key] = value
         return True

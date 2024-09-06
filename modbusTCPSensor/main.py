@@ -6,9 +6,20 @@ import six
 import sys
 import time
 import struct
+import os
 import json
 from plugins.base import om_expose, OMPluginBase, PluginConfigChecker, background_task
 import logging
+
+try:
+    this_dir = os.path.realpath(os.path.dirname(__file__))
+    for lib in os.listdir(os.path.join(this_dir, 'lib')):
+        lib_path = os.path.join(this_dir, 'lib', lib)
+        sys.path.insert(0, lib_path)
+
+    from pyModbusTCP.client import ModbusClient
+except Exception as ex:
+    raise ImportError(f"Could not import library: {ex}")
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +30,7 @@ class ModbusTCPSensor(OMPluginBase):
     """
 
     name = 'modbusTCPSensor'
-    version = '1.0.20'
+    version = '1.0.21'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'modbus_server_ip',
@@ -64,10 +75,6 @@ class ModbusTCPSensor(OMPluginBase):
         self._config = self.read_config(ModbusTCPSensor.default_config)
         self._config_checker = PluginConfigChecker(ModbusTCPSensor.config_description)
 
-        py_modbus_tcp_egg = '/opt/openmotics/python/plugins/modbusTCPSensor/pyModbusTCP-0.1.7-py2.7.egg'
-        if py_modbus_tcp_egg not in sys.path:
-            sys.path.insert(0, py_modbus_tcp_egg)
-
         self._client = None
         self._samples = []
         self._save_times = {}
@@ -93,7 +100,6 @@ class ModbusTCPSensor(OMPluginBase):
         self._enabled = len(self._sensors) > 0
 
         try:
-            from pyModbusTCP.client import ModbusClient
             self._client = ModbusClient(self._ip, self._port, auto_open=True, auto_close=True)
             self._client.open()
             self._enabled = self._enabled & True
@@ -145,7 +151,7 @@ class ModbusTCPSensor(OMPluginBase):
         if self._debug == 1:
             logger.debug('The sensors values are: {0}'.format(om_sensors))
 
-        for sensor_id, values in om_sensors.iteritems():
+        for sensor_id, values in om_sensors.items():
             result = json.loads(self.webinterface.set_virtual_sensor(sensor_id, **values))
             if result['success'] is False:
                 logger.error('Error when updating virtual sensor {0}: {1}'.format(sensor_id, result['msg']))

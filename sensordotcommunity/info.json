@@ -1,0 +1,7 @@
+{
+    "version" : "1.0.4",
+    "description" : "SensorDotCommunity",
+    "metric_source"  : "sensordotcommunity",
+    "metric_type" : "sensordotcommunity",
+    "python_version": 3
+}

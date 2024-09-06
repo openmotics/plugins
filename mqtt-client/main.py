@@ -6,6 +6,7 @@ For more info: https://github.com/openmotics/plugins/blob/master/mqtt-client/REA
 
 import six
 import sys
+import os
 import re
 import time
 from datetime import datetime
@@ -17,6 +18,16 @@ from serial_utils import CommunicationTimedOutException
 import logging
 from enums import HardwareType
 from .homeassistant import HomeAssistant
+
+try:
+    this_dir = os.path.realpath(os.path.dirname(__file__))
+    for lib in os.listdir(os.path.join(this_dir, 'lib')):
+        lib_path = os.path.join(this_dir, 'lib', lib)
+        sys.path.insert(0, lib_path)
+
+    import paho.mqtt.client as client
+except Exception as ex:
+    raise ImportError(f"Could not import library: {ex}")
 
 logger = logging.getLogger(__name__)
 

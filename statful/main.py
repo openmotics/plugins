@@ -21,7 +21,7 @@ class Statful(OMPluginBase):
     """
 
     name = 'Statful'
-    version = '1.0.3'
+    version = '1.0.4'
     url = 'https://api.statful.com/tel/v2.0/metrics'
     interfaces = [('config', '1.0')]
 
@@ -84,7 +84,7 @@ class Statful(OMPluginBase):
 
             values = metric['values']
             _values = {}
-            for key in values.keys()[:]:
+            for key in values.keys():
                 value = values[key]
                 if isinstance(value, six.string_types):
                     value = '"{0}"'.format(value)
@@ -100,7 +100,7 @@ class Statful(OMPluginBase):
             for tag, tvalue in metric['tags'].items():
                 if isinstance(tvalue, six.string_types):
                     # send tag values as ascii. specification details at https://www.statful.com/docs/metrics-ingestion-protocol.html#Metrics-Ingestion-Protocol
-                    tags[tag] = tvalue.decode("utf-8").encode('ascii', 'ignore').replace(' ', '_').replace(',', '.')
+                    tags[tag] = bytes(tvalue, 'ascii').replace(b' ', b'_').replace(b',', b'.')
                 else:
                     tags[tag] = tvalue
 

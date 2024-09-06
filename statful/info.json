@@ -1,0 +1,7 @@
+{
+    "version" : "1.0.4",
+    "description" : "Statful",
+    "metric_source"  : "statful",
+    "metric_type" : "statful",
+    "python_version": 3
+}

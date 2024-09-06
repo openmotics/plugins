@@ -124,19 +124,14 @@ class RTD10(OMPluginBase):
             self._syncing = True
             while True:
                 try:
-                    result = json.loads(self.webinterface.get_thermostat_group_status())
-                    if result.get('success', False) is False:
-                        raise RuntimeError(result.get('msg', 'Unknown error'))
-                    for thermostat_group_status in result.get('status', []):
-                        mode = thermostat_group_status['mode'].upper()  # COOLING / HEATING
-                        for thermostat_status in thermostat_group_status['thermostats']:
-                            thermostat_id = thermostat_status['id']
-                            state = thermostat_status['state'].upper()  # ON / OFF
-                            setpoint = thermostat_status['setpoint_temperature']
-                            self._drive_device(thermostat_id=thermostat_id,
-                                               mode=mode,
-                                               state=state,
-                                               setpoint=setpoint)
+                    thermostats = self.connector.thermostat.get_thermostats()
+                    for thermostat in thermostats:
+                        self._drive_device(
+                            thermostat_id=thermostat.id,
+                            mode=thermostat.mode.upper(),
+                            state=thermostat.state.upper(),
+                            setpoint=thermostat.setpoint
+                        )
                     return
                 except Exception as ex:
                     logger.exception('Could not load thermostat group states')

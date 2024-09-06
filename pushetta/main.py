@@ -19,7 +19,7 @@ class Pushetta(OMPluginBase):
     """
 
     name = 'Pushetta'
-    version = '1.0.15'
+    version = '1.0.16'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_key',
