@@ -1,9 +1,51 @@
+from enum import Enum
 import random
 import time
 from threading import Thread, Lock
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class ExtendedEnum(Enum):
+    @classmethod
+    def list_values(cls):
+        return list(map(lambda x: x.value, cls))
+    
+    
+class MeasurementEnums(object):
+    class Category(ExtendedEnum):
+        ELECTRIC = 'electric'
+        HEAT = 'heat'
+        WATER = 'water'
+        GAS = 'gas'
+
+
+    class Type(ExtendedEnum):
+        GRID = 'grid'
+        SOLAR = 'solar'
+        BATTERY = 'battery'
+        ELECTRIC_VEHICLE = 'electric_vehicle'
+        HEATPUMP = 'heatpump'
+        VENTILATION = 'ventilation'
+        OVEN = 'oven'
+        STOVE = 'stove'
+        FRIDGE = 'fridge'
+        FREEZER = 'freezer'
+        KITCHEN_APPLIANCES = 'kitchen_appliances'
+        DISHWASHER = 'dishwasher'
+        WASHER = 'washer'
+        DRYER = 'dryer'
+        BOILER = 'boiler'
+        LIGHTS = 'lights'
+        WALL_OUTLETS = 'wall_outlets'
+        OTHER = 'other'
+
+
+    class CallbackAction(object):
+        REGISTER = "register"
+        REPORT_COUNTER_STATUS = "report_counter_status"
+        REPORT_REALTIME_STATUS = "report_realtime_status"
 
 
 class MeasurementCounterDummy:

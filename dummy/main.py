@@ -10,7 +10,7 @@ from collections import deque
 from .hotwater import HotWaterDummy
 from .sensor import SensorDummy
 from .ventilation import VentilationDummy
-from .measurement_counter import MeasurementCounterDummy
+from .measurement_counter import MeasurementCounterDummy, MeasurementEnums
 
 from plugins.base import (
     OMPluginBase,
@@ -285,8 +285,8 @@ class Dummy(OMPluginBase):
         logger.info("Registering measurement counters...")
         for mc in mcs:
             mc_name = mc["name"]
-            mc_type = mc["type"]
-            mc_category = mc['category']
+            mc_type = MeasurementEnums.Type(mc["type"])
+            mc_category = MeasurementEnums.Category(mc['category'])
             try:
                 external_id = f"dummy/{mc_name}"
                 mc_dto = self.connector.measurement_counter.register(
