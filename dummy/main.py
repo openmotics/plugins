@@ -11,6 +11,7 @@ from .hotwater import HotWaterDummy
 from .sensor import SensorDummy
 from .ventilation import VentilationDummy
 from .measurement_counter import MeasurementCounterDummy
+from gateway.enums import MeasurementEnums
 
 from plugins.base import (
     OMPluginBase,
@@ -292,8 +293,8 @@ class Dummy(OMPluginBase):
                 mc_dto = self.connector.measurement_counter.register(
                     external_id=external_id,
                     name=f"{mc_name}",
-                    type=mc_type,
-                    category=mc_category,
+                    type=MeasurementEnums.Type(mc_type),
+                    category=MeasurementEnums.Category(mc_category),
                     has_realtime=True
                 )
                 logger.info("Registered %s" % mc_dto)
