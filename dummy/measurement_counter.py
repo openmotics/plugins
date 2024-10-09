@@ -24,11 +24,12 @@ class MeasurementCounterDummy:
         ],
         "water": ['total_consumed', 'realtime'],
         "gas": ['total_consumed', 'realtime'],
+        "heat": ['total_consumed', 'realtime'],
     }
 
     def __init__(self, measurement_counter_dto, report_status, update_interval=5):
         self.measurement_counter_dto = measurement_counter_dto
-        self.values = {k: 0 for k in MeasurementCounterDummy.CATEGORY_VALUE_MAP[self.measurement_counter_dto.category]}
+        self.values = {k: 0 for k in MeasurementCounterDummy.CATEGORY_VALUE_MAP[self.measurement_counter_dto.category.value]}
         self.report_status = report_status
 
         self.thread = Thread(target=self.simulation)

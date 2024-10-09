@@ -34,7 +34,7 @@ class Dummy(OMPluginBase):
     """
 
     name = "Dummy"
-    version = "2.1.1"
+    version = "2.1.2"
     interfaces = [("config", "1.0")]
 
     default_config = {}
@@ -285,8 +285,8 @@ class Dummy(OMPluginBase):
         logger.info("Registering measurement counters...")
         for mc in mcs:
             mc_name = mc["name"]
-            mc_type = mc["type"]
-            mc_category = mc['category']
+            mc_type = self.connector.measurement_counter.Enums.Types.from_value(mc["type"])
+            mc_category = self.connector.measurement_counter.Enums.Categories.from_value(mc['category'])
             try:
                 external_id = f"dummy/{mc_name}"
                 mc_dto = self.connector.measurement_counter.register(
