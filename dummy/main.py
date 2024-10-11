@@ -314,16 +314,16 @@ class Dummy(OMPluginBase):
     # sensors
 
     def report_sensor_status(self, sensor_dto, value):
-        logger.info("publish sensor value for {}: {}".format(sensor_dto, value))
+        logger.debug("publish sensor value for {}: {}".format(sensor_dto, value))
         self.connector.sensor.report_state(sensor=sensor_dto, value=value)
 
     @sensor_status(version=1)
     def sensor_status(self, status):
-        logger.info("new sensor status from gateway: {}".format(status))
+        logger.debug("new sensor status from gateway: {}".format(status))
 
     @staticmethod
     def handle_sensor_status(event):
-        logger.info(
+        logger.debug(
             "Received sensor status from gateway: {0} {1}".format(
                 event.data["id"], event.data["value"]
             )
@@ -331,17 +331,17 @@ class Dummy(OMPluginBase):
 
     # Measurement Counters
     def report_mc_status(self, mc_dto, total_consumed, total_injected, realtime):
-        logger.info("publish measurementCounter value for {}: consumed = {}; injected = {}; realtime={}".format(mc_dto, total_consumed, total_injected, realtime))
+        logger.debug("publish measurementCounter value for {}: consumed = {}; injected = {}; realtime={}".format(mc_dto, total_consumed, total_injected, realtime))
         self.connector.measurement_counter.report_counter_state(measurement_counter=mc_dto, total_consumed=total_consumed, total_injected=total_injected)
         self.connector.measurement_counter.report_realtime_state(measurement_counter=mc_dto, value=realtime)
 
     @measurement_counter_status(version=1)
     def measurement_counter_status(self, status):
-        logger.info("new measurement counter status from gateway: {}".format(status))
+        logger.debug("new measurement counter status from gateway: {}".format(status))
 
     @staticmethod
     def handle_measurement_counter_status(event):
-        logger.info(
+        logger.debug(
             "Received measurement status from gateway: {0} {1}".format(
                 event.data["id"], event.data["value"]
             )
@@ -350,7 +350,7 @@ class Dummy(OMPluginBase):
     # ventilation units
 
     def report_ventilation_status(self, ventilation_dto, mode, level, remaining_time):
-        logger.info(
+        logger.debug(
             "publish ventilation state for {}: {} {} {}".format(
                 ventilation_dto, mode, level, remaining_time
             )
@@ -363,11 +363,11 @@ class Dummy(OMPluginBase):
         )
 
     def ventilation_set_auto(self, external_id):
-        logger.info("set ventilation of external_id {} with auto".format(external_id))
+        logger.debug("set ventilation of external_id {} with auto".format(external_id))
         self._ventilation_dummy.set_auto()
 
     def ventilation_set_manual(self, external_id, level, timer):
-        logger.info(
+        logger.debug(
             "set ventilation of external_id {} with {} {}".format(
                 external_id, level, timer
             )
@@ -376,11 +376,11 @@ class Dummy(OMPluginBase):
 
     @ventilation_status(version=1)
     def ventilation_status(self, status):
-        logger.info("new ventilation status from gateway: {}".format(status))
+        logger.debug("new ventilation status from gateway: {}".format(status))
 
     @staticmethod
     def handle_ventilation_status(event):
-        logger.info(
+        logger.debug(
             "Received ventilation status from gateway: {0} {1} {2} {3}".format(
                 event.data["id"],
                 event.data["mode"],
@@ -394,7 +394,7 @@ class Dummy(OMPluginBase):
     def report_hot_water_status(
         self, hot_water_dto, steering_power, current_temperature, setpoint, state
     ):
-        logger.info(
+        logger.debug(
             "publish hot_water state for {}: {} {} {} {}".format(
                 hot_water_dto, steering_power, current_temperature, setpoint, state
             )
@@ -408,7 +408,7 @@ class Dummy(OMPluginBase):
         )
 
     def handle_hot_water_set_setpoint(self, external_id, setpoint):
-        logger.info(
+        logger.debug(
             "set hot water of external_id {} to setpoint {}".format(
                 external_id, setpoint
             )
@@ -416,18 +416,18 @@ class Dummy(OMPluginBase):
         self._hot_water_dummy.set_setpoint(setpoint)
 
     def handle_hot_water_set_state(self, external_id, state):
-        logger.info(
+        logger.debug(
             "set hot water of external_id {} with state {}".format(external_id, state)
         )
         self._hot_water_dummy.set_state(state)
 
     @hot_water_status(version=1)
     def hot_water_status(self, status):
-        logger.info("new hot water status from gateway: {}".format(status))
+        logger.debug("new hot water status from gateway: {}".format(status))
 
     @staticmethod
     def handle_hot_water_status(event):
-        logger.info(
+        logger.debug(
             "Received hot_water status from gateway: {0} {1} {2} {3} {4}".format(
                 event.data["id"],
                 event.data["state"],
