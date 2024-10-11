@@ -54,7 +54,7 @@ class MeasurementCounterDummy:
                     consumed = self.values.get('total_consumed', 0)
                     injected = self.values.get('total_injected', 0)
                     realtime = self.values.get('realtime', 0)
-                    # logger.info("Report change: MeasurementCounter [{}]: consumed = {}; injected = {}; realtime = {}".format(self.measurement_counter_dto.name, consumed, injected, realtime))
+                    # logger.debug("Report change: MeasurementCounter [{}]: consumed = {}; injected = {}; realtime = {}".format(self.measurement_counter_dto.name, consumed, injected, realtime))
                     self.report_status(self.measurement_counter_dto, consumed, injected, realtime)
             except Exception:
                 logger.exception("An error in updating the measurement_counter simulation occurred")
