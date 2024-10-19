@@ -24,11 +24,12 @@ class MeasurementCounterDummy:
         ],
         "water": ['total_consumed', 'realtime'],
         "gas": ['total_consumed', 'realtime'],
+        "heat": ['total_consumed', 'realtime'],
     }
 
     def __init__(self, measurement_counter_dto, report_status, update_interval=5):
         self.measurement_counter_dto = measurement_counter_dto
-        self.values = {k: 0 for k in MeasurementCounterDummy.CATEGORY_VALUE_MAP[self.measurement_counter_dto.category]}
+        self.values = {k: 0 for k in MeasurementCounterDummy.CATEGORY_VALUE_MAP[self.measurement_counter_dto.category.value]}
         self.report_status = report_status
 
         self.thread = Thread(target=self.simulation)
@@ -53,7 +54,7 @@ class MeasurementCounterDummy:
                     consumed = self.values.get('total_consumed', 0)
                     injected = self.values.get('total_injected', 0)
                     realtime = self.values.get('realtime', 0)
-                    # logger.info("Report change: MeasurementCounter [{}]: consumed = {}; injected = {}; realtime = {}".format(self.measurement_counter_dto.name, consumed, injected, realtime))
+                    # logger.debug("Report change: MeasurementCounter [{}]: consumed = {}; injected = {}; realtime = {}".format(self.measurement_counter_dto.name, consumed, injected, realtime))
                     self.report_status(self.measurement_counter_dto, consumed, injected, realtime)
             except Exception:
                 logger.exception("An error in updating the measurement_counter simulation occurred")
