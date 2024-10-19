@@ -4,20 +4,30 @@ An MQTT client plugin for sending/receiving data to/from an MQTT broker.
 For more info: https://github.com/openmotics/plugins/blob/master/mqtt-client/README.md
 """
 
+import json
+import logging
+import os
+import pytz
 import six
 import sys
-import os
 import re
 import time
-from datetime import datetime
-import pytz
-import json
-from threading import Thread
-from plugins.base import om_expose, input_status, output_status, shutter_status, OMPluginBase, PluginConfigChecker, receive_events, om_metric_receive, background_task
-from serial_utils import CommunicationTimedOutException
-import logging
 from enums import HardwareType
+from datetime import datetime
+from threading import Thread
 from .homeassistant import HomeAssistant
+
+from plugins.base import (
+    OMPluginBase,
+    PluginConfigChecker,
+    background_task,
+    om_expose,
+    input_status,
+    output_status,
+    shutter_status,
+    receive_events,
+    
+)
 
 try:
     this_dir = os.path.realpath(os.path.dirname(__file__))
@@ -243,7 +253,7 @@ class MQTTClient(OMPluginBase):
         super(MQTTClient, self).__init__(webinterface=webinterface,
                                             connector=connector)
 
-        logger.info('Starting MQTTClient plugin...')
+        logger.info('Starting MQTTClient plugin {0}...'.format(MQTTClient.version))
 
         self._config = self.read_config(MQTTClient.default_config)
         #logger.info("Default configuration '{0}'".format(self._config))
