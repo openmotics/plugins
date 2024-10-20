@@ -47,7 +47,8 @@ class HomeAssistant():
                 self._output_discovery()
                 self._shutter_discovery()
                 self._energy_discovery()
-                self._power_discovery()
+                #self._power_discovery()
+                self._power_details_discovery()
                 self._sensor_discovery()
 
                 logger.info('HomeAssistant Discovery finished.')
@@ -124,12 +125,20 @@ class HomeAssistant():
                 for sensor_id in module_config.keys():
                     if module_config[sensor_id].get('name'):
                         self._send_power_discovery(module_id, sensor_id, module_config[sensor_id])
+
+    def _power_details_discovery(self):
+        if self._config.get('power_details_status_enabled'):
+            for module_id in self._power_modules.keys():
+                module_config = self._power_modules[module_id]
+
+                for sensor_id in module_config.keys():
+                    if module_config[sensor_id].get('name'):
                         self._send_power_voltage_discovery(module_id, sensor_id, module_config[sensor_id])
                         self._send_power_current_discovery(module_id, sensor_id, module_config[sensor_id])
                         self._send_power_frequency_discovery(module_id, sensor_id, module_config[sensor_id])
 
     def _sensor_discovery(self):
-        if self._config.get('sensor_status_enabled'):
+        if self._config.get('temperature_status_enabled') or self._config.get('humidity_status_enabled') or self._config.get('brightness_status_enabled'):
             for sensor_id in self._sensors.keys():
                 sensor = self._sensors[sensor_id]
 
@@ -352,8 +361,10 @@ class HomeAssistant():
             "payload_open": "up",
             "payload_close": "down",
             "payload_stop": "stop",
+            "state_open": "up",
             "state_opening": "going_up",
             "state_closed": "down",
+            "state_closing": "going_down",
             "state_stopped": "stopped",
             "position_open": 0,
             "position_closed": 99,
@@ -390,8 +401,8 @@ class HomeAssistant():
             "name": power.get('name'),
             "object_id": "openmotics_{0}_{1}_power".format(module_id, power.get('name')),
             "unique_id": "openmotics {0} {1} power".format(module_id, power.get('name').lower()),
-            "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
-            "value_template": "{{ value_json.power | float | round(2) }}",
+            "state_topic": self._config.get('power_status_topic_format').format(id=power.get('id')),
+            "value_template": "{{ value_json.unit | float | round(2) }}",
             "unit_of_measurement": "W",
             "device": {
                 "name": "Energy {0}".format(power.get('name')),
@@ -408,7 +419,7 @@ class HomeAssistant():
             "name": voltage.get('name'),
             "object_id": "openmotics_{0}_{1}_voltage".format(module_id, voltage.get('name')),
             "unique_id": "openmotics {0} {1} voltage".format(module_id, voltage.get('name').lower()),
-            "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
+            "state_topic": self._config.get('power_details_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.voltage | float | round(2) }}",
             "unit_of_measurement": "V",
             "device": {
@@ -426,7 +437,7 @@ class HomeAssistant():
             "name": current.get('name'),
             "object_id": "openmotics_{0}_{1}_current".format(module_id, current.get('name')),
             "unique_id": "openmotics {0} {1} current".format(module_id, current.get('name').lower()),
-            "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
+            "state_topic": self._config.get('power_details_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.current | float | round(3) }}",
             "unit_of_measurement": "A",
             "device": {
@@ -444,7 +455,7 @@ class HomeAssistant():
             "name": frequency.get('name'),
             "object_id": "openmotics_{0}_{1}_frequency".format(module_id, frequency.get('name')),
             "unique_id": "openmotics {0} {1} frequency".format(module_id, frequency.get('name').lower()),
-            "state_topic": self._config.get('power_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
+            "state_topic": self._config.get('power_details_status_topic_format').format(module_id=module_id, sensor_id=sensor_id),
             "value_template": "{{ value_json.frequency | float | round(2) }}",
             "unit_of_measurement": "Hz",
             "device": {
@@ -458,13 +469,17 @@ class HomeAssistant():
         }
 
     def _dump_sensor_discovery_json(self, sensor_id, sensor):
-        if sensor.get('physical_quantity').lower() == 'temperature':
+        device_class = sensor.get('physical_quantity').lower()
+        if device_class == 'temperature':
             # default temperature is celsius
-            unit_of_measurement = 'ºC'
-            device_class = 'temperature'
-        elif sensor.get('physical_quantity').lower() == 'humidity':
+            unit_of_measurement = '°C'
+        elif device_class == 'humidity':
             unit_of_measurement = '%'
-            device_class = 'humidity'
+        elif device_class == 'brightness':
+            unit_of_measurement = 'mm'
+            device_class = 'precipitation'
+        elif device_class == 'power':
+            unit_of_measurement = 'W'
         else:
             return None
 
@@ -477,7 +492,7 @@ class HomeAssistant():
             "name": sensor.get('name'),
             "object_id": "{0}_{1}".format(sensor.get('name'), device_class),
             "unique_id": "openmotics {0} {1}".format(sensor.get('name').lower(), sensor.get('physical_quantity').lower()),
-            "state_topic": self._config.get('sensor_status_topic_format').format(id=sensor_id),
+            "state_topic": self._config.get('{0}_status_topic_format'.format(sensor.get('physical_quantity'))).format(id=sensor_id),
             "value_template": "{{ value_json.value | float | round(2) }}",
             "unit_of_measurement": unit_of_measurement,
             "device": {
