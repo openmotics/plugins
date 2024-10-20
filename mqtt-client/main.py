@@ -48,7 +48,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '3.1.13'
+    version = '3.1.2'
     interfaces = [('config', '1.0')]
 
     energy_module_config = {
@@ -1138,9 +1138,9 @@ class MQTTClient(OMPluginBase):
                 logger.exception('Could not subscribe to {0}: {1}'.format(self._shutter_position_command_topic, ex))
 
     def on_message(self, client, userdata, msg):
-        output_regexp = self._output_command_topic.replace('+', '(\d+)')
-        shutter_regexp = self._shutter_command_topic.replace('+', '(\d+)')
-        shutter_position_regexp = self._shutter_position_command_topic.replace('+', '(\d+)')
+        output_regexp = "^{0}$".format(self._output_command_topic.replace('+', '(\d+)'))
+        shutter_regexp = "^{0}$".format(self._shutter_command_topic.replace('+', '(\d+)'))
+        shutter_position_regexp = "^{0}$".format(self._shutter_position_command_topic.replace('+', '(\d+)'))
 
         if re.search(output_regexp, msg.topic) is not None:
             # the output_id is the first match of the regular expression
