@@ -13,7 +13,7 @@ import sys
 import re
 import time
 from enums import HardwareType
-from datetime import datetime
+from datetime import datetime, timezone
 from threading import Thread
 from .homeassistant import HomeAssistant
 
@@ -48,7 +48,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '3.1.6'
+    version = '3.1.13'
     interfaces = [('config', '1.0')]
 
     energy_module_config = {
@@ -328,7 +328,7 @@ class MQTTClient(OMPluginBase):
 
         self._load_and_connect()
 
-        logger.info("Started MQTTClient plugin")
+        logger.info('Started MQTTClient plugin {0}'.format(MQTTClient.version))
 
     def _read_config(self):
         # broker
@@ -754,11 +754,9 @@ class MQTTClient(OMPluginBase):
 
     def _timestamp2isoformat(self, timestamp=None):
         # start with UTC
-        dt = datetime.utcnow()
+        dt = datetime.now(timezone.utc)
         if (timestamp is not None):
-            dt.utcfromtimestamp(float(timestamp))
-        # localize the UTC date/time, make it "aware" instead of naive
-        dt = pytz.timezone('UTC').localize(dt)
+            dt.fromtimestamp(timezone.utc)(float(timestamp))
         # convert to timezone from configuration
         if self._timezone is not None and self._timezone is not 'UTC':
             dt = dt.astimezone(pytz.timezone(self._timezone))
