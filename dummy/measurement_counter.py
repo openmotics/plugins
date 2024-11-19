@@ -25,6 +25,7 @@ class MeasurementCounterDummy:
         "water": ['total_consumed', 'realtime'],
         "gas": ['total_consumed', 'realtime'],
         "heat": ['total_consumed', 'realtime'],
+        "cooling": ['total_consumed', 'realtime'],
     }
 
     def __init__(self, measurement_counter_dto, report_status, update_interval=5):
