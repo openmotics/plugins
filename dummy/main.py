@@ -34,7 +34,7 @@ class Dummy(OMPluginBase):
     """
 
     name = "Dummy"
-    version = "2.1.3"
+    version = "2.2.0"
     interfaces = [("config", "1.0")]
 
     default_config = {}
@@ -64,12 +64,22 @@ class Dummy(OMPluginBase):
                             {
                                 "name": "physical",
                                 "type": "enum",
-                                "choices": list(self.connector.sensor.Enums.UNIT_MAPPING.keys()),
+                                "choices": list(
+                                    self.connector.sensor.Enums.UNIT_MAPPING.keys()
+                                ),
                             },
                             {
                                 "name": "unit",
                                 "type": "enum",
-                                "choices": list(set([item for sublist in self.connector.sensor.Enums.UNIT_MAPPING.values() for item in sublist])),
+                                "choices": list(
+                                    set(
+                                        [
+                                            item
+                                            for sublist in self.connector.sensor.Enums.UNIT_MAPPING.values()
+                                            for item in sublist
+                                        ]
+                                    )
+                                ),
                             },
                         ],
                     },
@@ -286,7 +296,9 @@ class Dummy(OMPluginBase):
         for mc in mcs:
             mc_name = mc["name"]
             mc_type = self.connector.measurement_counter.Enums.Types(mc["type"])
-            mc_category = self.connector.measurement_counter.Enums.Categories(mc['category'])
+            mc_category = self.connector.measurement_counter.Enums.Categories(
+                mc["category"]
+            )
             try:
                 external_id = f"dummy/{mc_name}"
                 mc_dto = self.connector.measurement_counter.register(
@@ -294,7 +306,7 @@ class Dummy(OMPluginBase):
                     name=f"{mc_name}",
                     type=mc_type,
                     category=mc_category,
-                    has_realtime=True
+                    has_realtime=True,
                 )
                 logger.info("Registered %s" % mc_dto)
                 self._mc_dtos.append(mc_dto)
@@ -302,9 +314,7 @@ class Dummy(OMPluginBase):
                 if mc_dummy is not None:
                     mc_dummy.stop()
                 mc_dummy = MeasurementCounterDummy(
-                    mc_dto,
-                    report_status=self.report_mc_status,
-                    update_interval=30
+                    mc_dto, report_status=self.report_mc_status, update_interval=30
                 )
                 self._mc_dummies[mc_dto.external_id] = mc_dummy
                 mc_dummy.start()
@@ -331,9 +341,19 @@ class Dummy(OMPluginBase):
 
     # Measurement Counters
     def report_mc_status(self, mc_dto, total_consumed, total_injected, realtime):
-        logger.debug("publish measurementCounter value for {}: consumed = {}; injected = {}; realtime={}".format(mc_dto, total_consumed, total_injected, realtime))
-        self.connector.measurement_counter.report_counter_state(measurement_counter=mc_dto, total_consumed=total_consumed, total_injected=total_injected)
-        self.connector.measurement_counter.report_realtime_state(measurement_counter=mc_dto, value=realtime)
+        logger.debug(
+            "publish measurementCounter value for {}: consumed = {}; injected = {}; realtime={}".format(
+                mc_dto, total_consumed, total_injected, realtime
+            )
+        )
+        self.connector.measurement_counter.report_counter_state(
+            measurement_counter=mc_dto,
+            total_consumed=total_consumed,
+            total_injected=total_injected,
+        )
+        self.connector.measurement_counter.report_realtime_state(
+            measurement_counter=mc_dto, value=realtime
+        )
 
     @measurement_counter_status(version=1)
     def measurement_counter_status(self, status):

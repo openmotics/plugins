@@ -19,7 +19,6 @@ class SensorDummy:
         "voc_concentration": (0, 300),
         "electric_potential": (220, 240),
         "electric_current": (0, 16),
-        "frequency": (47, 53),
         "energy": (0, 10**6),
         "electric_power": (0, 10**4),
     }
@@ -36,7 +35,6 @@ class SensorDummy:
         "voc": (0, 300),
         "electric_potential": (220, 240),
         "electric_current": (0, 16),
-        "frequency": (47, 53),
         "energy": (0, 10**6),
         "power": (0, 10**4),
     }
