@@ -34,7 +34,7 @@ class Dummy(OMPluginBase):
     """
 
     name = "Dummy"
-    version = "2.2.0"
+    version = "2.2.1"
     interfaces = [("config", "1.0")]
 
     default_config = {}
@@ -446,13 +446,13 @@ class Dummy(OMPluginBase):
         logger.debug("new hot water status from gateway: {}".format(status))
 
     @staticmethod
-    def handle_hot_water_status(event):
+    def handle_hot_water_status(event_data):
         logger.debug(
             "Received hot_water status from gateway: {0} {1} {2} {3} {4}".format(
-                event.data["id"],
-                event.data["state"],
-                event.data["setpoint"],
-                event.data["steering_power"],
-                event.data["current_temperature"],
+                event_data["id"],
+                event_data["state"],
+                event_data["setpoint"],
+                event_data["steering_power"],
+                event_data["current_temperature"],
             )
         )
