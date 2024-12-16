@@ -66,7 +66,7 @@ class VentilationDummy:
             new_remaining_time = (
                 self._expiry - now if self._expiry and now <= self._expiry else None
             )
-            if new_remaining_time >= 0:
+            if new_remaining_time and new_remaining_time >= 0:
                 new_expiry = self._expiry
                 new_mode = self.mode
             else:
