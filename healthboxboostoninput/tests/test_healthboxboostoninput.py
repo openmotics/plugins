@@ -1,3 +1,4 @@
+import json
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
@@ -36,7 +37,7 @@ class TestHealthboxBoostOnInput(TestCase):
     def test_poll_HealthboxBoostOnInput(self):
           # replace by actual key for local development
         self.web_dispatcher.get_input_status = MagicMock(
-            return_value={
+            return_value=json.dumps({
                 "success": True,
                 "status": [
                     {"id": 0, "status": 1},
@@ -48,10 +49,10 @@ class TestHealthboxBoostOnInput(TestCase):
                     {"id": 6, "status": 0},
                     {"id": 7, "status": 0},
                 ],
-            }
+            })
         )
         self.web_dispatcher.network_discovery = MagicMock(
-            return_value={
+            return_value=json.dumps({
                 "success": True,
                 "devices": [
                     {
@@ -66,7 +67,7 @@ class TestHealthboxBoostOnInput(TestCase):
                         "warranty_number": "BLO026100001015",
                     }
                 ],
-            }
+            })
         )
 
         self.plugin.activate_boost = MagicMock()

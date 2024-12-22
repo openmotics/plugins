@@ -29,7 +29,7 @@ class HealthboxBoostOnInput(OMPluginBase):
     """
 
     name = "HealthboxBoostOnInput"
-    version = "0.1.0"
+    version = "0.1.1"
     interfaces = [("config", "1.0")]
 
     default_config = {}
@@ -125,7 +125,7 @@ class HealthboxBoostOnInput(OMPluginBase):
             return self._ip
 
         try:
-            devices = self.webinterface.network_discovery()["devices"]
+            devices = json.loads(self.webinterface.network_discovery())["devices"]
             warranty = self._config.get("healthbox_warranty", "")
             device = next(
                 filter(
@@ -172,7 +172,7 @@ class HealthboxBoostOnInput(OMPluginBase):
         if self._config.get("healthbox_warranty", ""):
             status = {
                 s["id"]: s["status"]
-                for s in self.webinterface.get_input_status()["status"]
+                for s in json.loads(self.webinterface.get_input_status())["status"]
             }
             for item in self._config.get("config", []):
                 if status.get(item["input_nr"]) == 1:
@@ -241,7 +241,7 @@ if __name__ == "__main__":
         }
     )
     web_dispatcher.get_input_status = MagicMock(
-        return_value={
+        return_value=json.dumps({
             "success": True,
             "status": [
                 {"id": 0, "status": 1},
@@ -253,10 +253,10 @@ if __name__ == "__main__":
                 {"id": 6, "status": 0},
                 {"id": 7, "status": 0},
             ],
-        }
+        })
     )
     web_dispatcher.network_discovery = MagicMock(
-        return_value={
+        return_value=json.dumps({
             "success": True,
             "devices": [
                 {
@@ -271,7 +271,7 @@ if __name__ == "__main__":
                     "warranty_number": "BLO026100001015",
                 }
             ],
-        }
+        })
     )
     plugin = HealthboxBoostOnInput(webinterface=web_dispatcher, connector=connector)
     plugin.poll_inputs()

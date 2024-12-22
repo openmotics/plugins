@@ -1,5 +1,5 @@
 {
-    "version" : "0.1.0",
+    "version" : "0.1.1",
     "description" : "Healthbox 3 boost on input plugin",
     "metric_source"  : "healthboxboostoninput",
     "metric_type" : "healthboxboostoninput",
