@@ -138,7 +138,7 @@ class HealthboxBoostOnInput(OMPluginBase):
             if device is not None:
                 if self._ip != device["IP"]:
                     logger.info(
-                        f"Found Healthbox 3 device {device["warranty_number"]} - IP {device["IP"]}"
+                        f"Found Healthbox 3 device {device['warranty_number']} - IP {device['IP']}"
                     )
                     self._ip = device["IP"]
                 return self._ip
@@ -179,7 +179,7 @@ class HealthboxBoostOnInput(OMPluginBase):
                     # only activate boost once, not repeatedly
                     if not item["healthbox_roomnr"] in self._boosts_activated:
                         logger.info(
-                            f"Activating boost on room {item["healthbox_roomnr"]}"
+                            f"Activating boost on room {item['healthbox_roomnr']}"
                         )
                         self.activate_boost(
                             item["healthbox_roomnr"],
@@ -188,7 +188,7 @@ class HealthboxBoostOnInput(OMPluginBase):
                         )
                         self._boosts_activated.add(item["healthbox_roomnr"])
                 elif item["healthbox_roomnr"] in self._boosts_activated:
-                    logger.info(f"Stopping boost on room {item["healthbox_roomnr"]}")
+                    logger.info(f"Stopping boost on room {item['healthbox_roomnr']}")
                     self.stop_boost(item["healthbox_roomnr"])
                     self._boosts_activated.remove(item["healthbox_roomnr"])
 
